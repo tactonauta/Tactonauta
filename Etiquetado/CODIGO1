@@ -1,0 +1,36 @@
+"""
+Lectura por voz de las coordenadas detectadas, con control (debounce)
+para no repetir la misma lectura en cada frame ni saturar el audio.
+"""
+import time
+import pyttsx3
+
+
+class SpeechFeedback:
+    def __init__(self, rate=175, cooldown_s=0.6, repeat_after_s=3.0):
+        self.engine = pyttsx3.init()
+        self.engine.setProperty("rate", rate)
+        self._last_text = None
+        self._last_time = 0.0
+        self.cooldown_s = cooldown_s
+        self.repeat_after_s = repeat_after_s
+
+    def say_if_new(self, text):
+        now = time.time()
+        same_point_recently = (
+            text == self._last_text and (now - self._last_time) < self.repeat_after_s
+        )
+        too_soon = (now - self._last_time) < self.cooldown_s
+        if same_point_recently or too_soon:
+            return
+        self.engine.say(text)
+        self.engine.runAndWait()
+        self._last_text = text
+        self._last_time = now
+
+    def say_now(self, text):
+        """Fuerza la lectura inmediata (ej. mensajes de estado)."""
+        self.engine.say(text)
+        self.engine.runAndWait()
+        self._last_text = text
+        self._last_time = time.time()
