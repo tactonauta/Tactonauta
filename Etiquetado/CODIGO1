@@ -1,7 +1,4 @@
-"""
-Lectura por voz de las coordenadas detectadas, con control (debounce)
-para no repetir la misma lectura en cada frame ni saturar el audio.
-"""
+"""Version 1 de etiquetado por voz""
 import time
 import pyttsx3
 
