@@ -1,0 +1,106 @@
+import cadquery as cq
+import numpy as np
+
+# Diccionario básico de Braille (Puntos 1 a 6)
+# Usaremos código Nemeth para matemáticas (0) y UEB para letras (x, y)
+BRAILLE_DICT = {
+    'x': [1, 3, 4, 6],
+    'y': [1, 3, 4, 5, 6],
+    '0': [3, 5, 6] # Cero en código Nemeth
+}
+
+def agregar_caracter_braille(modelo, caracter, cx, cy, z_base):
+    """
+    Genera un carácter Braille en las coordenadas físicas (cx, cy).
+    Según estándares, el espaciado entre puntos es ~2.34mm.
+    """
+    espaciado = 2.4
+    radio_punto = 0.7  # Diámetro de 1.4mm aprox
+    
+    # Mapeo de la celda Braille (2 columnas x 3 filas)
+    # (offset_x, offset_y) respecto al centro del carácter
+    posiciones = {
+        1: (-espaciado/2, espaciado),
+        2: (-espaciado/2, 0),
+        3: (-espaciado/2, -espaciado),
+        4: (espaciado/2, espaciado),
+        5: (espaciado/2, 0),
+        6: (espaciado/2, -espaciado)
+    }
+    
+    puntos = BRAILLE_DICT.get(caracter.lower(), [])
+    for p in puntos:
+        dx, dy = posiciones[p]
+        # Creamos una semiesfera uniéndola a la base
+        punto_tactil = cq.Workplane("XY").center(cx + dx, cy + dy).workplane(offset=z_base).sphere(radio_punto)
+        modelo = modelo.union(punto_tactil)
+        
+    return modelo
+
+def generar_modelo_bana(dim_x=150, dim_y=150, p1=(0,0), p2=(100,80), archivo_salida="grafica_bana.stl"):
+    
+    # --- 1. PLANO BASE ---
+    # Grosor de 2mm. Movemos el centro geométrico para que la esquina inferior izquierda sea (0,0) físico.
+    modelo = cq.Workplane("XY").center(dim_x/2, dim_y/2).box(dim_x, dim_y, 2)
+    
+    # Origen matemático desplazado para dejar margen a las etiquetas (15mm de margen)
+    origen_x, origen_y = 15, 15
+    grosor_eje = 2
+    altura_eje = 4 # Z=4 (2mm de relieve)
+    
+    # --- 2. EJES X e Y ---
+    # Eje X
+    eje_x = cq.Workplane("XY").center(dim_x/2 + origen_x/2, origen_y).box(dim_x - origen_x, grosor_eje, altura_eje)
+    # Eje Y
+    eje_y = cq.Workplane("XY").center(origen_x, dim_y/2 + origen_y/2).box(grosor_eje, dim_y - origen_y, altura_eje)
+    modelo = modelo.union(eje_x).union(eje_y)
+    
+    # --- 3. MARCAS DE ESCALA (Ticks) ---
+    # Colocamos un tick perpendicular cada 20 unidades
+    intervalo_ticks = 20
+    longitud_tick = 6 # 6mm de largo para que cruce el eje
+    
+    # Ticks Eje X
+    for x in range(origen_x + intervalo_ticks, dim_x, intervalo_ticks):
+        tick = cq.Workplane("XY").center(x, origen_y).box(grosor_eje, longitud_tick, altura_eje)
+        modelo = modelo.union(tick)
+        
+    # Ticks Eje Y
+    for y in range(origen_y + intervalo_ticks, dim_y, intervalo_ticks):
+        tick = cq.Workplane("XY").center(origen_x, y).box(longitud_tick, grosor_eje, altura_eje)
+        modelo = modelo.union(tick)
+        
+    # --- 4. ETIQUETAS BRAILLE ---
+    # Origen '0' (Abajo a la izquierda del cruce de ejes)
+    modelo = agregar_caracter_braille(modelo, '0', origen_x - 8, origen_y - 8, z_base=2)
+    # Etiqueta 'x' (Al final del eje X)
+    modelo = agregar_caracter_braille(modelo, 'x', dim_x - 10, origen_y - 8, z_base=2)
+    # Etiqueta 'y' (Arriba del eje Y)
+    modelo = agregar_caracter_braille(modelo, 'y', origen_x - 8, dim_y - 10, z_base=2)
+
+    # --- 5. FUNCIÓN LINEAL (Relieve distintivo) ---
+    # Mapeamos los puntos matemáticos p1 y p2 a las coordenadas físicas sumando el origen
+    x_inicio, y_inicio = p1[0] + origen_x, p1[1] + origen_y
+    x_fin, y_fin = p2[0] + origen_x, p2[1] + origen_y
+    
+    distancia = np.linalg.norm(np.array([x_fin, y_fin]) - np.array([x_inicio, y_inicio]))
+    num_puntos = int(distancia / 4) # Una esfera cada 4mm
+    
+    puntos_x = np.linspace(x_inicio, x_fin, num_puntos)
+    puntos_y = np.linspace(y_inicio, y_fin, num_puntos)
+    
+    # La gráfica será más alta que los ejes para respetar la Jerarquía Táctil
+    radio_esfera = 2.5
+    altura_grafica = 3.5 # Z_center de la esfera
+    
+    for px, py in zip(puntos_x, puntos_y):
+        punto = cq.Workplane("XY").center(px, py).workplane(offset=altura_grafica).sphere(radio_esfera)
+        modelo = modelo.union(punto)
+        
+    # --- 6. EXPORTAR ---
+    cq.exporters.export(modelo, archivo_salida)
+    print(f"Modelo táctil BANA exportado a: {archivo_salida}")
+
+if __name__ == "__main__":
+    # Genera una gráfica de 150x150mm, con una recta de (0,0) a (100, 80)
+    generar_modelo_bana()
