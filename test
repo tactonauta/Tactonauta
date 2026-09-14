@@ -71,7 +71,7 @@ def main(video_path):
             frame_num += 1
 
     cap.release()
-    out.release()
+    out.release( )
     csv_file.close()
 
     print(f"Listo. {frame_num} frames procesados, mano detectada en {detecciones}.")
