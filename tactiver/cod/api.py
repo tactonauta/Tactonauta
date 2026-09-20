@@ -105,7 +105,7 @@ GET /api/salud
 import os
 import shutil
 import uuid
-
+import traceback
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
@@ -213,7 +213,12 @@ def generar_stl_desde_grafico(id_grafico):
     try:
         resultado, nombre = crear_stl_desde_imagen(ruta_imagen, "grafica_tactil")
     except Exception as e:
-        return jsonify({"ok": False, "error": f"No se pudo generar el STL: {e}"}), 500
+        print("ERROR GENERANDO STL:", flush=True)
+        print(traceback.format_exc(), flush=True)
+        return jsonify({
+            "ok": False,
+            "error": f"No se pudo generar el STL: {e}"
+        }), 500
     return jsonify({
         "ok": True,
         "resumen": resultado["resumen"],
