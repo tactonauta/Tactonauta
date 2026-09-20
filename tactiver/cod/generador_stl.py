@@ -122,13 +122,127 @@ def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
     return modelo.union(cuerpo).union(tapa0).union(tapa1)
 
 
-def agregar_funcion(modelo, puntos, diametro=DIAM_LINEA, altura=RELIEVE_LINEA):
-    """Dibuja una polilínea a partir de una secuencia de puntos."""
+def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
+    """
+    Simplifica una polilínea conservando su forma aproximada.
+
+    Primero utiliza una simplificación tipo Ramer-Douglas-Peucker.
+    Después, si todavía quedan demasiados puntos, aplica un muestreo
+    uniforme para mantener el coste geométrico bajo.
+
+    tolerancia:
+        Distancia máxima aproximada que puede separarse la curva
+        simplificada de la original, en mm físicos.
+
+    max_puntos:
+        Número máximo de puntos que se utilizarán para fabricar el STL.
+    """
+
+    if len(puntos) <= 2:
+        return puntos[:]
+
+    def distancia_punto_segmento(p, a, b):
+        px, py = p
+        ax, ay = a
+        bx, by = b
+
+        dx = bx - ax
+        dy = by - ay
+
+        if dx == 0 and dy == 0:
+            return hypot(px - ax, py - ay)
+
+        t = (
+            (px - ax) * dx +
+            (py - ay) * dy
+        ) / (dx * dx + dy * dy)
+
+        t = max(0.0, min(1.0, t))
+
+        cx = ax + t * dx
+        cy = ay + t * dy
+
+        return hypot(px - cx, py - cy)
+
+    def rdp(lista, eps):
+        if len(lista) <= 2:
+            return lista[:]
+
+        inicio = lista[0]
+        fin = lista[-1]
+
+        max_distancia = -1.0
+        indice = -1
+
+        for i in range(1, len(lista) - 1):
+            d = distancia_punto_segmento(
+                lista[i],
+                inicio,
+                fin
+            )
+
+            if d > max_distancia:
+                max_distancia = d
+                indice = i
+
+        if max_distancia > eps:
+            izquierda = rdp(
+                lista[:indice + 1],
+                eps
+            )
+
+            derecha = rdp(
+                lista[indice:],
+                eps
+            )
+
+            return izquierda[:-1] + derecha
+
+        return [inicio, fin]
+
+    simplificados = rdp(puntos, tolerancia)
+
+    if len(simplificados) <= max_puntos:
+        return simplificados
+
+    # Si todavía hay demasiados puntos, conservarlos
+    # distribuidos uniformemente.
+    resultado = []
+
+    paso = (len(simplificados) - 1) / (max_puntos - 1)
+
+    for i in range(max_puntos):
+        indice = round(i * paso)
+        resultado.append(simplificados[indice])
+
+    return resultado
+
+
+def agregar_funcion(
+    modelo,
+    puntos,
+    diametro=DIAM_LINEA,
+    altura=RELIEVE_LINEA
+):
+    """
+    Dibuja una polilínea en relieve.
+
+    Los puntos deben estar ya convertidos a coordenadas físicas.
+    """
+
+    if not puntos or len(puntos) < 2:
+        return modelo
+
     for p0, p1 in zip(puntos[:-1], puntos[1:]):
-        modelo = agregar_segmento_relieve(modelo, p0, p1, diametro, altura)
+        modelo = agregar_segmento_relieve(
+            modelo,
+            p0,
+            p1,
+            diametro,
+            altura
+        )
+
     return modelo
-
-
 def _valores_tick(v_min, v_max, intervalo):
     """Devuelve los múltiplos de un intervalo dentro del rango."""
     inicio = math.ceil(v_min / intervalo) * intervalo
@@ -265,27 +379,46 @@ def generar_modelo_desde_recta(
     dim_y=148.0,
     archivo_salida="grafica_tactil.stl"
 ):
-    """Genera una placa STL a partir de todos los puntos de una curva detectada.
+    """
+    Genera una placa táctil a partir de la curva detectada por
+    segmentador.py.
 
-    Los puntos pueden venir calibrados:
-        {"valor_x": ..., "valor_y": ...}
+    El segmentador puede entregar cientos de puntos. Estos se conservan
+    durante el procesamiento, pero antes de construir la geometría STL
+    se simplifican para evitar un número excesivo de operaciones booleanas
+    de CadQuery.
 
-    o, si no hay calibración:
-        {"px": ..., "py": ...}
+    Los puntos pueden estar calibrados:
 
-    La curva se construye como una polilínea utilizando todos los puntos
-    proporcionados por el segmentador.
+        {
+            "px": ...,
+            "py": ...,
+            "valor_x": ...,
+            "valor_y": ...
+        }
+
+    o pueden contener únicamente coordenadas de imagen:
+
+        {
+            "px": ...,
+            "py": ...
+        }
     """
 
     if dim_x < 130 or dim_y < 90:
-        raise ValueError("La placa debe medir al menos 130 x 90 mm.")
+        raise ValueError(
+            "La placa debe medir al menos 130 x 90 mm."
+        )
 
     if not isinstance(puntos, (list, tuple)) or len(puntos) < 2:
-        raise ValueError("Se necesitan al menos dos puntos para generar un STL.")
+        raise ValueError(
+            "Se necesitan al menos dos puntos para generar un STL."
+        )
 
-    # -------------------------------------------------------------------------
-    # 1. Convertir los puntos del segmentador a coordenadas de trabajo
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 1. DETERMINAR SI LOS PUNTOS ESTÁN CALIBRADOS
+    # ================================================================
+
     calibrados = all(
         isinstance(p, dict)
         and p.get("valor_x") is not None
@@ -296,6 +429,7 @@ def generar_modelo_desde_recta(
     datos = []
 
     if calibrados:
+
         for p in puntos:
             try:
                 x = float(p["valor_x"])
@@ -307,11 +441,18 @@ def generar_modelo_desde_recta(
                 datos.append((x, y))
 
     else:
+
         for p in puntos:
             try:
                 x = float(p["px"])
-                # Invertimos Y porque en imágenes el eje Y crece hacia abajo.
+
+                # Coordenadas de imagen:
+                # Y crece hacia abajo.
+                #
+                # Las invertimos para convertirlas a coordenadas
+                # cartesianas normales.
                 y = -float(p["py"])
+
             except (TypeError, ValueError, KeyError):
                 continue
 
@@ -323,12 +464,14 @@ def generar_modelo_desde_recta(
             "No hay suficientes puntos válidos para generar la curva."
         )
 
-    # -------------------------------------------------------------------------
-    # 2. Eliminar puntos consecutivos prácticamente idénticos
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 2. ELIMINAR DUPLICADOS CONSECUTIVOS
+    # ================================================================
+
     datos_limpios = [datos[0]]
 
     for punto in datos[1:]:
+
         anterior = datos_limpios[-1]
 
         distancia = hypot(
@@ -346,24 +489,24 @@ def generar_modelo_desde_recta(
             "La curva contiene menos de dos puntos distintos."
         )
 
-    # -------------------------------------------------------------------------
-    # 3. Obtener límites de la curva completa
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 3. LÍMITES DE LA CURVA
+    # ================================================================
+
     xs = [p[0] for p in datos]
     ys = [p[1] for p in datos]
 
     x_min = min(xs)
     x_max = max(xs)
+
     y_min = min(ys)
     y_max = max(ys)
 
-    # Una recta horizontal o vertical sigue siendo una gráfica válida.
     if x_max == x_min and y_max == y_min:
         raise ValueError(
             "Todos los puntos de la curva son iguales."
         )
 
-    # Evitamos divisiones por cero para funciones horizontales o verticales.
     rango_x = x_max - x_min
     rango_y = y_max - y_min
 
@@ -373,9 +516,10 @@ def generar_modelo_desde_recta(
     if rango_y == 0:
         rango_y = 1.0
 
-    # -------------------------------------------------------------------------
-    # 4. Área física destinada al gráfico
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 4. ÁREA DEL GRÁFICO
+    # ================================================================
+
     izquierda = 55.0
     derecha = 15.0
     abajo = 25.0
@@ -390,31 +534,57 @@ def generar_modelo_desde_recta(
             "para el gráfico."
         )
 
-    # -------------------------------------------------------------------------
-    # 5. Conversión de coordenadas matemáticas -> coordenadas físicas
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 5. CONVERSIÓN A COORDENADAS FÍSICAS
+    # ================================================================
+
     def escalar(x, y):
+
         x_fis = (
             izquierda
-            + (x - x_min) / rango_x * ancho_plot
+            + (x - x_min)
+            / rango_x
+            * ancho_plot
         )
 
         y_fis = (
             abajo
-            + (y - y_min) / rango_y * alto_plot
+            + (y - y_min)
+            / rango_y
+            * alto_plot
         )
 
         return (x_fis, y_fis)
 
-    # Convertimos TODOS los puntos.
     puntos_fisicos = [
         escalar(x, y)
         for x, y in datos
     ]
 
-    # -------------------------------------------------------------------------
-    # 6. Crear la placa base
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 6. SIMPLIFICAR LA CURVA PARA EL STL
+    # ================================================================
+
+    puntos_stl = simplificar_polilinea(
+        puntos_fisicos,
+        tolerancia=0.8,
+        max_puntos=60
+    )
+
+    print(
+        f"[STL] Puntos originales: {len(puntos_fisicos)}",
+        flush=True
+    )
+
+    print(
+        f"[STL] Puntos utilizados para geometría: {len(puntos_stl)}",
+        flush=True
+    )
+
+    # ================================================================
+    # 7. PLACA BASE
+    # ================================================================
+
     modelo = (
         cq.Workplane("XY")
         .center(dim_x / 2, dim_y / 2)
@@ -426,9 +596,10 @@ def generar_modelo_desde_recta(
         )
     )
 
-    # -------------------------------------------------------------------------
-    # 7. Crear los ejes
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 8. EJES
+    # ================================================================
+
     eje_x_inicio = (izquierda, abajo)
     eje_x_fin = (dim_x - derecha, abajo)
 
@@ -451,23 +622,30 @@ def generar_modelo_desde_recta(
         RELIEVE_EJE
     )
 
-    # -------------------------------------------------------------------------
-    # 8. Marcas de los ejes y valores Braille
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 9. TICKS Y BRAILLE
+    # ================================================================
+
     NUM_TICKS = 5
 
     for i in range(NUM_TICKS):
+
         fraccion = i / (NUM_TICKS - 1)
 
-        # Posición física del tick X
-        x_fis = izquierda + fraccion * ancho_plot
+        x_fis = (
+            izquierda
+            + fraccion * ancho_plot
+        )
 
-        # Posición física del tick Y
-        y_fis = abajo + fraccion * alto_plot
+        y_fis = (
+            abajo
+            + fraccion * alto_plot
+        )
 
-        # -------------------------------------------------------------
-        # Tick del eje X
-        # -------------------------------------------------------------
+        # ------------------------------
+        # Tick X
+        # ------------------------------
+
         modelo = agregar_segmento_relieve(
             modelo,
             (x_fis, abajo - 3),
@@ -476,9 +654,10 @@ def generar_modelo_desde_recta(
             RELIEVE_TICK
         )
 
-        # -------------------------------------------------------------
-        # Tick del eje Y
-        # -------------------------------------------------------------
+        # ------------------------------
+        # Tick Y
+        # ------------------------------
+
         modelo = agregar_segmento_relieve(
             modelo,
             (izquierda - 3, y_fis),
@@ -487,19 +666,31 @@ def generar_modelo_desde_recta(
             RELIEVE_TICK
         )
 
-        # -------------------------------------------------------------
+        # ------------------------------
         # Valores Braille
-        # -------------------------------------------------------------
+        # ------------------------------
+
         if calibrados:
 
-            x_valor = x_min + fraccion * (x_max - x_min)
-            y_valor = y_min + fraccion * (y_max - y_min)
+            x_valor = (
+                x_min
+                + fraccion * (x_max - x_min)
+            )
 
-            # Valor X
+            y_valor = (
+                y_min
+                + fraccion * (y_max - y_min)
+            )
+
+            # X
+
             ancho_x = _ancho_numero(x_valor)
 
             inicio_x = min(
-                max(3.0, x_fis - ancho_x / 2),
+                max(
+                    3.0,
+                    x_fis - ancho_x / 2
+                ),
                 dim_x - ancho_x - 3.0
             )
 
@@ -510,12 +701,15 @@ def generar_modelo_desde_recta(
                 abajo - CLEARANCE_BRAILLE
             )
 
-            # Valor Y
+            # Y
+
             ancho_y = _ancho_numero(y_valor)
 
             inicio_y = max(
                 3.0,
-                izquierda - CLEARANCE_BRAILLE - ancho_y
+                izquierda
+                - CLEARANCE_BRAILLE
+                - ancho_y
             )
 
             modelo = agregar_numero_braille(
@@ -525,51 +719,32 @@ def generar_modelo_desde_recta(
                 y_fis
             )
 
-    # -------------------------------------------------------------------------
-    # 9. DIBUJAR LA CURVA COMPLETA
-    #
-    # ESTE ES EL CAMBIO PRINCIPAL.
-    #
-    # Antes:
-    #
-    #     inicio = puntos[0]
-    #     fin = puntos[-1]
-    #     agregar_segmento_relieve(...)
-    #
-    # Eso convertía toda la curva en UNA SOLA RECTA.
-    #
-    # Ahora:
-    #
-    #     agregar_funcion(...)
-    #
-    # conecta:
-    #
-    #     p0 -> p1 -> p2 -> p3 -> ... -> pn
-    #
-    # utilizando todos los puntos entregados por segmentador.py.
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 10. CURVA
+    # ================================================================
+
     modelo = agregar_funcion(
         modelo,
-        puntos_fisicos,
+        puntos_stl,
         diametro=DIAM_LINEA,
         altura=RELIEVE_LINEA
     )
 
-    # -------------------------------------------------------------------------
-    # 10. Exportar STL
-    # -------------------------------------------------------------------------
+    # ================================================================
+    # 11. EXPORTAR
+    # ================================================================
+
     cq.exporters.export(
         modelo,
         archivo_salida
     )
 
     print(
-        f"Modelo táctil generado con {len(puntos_fisicos)} "
-        f"puntos de curva: {archivo_salida}"
+        f"[STL] Modelo táctil generado: {archivo_salida}",
+        flush=True
     )
 
     return modelo
-            
 
 if __name__ == "__main__":
     generar_modelo_bana()
