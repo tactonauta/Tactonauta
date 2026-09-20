@@ -6,3 +6,4 @@ werkzeug
 cadquery
 PyMuPDF
 Pillow
+gunicorn
