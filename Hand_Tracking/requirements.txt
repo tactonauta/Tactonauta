@@ -1,0 +1,8 @@
+# Compatible con Python 3.10 (requisito de mediapipe en Windows/macOS/Linux x86_64)
+opencv-python>=4.9,<5
+mediapipe>=0.10.9,<0.11
+pyttsx3>=2.90
+
+# Opcional: solo para elegir la cámara por nombre en Windows (pygrabber.dshow_graph).
+# El script sigue funcionando sin ella (cae al índice de cámara 0).
+pygrabber>=0.2 ; sys_platform == "win32"
