@@ -860,6 +860,7 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     resumen = {
         "eje_x_detectado": eje_x is not None,
         "eje_y_detectado": eje_y is not None,
+        "curva_detectada": len(series_salida) > 0,
         "rect_grafico": list(rect),
         "n_series": len(series_salida),
         "n_etiquetas_x": len(etiquetas_x),
@@ -873,10 +874,13 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         "calibrado_x": m_x is not None,
         "calibrado_y": m_y is not None,
         "calibrado_y_por_datos": calibrado_y_por_datos,
-        "r2_x": info_x["r2"], "r2_y": info_y["r2"],
-        "ancho_imagen": ancho_imagen, "alto_imagen": alto_imagen,
-        # La etapa BANA/STL solo debería correr si esto es True.
-        "listo_para_stl": bool(series_salida and m_x is not None and m_y is not None),
+        "r2_x": info_x["r2"],
+        "r2_y": info_y["r2"],
+        "ancho_imagen": ancho_imagen,
+        "alto_imagen": alto_imagen,
+        "listo_para_stl": bool(
+          series_salida and m_x is not None and m_y is not None
+        ),
     }
 
     # --- JSON estructurado (entrada natural de la etapa BANA/STL) ---
