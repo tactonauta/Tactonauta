@@ -145,6 +145,39 @@ def extension_valida(nombre_archivo):
         nombre_archivo.rsplit(".", 1)[1].lower() in EXTENSIONES_VALIDAS
 
 
+@app.route("/", methods=["GET"])
+def index():
+    return """
+    <!doctype html>
+    <html lang="es">
+    <head>
+        <meta charset="utf-8">
+        <title>Tactonauta API</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 760px; margin: 48px auto; padding: 0 20px; color: #1f2937; }
+            code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+            .card { border: 1px solid #d1d5db; border-radius: 12px; padding: 20px; background: #fff; }
+            a { color: #2563eb; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>Tactonauta</h1>
+            <p>La API está funcionando en este servidor.</p>
+            <p>Ruta de salud: <a href="/api/salud"><code>/api/salud</code></a></p>
+            <p>Para abrir la interfaz visual de segmentación en Chrome:</p>
+            <ol>
+                <li>lanzá el servidor Flask en el puerto 5000</li>
+                <li>abre la interfaz desde el archivo <code>tactiver/interfaz/interfaz_segmentador.html</code></li>
+                <li>o servila localmente con <code>python -m http.server 8000</code> desde la carpeta <code>tactiver/interfaz</code></li>
+            </ol>
+            <p>Si quieres probar la API directamente, usa <code>http://127.0.0.1:5000/api/salud</code>.</p>
+        </div>
+    </body>
+    </html>
+    """
+
+
 @app.route("/api/salud", methods=["GET"])
 def salud():
     return jsonify({"ok": True})
