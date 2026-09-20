@@ -126,7 +126,7 @@ os.makedirs(STL_DIR, exist_ok=True)
 os.makedirs(CLASIFICACION_DIR, exist_ok=True)
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024  # 40 MB máx (PDFs pesan más que una imagen suelta)
+app.config["MAX_CONTENT_LENGTH"] = 40 * 1024*1024  # 40 MB máx (PDFs pesan más que una imagen suelta)
 
 
 @app.after_request
