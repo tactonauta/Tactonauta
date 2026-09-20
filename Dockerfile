@@ -2,9 +2,10 @@ FROM python:3.11-slim
 
 # Instalar Tesseract OCR
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        libgl1 \
     && rm -rf /var/lib/apt/lists/*
-
 # Directorio de trabajo
 WORKDIR /app
 
