@@ -374,35 +374,35 @@ def _ancho_numero(valor):
 
 
 def generar_modelo_desde_recta(
-    puntos,
+    datos_segmentador,
     dim_x=210.0,
     dim_y=148.0,
     archivo_salida="grafica_tactil.stl"
 ):
     """
-    Genera una placa táctil a partir de la curva detectada por
-    segmentador.py.
+    Genera una placa táctil a partir del resultado completo de
+    segmentador.procesar_imagen().
 
-    El segmentador puede entregar cientos de puntos. Estos se conservan
-    durante el procesamiento, pero antes de construir la geometría STL
-    se simplifican para evitar un número excesivo de operaciones booleanas
-    de CadQuery.
+    Puede recibir:
 
-    Los puntos pueden estar calibrados:
-
+    1) El resultado completo del nuevo segmentador:
         {
-            "px": ...,
-            "py": ...,
-            "valor_x": ...,
-            "valor_y": ...
+            "series": [...],
+            "puntos_curva": [...],
+            "resumen": {...},
+            ...
         }
 
-    o pueden contener únicamente coordenadas de imagen:
-
-        {
-            "px": ...,
-            "py": ...
-        }
+    2) Una lista antigua de puntos:
+        [
+            {
+                "px": ...,
+                "py": ...,
+                "valor_x": ...,
+                "valor_y": ...
+            },
+            ...
+        ]
     """
 
     if dim_x < 130 or dim_y < 90:
@@ -410,114 +410,229 @@ def generar_modelo_desde_recta(
             "La placa debe medir al menos 130 x 90 mm."
         )
 
-    if not isinstance(puntos, (list, tuple)) or len(puntos) < 2:
+    # ================================================================
+    # 1. EXTRAER INFORMACIÓN DEL NUEVO SEGMENTADOR
+    # ================================================================
+
+    es_resultado_completo = isinstance(datos_segmentador, dict)
+
+    if es_resultado_completo:
+        resultado = datos_segmentador
+
+        series = resultado.get("series") or []
+
+        puntos_legacy = resultado.get("puntos_curva") or []
+
+        resumen = resultado.get("resumen") or {}
+
+    elif isinstance(datos_segmentador, (list, tuple)):
+        # Compatibilidad con el formato anterior
+        resultado = {}
+        series = []
+        puntos_legacy = list(datos_segmentador)
+        resumen = {}
+
+    else:
         raise ValueError(
-            "Se necesitan al menos dos puntos para generar un STL."
+            "La entrada debe ser el resultado del segmentador "
+            "o una lista de puntos."
         )
 
     # ================================================================
-    # 1. DETERMINAR SI LOS PUNTOS ESTÁN CALIBRADOS
+    # 2. OBTENER LAS SERIES
     # ================================================================
 
-    calibrados = all(
-        isinstance(p, dict)
-        and p.get("valor_x") is not None
-        and p.get("valor_y") is not None
-        for p in puntos
-    )
+    if series:
 
-    datos = []
+        series_puntos = []
 
-    if calibrados:
+        for serie in series:
 
-        for p in puntos:
-            try:
-                x = float(p["valor_x"])
-                y = float(p["valor_y"])
-            except (TypeError, ValueError, KeyError):
-                continue
+            puntos = serie.get("puntos", [])
 
-            if math.isfinite(x) and math.isfinite(y):
-                datos.append((x, y))
+            if isinstance(puntos, list) and len(puntos) >= 2:
+                series_puntos.append(puntos)
+
+    elif puntos_legacy:
+
+        series_puntos = [puntos_legacy]
 
     else:
 
-        for p in puntos:
-            try:
-                x = float(p["px"])
-
-                # Coordenadas de imagen:
-                # Y crece hacia abajo.
-                #
-                # Las invertimos para convertirlas a coordenadas
-                # cartesianas normales.
-                y = -float(p["py"])
-
-            except (TypeError, ValueError, KeyError):
-                continue
-
-            if math.isfinite(x) and math.isfinite(y):
-                datos.append((x, y))
-
-    if len(datos) < 2:
         raise ValueError(
-            "No hay suficientes puntos válidos para generar la curva."
+            "El segmentador no detectó ninguna serie de puntos."
         )
 
-    # ================================================================
-    # 2. ELIMINAR DUPLICADOS CONSECUTIVOS
-    # ================================================================
-
-    datos_limpios = [datos[0]]
-
-    for punto in datos[1:]:
-
-        anterior = datos_limpios[-1]
-
-        distancia = hypot(
-            punto[0] - anterior[0],
-            punto[1] - anterior[1]
-        )
-
-        if distancia > 1e-6:
-            datos_limpios.append(punto)
-
-    datos = datos_limpios
-
-    if len(datos) < 2:
+    if not series_puntos:
         raise ValueError(
-            "La curva contiene menos de dos puntos distintos."
+            "No hay suficientes puntos para generar el STL."
         )
 
     # ================================================================
-    # 3. LÍMITES DE LA CURVA
+    # 3. RECTÁNGULO REAL DEL GRÁFICO
     # ================================================================
 
-    xs = [p[0] for p in datos]
-    ys = [p[1] for p in datos]
+    rect = resumen.get("rect_grafico")
 
-    x_min = min(xs)
-    x_max = max(xs)
+    if rect and len(rect) == 4:
 
-    y_min = min(ys)
-    y_max = max(ys)
+        rect_x1 = float(rect[0])
+        rect_y1 = float(rect[1])
+        rect_x2 = float(rect[2])
+        rect_y2 = float(rect[3])
 
-    if x_max == x_min and y_max == y_min:
+    else:
+
+        # Compatibilidad con versiones antiguas.
+        # Calculamos el rectángulo a partir de los puntos.
+
+        todos = [
+            p
+            for serie in series_puntos
+            for p in serie
+        ]
+
+        columnas = [
+            float(p["px"])
+            for p in todos
+            if p.get("px") is not None
+        ]
+
+        filas = [
+            float(p["py"])
+            for p in todos
+            if p.get("py") is not None
+        ]
+
+        if len(columnas) < 2 or len(filas) < 2:
+            raise ValueError(
+                "No se pudo determinar el área del gráfico."
+            )
+
+        rect_x1 = min(columnas)
+        rect_x2 = max(columnas)
+        rect_y1 = min(filas)
+        rect_y2 = max(filas)
+
+    if rect_x2 <= rect_x1 or rect_y2 <= rect_y1:
         raise ValueError(
-            "Todos los puntos de la curva son iguales."
+            "El rectángulo del gráfico no es válido."
         )
+
+    # ================================================================
+    # 4. OBTENER CALIBRACIÓN DE LOS EJES
+    # ================================================================
+
+    calibracion_x = resultado.get("ejes", {}).get("calibracion_x", {})
+    calibracion_y = resultado.get("ejes", {}).get("calibracion_y", {})
+
+    m_x = calibracion_x.get("m")
+    b_x = calibracion_x.get("b")
+
+    m_y = calibracion_y.get("m")
+    b_y = calibracion_y.get("b")
+
+    # Si no viene dentro de "ejes", intentar buscarlo en resumen
+    # o reconstruirlo desde los puntos calibrados.
+
+    if m_x is None or b_x is None:
+
+        puntos_calibrados = [
+            p
+            for serie in series_puntos
+            for p in serie
+            if p.get("valor_x") is not None
+        ]
+
+        if len(puntos_calibrados) >= 2:
+
+            px1 = float(puntos_calibrados[0]["px"])
+            px2 = float(puntos_calibrados[-1]["px"])
+
+            vx1 = float(puntos_calibrados[0]["valor_x"])
+            vx2 = float(puntos_calibrados[-1]["valor_x"])
+
+            if abs(px2 - px1) > 1e-9:
+
+                m_x = (vx2 - vx1) / (px2 - px1)
+                b_x = vx1 - m_x * px1
+
+    if m_y is None or b_y is None:
+
+        puntos_calibrados = [
+            p
+            for serie in series_puntos
+            for p in serie
+            if p.get("valor_y") is not None
+        ]
+
+        if len(puntos_calibrados) >= 2:
+
+            py1 = float(puntos_calibrados[0]["py"])
+            py2 = float(puntos_calibrados[-1]["py"])
+
+            vy1 = float(puntos_calibrados[0]["valor_y"])
+            vy2 = float(puntos_calibrados[-1]["valor_y"])
+
+            if abs(py2 - py1) > 1e-9:
+
+                m_y = (vy2 - vy1) / (py2 - py1)
+                b_y = vy1 - m_y * py1
+
+    calibrados = (
+        m_x is not None
+        and b_x is not None
+        and m_y is not None
+        and b_y is not None
+    )
+
+    # ================================================================
+    # 5. DOMINIO REAL DEL GRÁFICO
+    # ================================================================
+
+    if calibrados:
+
+        # X:
+        # izquierda -> derecha
+        x_val_izquierda = m_x * rect_x1 + b_x
+        x_val_derecha = m_x * rect_x2 + b_x
+
+        x_min = min(x_val_izquierda, x_val_derecha)
+        x_max = max(x_val_izquierda, x_val_derecha)
+
+        # Y:
+        # En la imagen y crece hacia abajo.
+        #
+        # Por eso el valor superior y el inferior se calculan
+        # directamente mediante la calibración.
+
+        y_val_superior = m_y * rect_y1 + b_y
+        y_val_inferior = m_y * rect_y2 + b_y
+
+        y_min = min(y_val_superior, y_val_inferior)
+        y_max = max(y_val_superior, y_val_inferior)
+
+    else:
+
+        # Sin calibración, utilizar coordenadas de píxel.
+        x_min = rect_x1
+        x_max = rect_x2
+
+        # Invertimos Y para obtener coordenadas cartesianas.
+        y_min = -rect_y2
+        y_max = -rect_y1
 
     rango_x = x_max - x_min
     rango_y = y_max - y_min
 
-    if rango_x == 0:
+    if abs(rango_x) < 1e-9:
         rango_x = 1.0
 
-    if rango_y == 0:
+    if abs(rango_y) < 1e-9:
         rango_y = 1.0
 
     # ================================================================
-    # 4. ÁREA DEL GRÁFICO
+    # 6. ÁREA FÍSICA DEL GRÁFICO
     # ================================================================
 
     izquierda = 55.0
@@ -535,54 +650,118 @@ def generar_modelo_desde_recta(
         )
 
     # ================================================================
-    # 5. CONVERSIÓN A COORDENADAS FÍSICAS
+    # 7. CONVERSIÓN PIXEL -> VALOR -> MILÍMETROS
     # ================================================================
 
-    def escalar(x, y):
+    def pixel_a_valor(px, py):
+
+        if calibrados:
+
+            x_val = m_x * px + b_x
+            y_val = m_y * py + b_y
+
+        else:
+
+            x_val = px
+            y_val = -py
+
+        return x_val, y_val
+
+    def valor_a_fisico(x_val, y_val):
 
         x_fis = (
             izquierda
-            + (x - x_min)
+            + (x_val - x_min)
             / rango_x
             * ancho_plot
         )
 
         y_fis = (
             abajo
-            + (y - y_min)
+            + (y_val - y_min)
             / rango_y
             * alto_plot
         )
 
-        return (x_fis, y_fis)
-
-    puntos_fisicos = [
-        escalar(x, y)
-        for x, y in datos
-    ]
+        return x_fis, y_fis
 
     # ================================================================
-    # 6. SIMPLIFICAR LA CURVA PARA EL STL
+    # 8. CONVERTIR CADA SERIE
     # ================================================================
 
-    puntos_stl = simplificar_polilinea(
-        puntos_fisicos,
-        tolerancia=0.8,
-        max_puntos=60
-    )
+    series_fisicas = []
 
-    print(
-        f"[STL] Puntos originales: {len(puntos_fisicos)}",
-        flush=True
-    )
+    for indice, puntos in enumerate(series_puntos, start=1):
 
-    print(
-        f"[STL] Puntos utilizados para geometría: {len(puntos_stl)}",
-        flush=True
-    )
+        puntos_fisicos = []
+
+        for p in puntos:
+
+            try:
+
+                px = float(p["px"])
+                py = float(p["py"])
+
+            except (KeyError, TypeError, ValueError):
+
+                continue
+
+            if not math.isfinite(px) or not math.isfinite(py):
+                continue
+
+            x_val, y_val = pixel_a_valor(px, py)
+
+            if not (
+                math.isfinite(x_val)
+                and math.isfinite(y_val)
+            ):
+                continue
+
+            puntos_fisicos.append(
+                valor_a_fisico(x_val, y_val)
+            )
+
+        if len(puntos_fisicos) >= 2:
+
+            # Eliminar duplicados consecutivos
+            limpios = [puntos_fisicos[0]]
+
+            for p in puntos_fisicos[1:]:
+
+                if hypot(
+                    p[0] - limpios[-1][0],
+                    p[1] - limpios[-1][1]
+                ) > 1e-6:
+
+                    limpios.append(p)
+
+            if len(limpios) >= 2:
+
+                puntos_simplificados = simplificar_polilinea(
+                    limpios,
+                    tolerancia=0.8,
+                    max_puntos=60
+                )
+
+                series_fisicas.append(
+                    puntos_simplificados
+                )
+
+                print(
+                    f"[STL] Serie {indice}: "
+                    f"{len(limpios)} puntos -> "
+                    f"{len(puntos_simplificados)} puntos",
+                    flush=True
+                )
+
+    if not series_fisicas:
+        raise ValueError(
+            "No quedaron puntos válidos después de convertir "
+            "la curva a coordenadas físicas."
+        )
 
     # ================================================================
-    # 7. PLACA BASE
+    # 9. PLACA BASE
     # ================================================================
 
     modelo = (
@@ -597,14 +776,20 @@ def generar_modelo_desde_recta(
     )
 
     # ================================================================
-    # 8. EJES
+    # 10. EJES
     # ================================================================
 
     eje_x_inicio = (izquierda, abajo)
-    eje_x_fin = (dim_x - derecha, abajo)
+    eje_x_fin = (
+        dim_x - derecha,
+        abajo
+    )
 
     eje_y_inicio = (izquierda, abajo)
-    eje_y_fin = (izquierda, dim_y - arriba)
+    eje_y_fin = (
+        izquierda,
+        dim_y - arriba
+    )
 
     modelo = agregar_segmento_relieve(
         modelo,
@@ -623,7 +808,7 @@ def generar_modelo_desde_recta(
     )
 
     # ================================================================
-    # 9. TICKS Y BRAILLE
+    # 11. TICKS
     # ================================================================
 
     NUM_TICKS = 5
@@ -642,10 +827,7 @@ def generar_modelo_desde_recta(
             + fraccion * alto_plot
         )
 
-        # ------------------------------
         # Tick X
-        # ------------------------------
-
         modelo = agregar_segmento_relieve(
             modelo,
             (x_fis, abajo - 3),
@@ -654,10 +836,7 @@ def generar_modelo_desde_recta(
             RELIEVE_TICK
         )
 
-        # ------------------------------
         # Tick Y
-        # ------------------------------
-
         modelo = agregar_segmento_relieve(
             modelo,
             (izquierda - 3, y_fis),
@@ -666,23 +845,22 @@ def generar_modelo_desde_recta(
             RELIEVE_TICK
         )
 
-        # ------------------------------
         # Valores Braille
-        # ------------------------------
-
         if calibrados:
 
             x_valor = (
                 x_min
-                + fraccion * (x_max - x_min)
+                + fraccion * rango_x
             )
 
             y_valor = (
                 y_min
-                + fraccion * (y_max - y_min)
+                + fraccion * rango_y
             )
 
+            # ------------------------------
             # X
+            # ------------------------------
 
             ancho_x = _ancho_numero(x_valor)
 
@@ -701,7 +879,9 @@ def generar_modelo_desde_recta(
                 abajo - CLEARANCE_BRAILLE
             )
 
+            # ------------------------------
             # Y
+            # ------------------------------
 
             ancho_y = _ancho_numero(y_valor)
 
@@ -720,18 +900,20 @@ def generar_modelo_desde_recta(
             )
 
     # ================================================================
-    # 10. CURVA
+    # 12. DIBUJAR TODAS LAS SERIES
     # ================================================================
 
-    modelo = agregar_funcion(
-        modelo,
-        puntos_stl,
-        diametro=DIAM_LINEA,
-        altura=RELIEVE_LINEA
-    )
+    for puntos_stl in series_fisicas:
+
+        modelo = agregar_funcion(
+            modelo,
+            puntos_stl,
+            diametro=DIAM_LINEA,
+            altura=RELIEVE_LINEA
+        )
 
     # ================================================================
-    # 11. EXPORTAR
+    # 13. EXPORTAR
     # ================================================================
 
     cq.exporters.export(
@@ -745,6 +927,5 @@ def generar_modelo_desde_recta(
     )
 
     return modelo
-
 if __name__ == "__main__":
     generar_modelo_bana()
