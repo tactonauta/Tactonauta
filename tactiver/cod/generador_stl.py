@@ -806,7 +806,8 @@ def generar_modelo_desde_recta(
     datos_segmentador,
     dim_x=210.0,
     dim_y=148.0,
-    archivo_salida="grafica_tactil.stl"
+    archivo_salida="grafica_tactil.stl",
+    incluir_etiquetas=False,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -832,6 +833,13 @@ def generar_modelo_desde_recta(
             },
             ...
         ]
+
+    `incluir_etiquetas` (por defecto False, por ahora: se está revisando
+    solo la forma de ejes y curvas) controla los números Braille de los
+    ticks y los títulos del gráfico/ejes. Las marcas físicas de los ticks y
+    los ejes/curvas en sí no se ven afectados —no son texto—, y los
+    márgenes ya quedan reservados para cuando se reactive (`True`), sin
+    necesitar volver a acomodar la placa.
     """
 
     if dim_x < 130 or dim_y < 90:
@@ -1281,11 +1289,12 @@ def generar_modelo_desde_recta(
             piezas, (x_fis, abajo - 3), (x_fis, abajo + 3), 1.5, RELIEVE_TICK
         )
 
-        ancho_x = _ancho_numero(valor_x, decimales_x)
-        inicio_x = min(max(3.0, x_fis - ancho_x / 2), dim_x - ancho_x - 3.0)
-        agregar_numero_braille(
-            piezas, valor_x, inicio_x, abajo - CLEARANCE_BRAILLE, decimales_x
-        )
+        if incluir_etiquetas:
+            ancho_x = _ancho_numero(valor_x, decimales_x)
+            inicio_x = min(max(3.0, x_fis - ancho_x / 2), dim_x - ancho_x - 3.0)
+            agregar_numero_braille(
+                piezas, valor_x, inicio_x, abajo - CLEARANCE_BRAILLE, decimales_x
+            )
 
     for valor_y in valores_y:
         y_fis = min(max(valor_a_fisico(x_min, valor_y)[1], abajo), abajo + alto_plot)
@@ -1294,9 +1303,10 @@ def generar_modelo_desde_recta(
             piezas, (izquierda - 3, y_fis), (izquierda + 3, y_fis), 1.5, RELIEVE_TICK
         )
 
-        ancho_y = _ancho_numero(valor_y, decimales_y)
-        inicio_y = max(3.0, izquierda - CLEARANCE_BRAILLE - ancho_y)
-        agregar_numero_braille(piezas, valor_y, inicio_y, y_fis, decimales_y)
+        if incluir_etiquetas:
+            ancho_y = _ancho_numero(valor_y, decimales_y)
+            inicio_y = max(3.0, izquierda - CLEARANCE_BRAILLE - ancho_y)
+            agregar_numero_braille(piezas, valor_y, inicio_y, y_fis, decimales_y)
 
     # ================================================================
     # 11b. TÍTULOS EN BRAILLE (título del gráfico, nombre de cada eje)
@@ -1305,30 +1315,34 @@ def generar_modelo_desde_recta(
     # OCR— llegaba a la placa: solo se dibujaban números y la curva, sin
     # ningún contexto. Se recortan al ancho disponible en vez de desbordar
     # la placa o multiplicar sin límite las uniones del STL.
-    ancho_disponible_titulo = dim_x - izquierda - derecha
+    # (con incluir_etiquetas=False se saltea todo el bloque: ya se reservó
+    # el margen en base a si había texto, así que la placa no se reacomoda,
+    # solo queda ese espacio en blanco.)
+    if incluir_etiquetas:
+        ancho_disponible_titulo = dim_x - izquierda - derecha
 
-    if titulo_eje_x_txt:
-        texto, recortado = _truncar_para_ancho(
-            _sanear_texto_braille(titulo_eje_x_txt), ancho_disponible_titulo
-        )
-        y_titulo_x = (abajo - CLEARANCE_BRAILLE) - fila_reservada + ALTURA_FILA_BRAILLE / 2
-        agregar_texto_braille(piezas, texto, izquierda, y_titulo_x)
-        if recortado:
-            print(f"[STL] Título del eje X recortado para que quepa en la placa.", flush=True)
+        if titulo_eje_x_txt:
+            texto, recortado = _truncar_para_ancho(
+                _sanear_texto_braille(titulo_eje_x_txt), ancho_disponible_titulo
+            )
+            y_titulo_x = (abajo - CLEARANCE_BRAILLE) - fila_reservada + ALTURA_FILA_BRAILLE / 2
+            agregar_texto_braille(piezas, texto, izquierda, y_titulo_x)
+            if recortado:
+                print(f"[STL] Título del eje X recortado para que quepa en la placa.", flush=True)
 
-    fila_arriba = 0
-    for etiqueta, texto_crudo in (("eje Y", titulo_eje_y_txt), ("gráfico", titulo_grafico)):
-        if not texto_crudo:
-            continue
-        texto, recortado = _truncar_para_ancho(
-            _sanear_texto_braille(texto_crudo), ancho_disponible_titulo
-        )
-        y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
-            + fila_arriba * fila_reservada
-        agregar_texto_braille(piezas, texto, izquierda, y_fila)
-        if recortado:
-            print(f"[STL] Título del {etiqueta} recortado para que quepa en la placa.", flush=True)
-        fila_arriba += 1
+        fila_arriba = 0
+        for etiqueta, texto_crudo in (("eje Y", titulo_eje_y_txt), ("gráfico", titulo_grafico)):
+            if not texto_crudo:
+                continue
+            texto, recortado = _truncar_para_ancho(
+                _sanear_texto_braille(texto_crudo), ancho_disponible_titulo
+            )
+            y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
+                + fila_arriba * fila_reservada
+            agregar_texto_braille(piezas, texto, izquierda, y_fila)
+            if recortado:
+                print(f"[STL] Título del {etiqueta} recortado para que quepa en la placa.", flush=True)
+            fila_arriba += 1
 
     # ================================================================
     # 12. DIBUJAR TODAS LAS SERIES

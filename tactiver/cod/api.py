@@ -214,8 +214,16 @@ def _payload_stl(resultado):
     }
 
 
-def crear_stl_desde_resultado(resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0):
+def crear_stl_desde_resultado(
+    resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=False
+):
     """Convierte una segmentación ya hecha en una placa táctil STL.
+
+    `incluir_etiquetas=False` (el valor por defecto, por ahora): la lámina
+    sale sin números ni títulos en Braille, para revisar primero la forma de
+    ejes y curvas. Los márgenes que ya les reserva espacio no se tocan, así
+    que agregarlos más adelante (poner `incluir_etiquetas=True`) no requiere
+    volver a acomodar la placa.
 
     Devuelve (nombre_stl, advertencias). Lanza ValueError con un mensaje
     entendible si la gráfica no da para una lámina.
@@ -235,6 +243,11 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", dim_x=210.0, dim_y=1
             "faltar o no corresponder a los valores reales. Revisar el overlay "
             "antes de imprimir."
         )
+    if not incluir_etiquetas:
+        advertencias.append(
+            "Lámina sin números ni títulos en Braille todavía (pendiente de "
+            "activar): los márgenes ya quedan reservados para agregarlos."
+        )
 
     nombre = f"{prefijo}_{uuid.uuid4().hex[:8]}.stl"
     generar_modelo_desde_recta(
@@ -242,17 +255,22 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", dim_x=210.0, dim_y=1
         dim_x=dim_x,
         dim_y=dim_y,
         archivo_salida=os.path.join(STL_DIR, nombre),
+        incluir_etiquetas=incluir_etiquetas,
     )
     return nombre, advertencias
 
 
-def crear_stl_desde_imagen(ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0):
+def crear_stl_desde_imagen(
+    ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=False
+):
     """Segmenta una gráfica lineal y genera su placa táctil STL.
 
     Devuelve (resultado_segmentador, nombre_stl, advertencias).
     """
     resultado = procesar_imagen(ruta_imagen, RESULTADOS_DIR)
-    nombre, advertencias = crear_stl_desde_resultado(resultado, prefijo, dim_x, dim_y)
+    nombre, advertencias = crear_stl_desde_resultado(
+        resultado, prefijo, dim_x, dim_y, incluir_etiquetas
+    )
     return resultado, nombre, advertencias
 
 
