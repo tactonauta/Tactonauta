@@ -98,7 +98,7 @@ consumir esta API (no hace falta que sea JavaScript).
 
 ### Generar una placa táctil STL (Fase 1)
 
-Instala también `cadquery` (ya incluido en `requirements.txt`) y envía dos
+Instala también `numpy-stl` (ya incluido en `requirements.txt`) y envía dos
 puntos expresados en milímetros. El resultado es una placa de 210 x 148 mm
 por defecto, con ejes, marcas y números Braille en relieve.
 

@@ -3,13 +3,32 @@
 Este módulo reemplaza a la implementación anterior del generador STL y
 convierte el Bloque 3 en la fuente de verdad del proyecto, manteniendo la
 compatibilidad con la API y con el flujo de segmentación existente.
+
+Geometría: numpy + numpy-stl, sin kernel CAD.
+-----------------------------------------------
+Hasta esta versión, la geometría se construía con `cadquery` (un kernel CAD
+paramétrico completo sobre OpenCascade/OCCT), pensado para modelado con
+booleanos topológicos reales, fillets, cortes, etc. Acá nunca se usó nada de
+eso: todo lo que se dibuja son cajas, cilindros y esferas simples que se
+tocan o se superponen levemente entre sí y con la placa base — que es todo
+lo que necesita un slicer de impresión 3D para fusionarlas al cortar por
+capas; no hace falta que el STL sea un único sólido topológicamente cerrado.
+
+Usar un kernel CAD completo para esto resultó ser, medido en producción, la
+causa de que Render matara el contenedor por falta de memoria (evento "Out
+of Memory" confirmado) al generar una placa con títulos y varias series:
+picos de ~1.3-1.7GB de RAM y hasta 100s. El mismo modelo construido a mano
+como arreglos de triángulos (numpy) y escrito con `numpy-stl` midió <50MB de
+pico y ~2s — la sobrecarga era enteramente del kernel CAD, no de la
+geometría en sí.
 """
 
 import math
 import unicodedata
 from math import atan2, degrees, hypot
 
-import cadquery as cq
+import numpy as np
+from stl import mesh
 
 # =============================================================================
 # CONSTANTES
@@ -37,6 +56,23 @@ RAYA_HUECO = 3.5
 # Patrón "punteado" (serie 3): separación mínima entre bultos, en mm, para
 # que no se junten hasta parecer una línea continua otra vez.
 PUNTEADO_ESPACIADO = 5.0
+
+# Resolución de las mallas generadas a mano (nº de caras). Antes esto lo
+# decidía automáticamente el teselado de OCCT; acá se elige directamente, sin
+# depender de una "tolerancia" indirecta. 8x12 y 16 lados ya son más finos de
+# lo que una impresora FDM de escritorio puede resolver físicamente.
+ESFERA_LAT = 8
+ESFERA_LON = 12
+CILINDRO_LADOS = 16
+
+# Cuánto se hunde cada pieza en relieve dentro de la placa/pieza vecina (mm).
+# Sin un kernel CAD que suelde topológicamente las piezas, dos superficies
+# que solo se TOCAN (sin superponerse) dependen de que el slicer las una
+# bien al cortar por capas — la mayoría lo hace, pero garantizar una pequeña
+# superposición real elimina cualquier duda, sin cambiar el relieve visible
+# (se resta del punto de partida y se suma a la altura, así que lo que
+# sobresale por encima de la superficie mide exactamente lo mismo).
+SOLAPE = 0.15
 
 LETRAS = {
     "a": [1], "b": [1, 2], "c": [1, 4], "d": [1, 4, 5], "e": [1, 5],
@@ -67,18 +103,133 @@ for _n, _letra in enumerate(_ORDEN_DIGITOS, start=1):
     BRAILLE[_digito] = sorted(_DESPLAZAMIENTO_NEMETH[d] for d in LETRAS[_letra])
 
 
-def agregar_punto_braille(modelo, cx, cy):
-    """Genera un punto Braille en relieve sobre la placa."""
-    punto = (
-        cq.Workplane("XY")
-        .workplane(offset=BASE_THICKNESS)
-        .center(cx, cy)
-        .sphere(DIAM_PUNTO_BRAILLE / 2)
+# ============================================================
+# GENERADORES DE MALLA (numpy puro, sin kernel CAD)
+# ============================================================
+# Cada función devuelve un arreglo numpy (n_triángulos, 3, 3): n triángulos,
+# 3 vértices por triángulo, 3 coordenadas (x, y, z) por vértice. Los
+# devanados (orden de los vértices) están verificados a mano para que la
+# normal de cada cara apunte hacia afuera de la pieza.
+
+def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
+    """Una caja rectangular como 12 triángulos.
+
+    Equivale a lo que antes hacía
+    `cq.Workplane("XY").workplane(offset=z0).center(cx, cy)
+       .box(ancho, profundidad, altura, centered=(True, True, False))`.
+    """
+    x0, x1 = cx - ancho / 2.0, cx + ancho / 2.0
+    y0, y1 = cy - profundidad / 2.0, cy + profundidad / 2.0
+    z1 = z0 + altura
+    v = np.array([
+        (x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),  # 0-3: abajo
+        (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),  # 4-7: arriba
+    ])
+    caras = (
+        (0, 2, 1), (0, 3, 2),  # abajo    (normal -Z)
+        (4, 5, 6), (4, 6, 7),  # arriba   (normal +Z)
+        (0, 1, 5), (0, 5, 4),  # frente   (normal -Y)
+        (1, 2, 6), (1, 6, 5),  # derecha  (normal +X)
+        (2, 3, 7), (2, 7, 6),  # atrás    (normal +Y)
+        (3, 0, 4), (3, 4, 7),  # izquierda(normal -X)
     )
-    return modelo.union(punto)
+    return v[np.array(caras)]
 
 
-def agregar_caracter_braille(modelo, caracter, cx, cy):
+def _malla_cilindro(radio, altura, cx=0.0, cy=0.0, z0=0.0, lados=CILINDRO_LADOS):
+    """Un cilindro (círculo extruido) aproximado por un prisma de `lados`
+    caras, con sus dos tapas.
+
+    Equivale a lo que antes hacía
+    `cq.Workplane("XY").workplane(offset=z0).center(cx, cy)
+       .circle(radio).extrude(altura)`.
+    """
+    angulos = np.linspace(0, 2 * np.pi, lados, endpoint=False)
+    anillo_x = cx + radio * np.cos(angulos)
+    anillo_y = cy + radio * np.sin(angulos)
+    z1 = z0 + altura
+
+    tris = []
+    for i in range(lados):
+        j = (i + 1) % lados
+        p0b, p1b = (anillo_x[i], anillo_y[i], z0), (anillo_x[j], anillo_y[j], z0)
+        p0t, p1t = (anillo_x[i], anillo_y[i], z1), (anillo_x[j], anillo_y[j], z1)
+        tris.append(((cx, cy, z0), p1b, p0b))   # tapa de abajo (-Z)
+        tris.append(((cx, cy, z1), p0t, p1t))   # tapa de arriba (+Z)
+        tris.append((p0b, p1b, p1t))            # pared (normal radial saliente)
+        tris.append((p0b, p1t, p0t))
+    return np.array(tris)
+
+
+def _malla_esfera(radio, cx=0.0, cy=0.0, cz=0.0, lat=ESFERA_LAT, lon=ESFERA_LON):
+    """Una esfera aproximada por una grilla latitud/longitud (malla UV
+    estándar).
+
+    Equivale a lo que antes hacía
+    `cq.Workplane("XY").workplane(offset=cz).center(cx, cy).sphere(radio)`
+    (acá `cz` ya es la coordenada Z absoluta del centro).
+    """
+    def punto(theta, phi):
+        return (
+            cx + radio * math.sin(theta) * math.cos(phi),
+            cy + radio * math.sin(theta) * math.sin(phi),
+            cz + radio * math.cos(theta),
+        )
+
+    tris = []
+    for i in range(lat):
+        theta0, theta1 = math.pi * i / lat, math.pi * (i + 1) / lat
+        for j in range(lon):
+            phi0, phi1 = 2 * math.pi * j / lon, 2 * math.pi * (j + 1) / lon
+            p00, p01 = punto(theta0, phi0), punto(theta0, phi1)
+            p10, p11 = punto(theta1, phi0), punto(theta1, phi1)
+            if i != 0:
+                tris.append((p00, p10, p11))
+            if i != lat - 1:
+                tris.append((p00, p11, p01))
+    return np.array(tris)
+
+
+def _rotar_z(triangulos, angulo_grados):
+    """Rota una malla alrededor del eje Z que pasa por el origen."""
+    if triangulos.size == 0:
+        return triangulos
+    ang = math.radians(angulo_grados)
+    c, s = math.cos(ang), math.sin(ang)
+    rot = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    forma = triangulos.shape
+    return (triangulos.reshape(-1, 3) @ rot.T).reshape(forma)
+
+
+def _trasladar(triangulos, dx, dy, dz):
+    """Traslada una malla."""
+    if triangulos.size == 0:
+        return triangulos
+    return triangulos + np.array([dx, dy, dz])
+
+
+def _guardar_stl(triangulos, archivo_salida):
+    """Escribe una malla (arreglo N×3×3) a un archivo STL binario."""
+    m = mesh.Mesh(np.zeros(triangulos.shape[0], dtype=mesh.Mesh.dtype))
+    m.vectors[:] = triangulos
+    m.update_normals()
+    m.save(archivo_salida)
+    return m
+
+
+def agregar_punto_braille(piezas, cx, cy):
+    """Agrega un punto Braille (una esfera en relieve) a la lista `piezas`.
+
+    No se combina con nada todavía: las piezas se acumulan y se concatenan
+    con la placa base de una sola vez al final (ver `_ensamblar`). La esfera
+    nace centrada exactamente en la superficie de la placa (mitad adentro,
+    mitad afuera), así que ya queda bien anclada sin necesitar ningún
+    boolean.
+    """
+    piezas.append(_malla_esfera(DIAM_PUNTO_BRAILLE / 2, cx=cx, cy=cy, cz=BASE_THICKNESS))
+
+
+def agregar_caracter_braille(piezas, caracter, cx, cy):
     posiciones = {
         1: (-ESPACIADO_BRAILLE / 2, ESPACIADO_BRAILLE),
         2: (-ESPACIADO_BRAILLE / 2, 0),
@@ -89,17 +240,15 @@ def agregar_caracter_braille(modelo, caracter, cx, cy):
     }
     for p in BRAILLE.get(str(caracter).lower(), []):
         dx, dy = posiciones[p]
-        modelo = agregar_punto_braille(modelo, cx + dx, cy + dy)
-    return modelo
+        agregar_punto_braille(piezas, cx + dx, cy + dy)
 
 
-def agregar_texto_braille(modelo, texto, cx, cy):
+def agregar_texto_braille(piezas, texto, cx, cy):
     """Coloca una cadena de caracteres Braille en línea."""
     x = cx
     for ch in texto:
-        modelo = agregar_caracter_braille(modelo, ch, x, cy)
+        agregar_caracter_braille(piezas, ch, x, cy)
         x += CELDA_PITCH
-    return modelo
 
 
 def _decimales_necesarios(valores, max_decimales=3):
@@ -134,7 +283,7 @@ def _formatear_valor_braille(valor, decimales):
     return es_negativo, entero, frac
 
 
-def agregar_numero_braille(modelo, valor, cx, cy, decimales=0):
+def agregar_numero_braille(piezas, valor, cx, cy, decimales=0):
     """Coloca un número en formato Nemeth: signo menos si corresponde,
     indicador numeral, parte entera y, si `decimales` > 0, punto decimal
     Nemeth + parte decimal.
@@ -145,20 +294,19 @@ def agregar_numero_braille(modelo, valor, cx, cy, decimales=0):
     es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
     x = cx
     if es_negativo:
-        modelo = agregar_caracter_braille(modelo, "menos", x, cy)
+        agregar_caracter_braille(piezas, "menos", x, cy)
         x += CELDA_PITCH
-    modelo = agregar_caracter_braille(modelo, "numeral", x, cy)
+    agregar_caracter_braille(piezas, "numeral", x, cy)
     x += CELDA_PITCH
     for ch in entero:
-        modelo = agregar_caracter_braille(modelo, ch, x, cy)
+        agregar_caracter_braille(piezas, ch, x, cy)
         x += CELDA_PITCH
     if frac:
-        modelo = agregar_caracter_braille(modelo, "punto", x, cy)
+        agregar_caracter_braille(piezas, "punto", x, cy)
         x += CELDA_PITCH
         for ch in frac:
-            modelo = agregar_caracter_braille(modelo, ch, x, cy)
+            agregar_caracter_braille(piezas, ch, x, cy)
             x += CELDA_PITCH
-    return modelo
 
 
 def _valores_reales_eje(etiquetas, minimo, valor_min, valor_max, tolerancia=0.15):
@@ -220,9 +368,16 @@ def _truncar_para_ancho(texto, ancho_disponible, maximo_absoluto=40):
     return texto[:max_celdas], True
 
 
-def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
-    """Crea un tramo recto en relieve con dos extremos redondeados."""
+def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
+    """Agrega un tramo recto en relieve, con dos extremos redondeados, a la
+    lista `piezas` (tres piezas: el cuerpo y las dos tapas).
 
+    Arrancan `SOLAPE` mm por debajo de la superficie de la placa (en vez de
+    justo en el borde) para garantizar una superposición real: sin un
+    kernel CAD que suelde topológicamente las piezas, dos superficies que
+    solo se tocan dependen de que el slicer las una bien al cortar por
+    capas. La altura visible por encima de la superficie no cambia.
+    """
     x0 = float(p0[0])
     y0 = float(p0[1])
     x1 = float(p1[0])
@@ -234,74 +389,36 @@ def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
     largo = hypot(dx, dy)
 
     if largo < 1e-6:
-        return modelo
+        return
 
     angulo = degrees(atan2(dy, dx))
 
     mx = (x0 + x1) / 2
     my = (y0 + y1) / 2
 
-    # Crear el rectángulo centrado en el origen.
-    cuerpo = (
-        cq.Workplane("XY")
-        .workplane(offset=BASE_THICKNESS)
-        .box(
-            largo,
-            float(diametro),
-            float(altura),
-            centered=(True, True, False)
-        )
-    )
+    z0 = BASE_THICKNESS - SOLAPE
+    altura_real = float(altura) + SOLAPE
 
-    # Girarlo alrededor del eje Z.
-    cuerpo = cuerpo.rotate(
-        (0, 0, 0),
-        (0, 0, 1),
-        angulo
-    )
+    cuerpo_local = _malla_caja(largo, float(diametro), altura_real, cx=0.0, cy=0.0, z0=0.0)
+    cuerpo = _trasladar(_rotar_z(cuerpo_local, angulo), mx, my, z0)
 
-    # Llevarlo al punto medio del segmento.
-    cuerpo = cuerpo.translate(
-        (mx, my, 0)
-    )
+    tapa0 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x0, cy=y0, z0=z0)
+    tapa1 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x1, cy=y1, z0=z0)
 
-    # Extremos redondeados.
-    tapa0 = (
-        cq.Workplane("XY")
-        .workplane(offset=BASE_THICKNESS)
-        .center(x0, y0)
-        .circle(float(diametro) / 2)
-        .extrude(float(altura))
-    )
-
-    tapa1 = (
-        cq.Workplane("XY")
-        .workplane(offset=BASE_THICKNESS)
-        .center(x1, y1)
-        .circle(float(diametro) / 2)
-        .extrude(float(altura))
-    )
-
-    return (
-        modelo
-        .union(cuerpo)
-        .union(tapa0)
-        .union(tapa1)
-    )
+    piezas.append(cuerpo)
+    piezas.append(tapa0)
+    piezas.append(tapa1)
 
 
-def agregar_punto_relieve(modelo, punto, diametro, altura):
+def agregar_punto_relieve(piezas, punto, diametro, altura):
     """Un bulto redondo aislado en el punto dado (usado por el patrón
-    "punteado" para distinguir una tercera serie al tacto)."""
+    "punteado" para distinguir una tercera serie al tacto). Ver `SOLAPE`
+    en `agregar_segmento_relieve`."""
     x, y = float(punto[0]), float(punto[1])
-    bulto = (
-        cq.Workplane("XY")
-        .workplane(offset=BASE_THICKNESS)
-        .center(x, y)
-        .circle(float(diametro) / 2)
-        .extrude(float(altura))
-    )
-    return modelo.union(bulto)
+    piezas.append(_malla_cilindro(
+        float(diametro) / 2, float(altura) + SOLAPE,
+        cx=x, cy=y, z0=BASE_THICKNESS - SOLAPE,
+    ))
 
 
 def _puntos_espaciados(puntos, distancia_min):
@@ -450,14 +567,14 @@ _ESTILOS_SERIE = [
 
 
 def agregar_funcion(
-    modelo,
+    piezas,
     puntos,
     diametro=DIAM_LINEA,
     altura=RELIEVE_LINEA,
     patron="solido",
 ):
     """
-    Dibuja una polilínea en relieve.
+    Agrega una polilínea en relieve a la lista `piezas`.
 
     Los puntos deben estar ya convertidos a coordenadas físicas.
 
@@ -470,21 +587,30 @@ def agregar_funcion(
     """
 
     if not puntos or len(puntos) < 2:
-        return modelo
+        return
 
     if patron == "punteado":
         for p in _puntos_espaciados(puntos, PUNTEADO_ESPACIADO):
-            modelo = agregar_punto_relieve(modelo, p, diametro, altura)
-        return modelo
+            agregar_punto_relieve(piezas, p, diametro, altura)
+        return
 
     for p0, p1 in zip(puntos[:-1], puntos[1:]):
         if patron == "rayado":
             for a, b in _dividir_en_rayas(p0, p1):
-                modelo = agregar_segmento_relieve(modelo, a, b, diametro, altura)
+                agregar_segmento_relieve(piezas, a, b, diametro, altura)
         else:
-            modelo = agregar_segmento_relieve(modelo, p0, p1, diametro, altura)
+            agregar_segmento_relieve(piezas, p0, p1, diametro, altura)
 
-    return modelo
+
+def _ensamblar(base, piezas):
+    """Combina la placa base con TODAS las piezas en relieve en un solo
+    arreglo de triángulos, con una simple concatenación de numpy — nada de
+    boolean/CSG (ver la nota al principio del archivo sobre por qué no hace
+    falta)."""
+    trozos = [base] + [p for p in piezas if p is not None and len(p)]
+    return np.concatenate(trozos, axis=0)
+
+
 def _valores_tick(v_min, v_max, intervalo):
     """Devuelve los múltiplos de un intervalo dentro del rango."""
     inicio = math.ceil(v_min / intervalo) * intervalo
@@ -524,11 +650,7 @@ def generar_modelo_bana(
     def a_fisico(punto):
         return (punto[0] + origen_x_fis, punto[1] + origen_y_fis)
 
-    modelo = (
-        cq.Workplane("XY")
-        .center(dim_x / 2, dim_y / 2)
-        .box(dim_x, dim_y, BASE_THICKNESS, centered=(True, True, False))
-    )
+    modelo = _malla_caja(dim_x, dim_y, BASE_THICKNESS, cx=dim_x / 2, cy=dim_y / 2, z0=0.0)
 
     grosor_eje = 2.0
     z_ejes = BASE_THICKNESS + RELIEVE_EJE
@@ -537,74 +659,83 @@ def generar_modelo_bana(
     x0_fis, x1_fis = a_fisico((x_min, 0))[0], a_fisico((x_max, 0))[0]
     y0_fis, y1_fis = a_fisico((0, y_min))[1], a_fisico((0, y_max))[1]
 
-    eje_x = (
-        cq.Workplane("XY").center((x0_fis + x1_fis) / 2, origen_y_fis)
-        .box(x1_fis - x0_fis, grosor_eje, z_ejes, centered=(True, True, False))
+    piezas = []
+
+    # Ejes y ticks arrancan en z=0 (atraviesan toda la placa) en vez de
+    # apenas en su superficie, así que ya quedan bien anclados sin
+    # necesitar ningún boolean.
+    eje_x = _malla_caja(
+        x1_fis - x0_fis, grosor_eje, z_ejes,
+        cx=(x0_fis + x1_fis) / 2, cy=origen_y_fis, z0=0.0,
     )
-    eje_y = (
-        cq.Workplane("XY").center(origen_x_fis, (y0_fis + y1_fis) / 2)
-        .box(grosor_eje, y1_fis - y0_fis, z_ejes, centered=(True, True, False))
+    eje_y = _malla_caja(
+        grosor_eje, y1_fis - y0_fis, z_ejes,
+        cx=origen_x_fis, cy=(y0_fis + y1_fis) / 2, z0=0.0,
     )
-    modelo = modelo.union(eje_x).union(eje_y)
+    piezas.append(eje_x)
+    piezas.append(eje_y)
 
     longitud_tick = 6.0
     for valor in _valores_tick(x_min, x_max, intervalo_ticks):
         x_fis = origen_x_fis + valor
         if valor != 0:
-            tick = (
-                cq.Workplane("XY").center(x_fis, origen_y_fis)
-                .box(grosor_eje, longitud_tick, z_ticks, centered=(True, True, False))
+            tick = _malla_caja(
+                grosor_eje, longitud_tick, z_ticks,
+                cx=x_fis, cy=origen_y_fis, z0=0.0,
             )
-            modelo = modelo.union(tick)
-        modelo = agregar_numero_braille(
-            modelo, valor, cx=x_fis, cy=origen_y_fis - CLEARANCE_BRAILLE
+            piezas.append(tick)
+        agregar_numero_braille(
+            piezas, valor, cx=x_fis, cy=origen_y_fis - CLEARANCE_BRAILLE
         )
 
     for valor in _valores_tick(y_min, y_max, intervalo_ticks):
         if valor == 0:
             continue
         y_fis = origen_y_fis + valor
-        tick = (
-            cq.Workplane("XY").center(origen_x_fis, y_fis)
-            .box(longitud_tick, grosor_eje, z_ticks, centered=(True, True, False))
+        tick = _malla_caja(
+            longitud_tick, grosor_eje, z_ticks,
+            cx=origen_x_fis, cy=y_fis, z0=0.0,
         )
-        modelo = modelo.union(tick)
+        piezas.append(tick)
         ancho_estimado = CELDA_PITCH * (len(str(abs(valor))) + 2)
-        modelo = agregar_numero_braille(
-            modelo, valor, cx=origen_x_fis - CLEARANCE_BRAILLE - ancho_estimado, cy=y_fis
+        agregar_numero_braille(
+            piezas, valor, cx=origen_x_fis - CLEARANCE_BRAILLE - ancho_estimado, cy=y_fis
         )
 
-    modelo = agregar_texto_braille(
-        modelo, "x", cx=x1_fis - CELDA_PITCH,
+    agregar_texto_braille(
+        piezas, "x", cx=x1_fis - CELDA_PITCH,
         cy=origen_y_fis - CLEARANCE_BRAILLE - CELDA_PITCH * 2,
     )
-    modelo = agregar_texto_braille(
-        modelo, "y", cx=origen_x_fis - CLEARANCE_BRAILLE - CELDA_PITCH * 3,
+    agregar_texto_braille(
+        piezas, "y", cx=origen_x_fis - CLEARANCE_BRAILLE - CELDA_PITCH * 3,
         cy=y1_fis - CELDA_PITCH,
     )
 
-    modelo = agregar_funcion(modelo, [a_fisico(p1), a_fisico(p2)])
+    agregar_funcion(piezas, [a_fisico(p1), a_fisico(p2)])
 
-    cq.exporters.export(modelo, archivo_salida)
+    triangulos = _ensamblar(modelo, piezas)
+    _guardar_stl(triangulos, archivo_salida)
     print(f"Modelo táctil BANA ({dim_x}x{dim_y}mm) exportado a: {archivo_salida}")
-    return modelo
+    return triangulos
 
 
-# Compatibilidad con el código previo del proyecto.
-def _punto_braille(modelo, cx, cy):
-    return agregar_punto_braille(modelo, cx, cy)
+# Compatibilidad con el código previo del proyecto. Nada más en el repo las
+# llama, pero se actualiza su firma (reciben `piezas`, no `modelo`) para que
+# sigan siendo un espejo fiel de las funciones que envuelven.
+def _punto_braille(piezas, cx, cy):
+    return agregar_punto_braille(piezas, cx, cy)
 
 
-def _caracter_braille(modelo, caracter, cx, cy):
-    return agregar_caracter_braille(modelo, caracter, cx, cy)
+def _caracter_braille(piezas, caracter, cx, cy):
+    return agregar_caracter_braille(piezas, caracter, cx, cy)
 
 
-def _numero_braille(modelo, valor, cx, cy):
-    return agregar_numero_braille(modelo, valor, cx, cy)
+def _numero_braille(piezas, valor, cx, cy):
+    return agregar_numero_braille(piezas, valor, cx, cy)
 
 
-def _segmento(modelo, inicio, fin, diametro, altura):
-    return agregar_segmento_relieve(modelo, inicio, fin, diametro, altura)
+def _segmento(piezas, inicio, fin, diametro, altura):
+    return agregar_segmento_relieve(piezas, inicio, fin, diametro, altura)
 
 
 def _ticks(minimo, maximo, intervalo):
@@ -1032,16 +1163,12 @@ def generar_modelo_desde_recta(
     # 9. PLACA BASE
     # ================================================================
 
-    modelo = (
-        cq.Workplane("XY")
-        .center(dim_x / 2, dim_y / 2)
-        .box(
-            dim_x,
-            dim_y,
-            BASE_THICKNESS,
-            centered=(True, True, False)
-        )
-    )
+    modelo = _malla_caja(dim_x, dim_y, BASE_THICKNESS, cx=dim_x / 2, cy=dim_y / 2, z0=0.0)
+
+    # Todas las piezas en relieve (ejes, ticks, números y texto Braille,
+    # curvas) se acumulan acá y se sueldan a la placa base de una sola vez
+    # al final (ver _ensamblar) en vez de unirse una por una.
+    piezas = []
 
     # ================================================================
     # 10. EJES
@@ -1059,16 +1186,16 @@ def generar_modelo_desde_recta(
         dim_y - arriba
     )
 
-    modelo = agregar_segmento_relieve(
-        modelo,
+    agregar_segmento_relieve(
+        piezas,
         eje_x_inicio,
         eje_x_fin,
         2.0,
         RELIEVE_EJE
     )
 
-    modelo = agregar_segmento_relieve(
-        modelo,
+    agregar_segmento_relieve(
+        piezas,
         eje_y_inicio,
         eje_y_fin,
         2.0,
@@ -1113,26 +1240,26 @@ def generar_modelo_desde_recta(
     for valor_x in valores_x:
         x_fis = min(max(valor_a_fisico(valor_x, y_min)[0], izquierda), izquierda + ancho_plot)
 
-        modelo = agregar_segmento_relieve(
-            modelo, (x_fis, abajo - 3), (x_fis, abajo + 3), 1.5, RELIEVE_TICK
+        agregar_segmento_relieve(
+            piezas, (x_fis, abajo - 3), (x_fis, abajo + 3), 1.5, RELIEVE_TICK
         )
 
         ancho_x = _ancho_numero(valor_x, decimales_x)
         inicio_x = min(max(3.0, x_fis - ancho_x / 2), dim_x - ancho_x - 3.0)
-        modelo = agregar_numero_braille(
-            modelo, valor_x, inicio_x, abajo - CLEARANCE_BRAILLE, decimales_x
+        agregar_numero_braille(
+            piezas, valor_x, inicio_x, abajo - CLEARANCE_BRAILLE, decimales_x
         )
 
     for valor_y in valores_y:
         y_fis = min(max(valor_a_fisico(x_min, valor_y)[1], abajo), abajo + alto_plot)
 
-        modelo = agregar_segmento_relieve(
-            modelo, (izquierda - 3, y_fis), (izquierda + 3, y_fis), 1.5, RELIEVE_TICK
+        agregar_segmento_relieve(
+            piezas, (izquierda - 3, y_fis), (izquierda + 3, y_fis), 1.5, RELIEVE_TICK
         )
 
         ancho_y = _ancho_numero(valor_y, decimales_y)
         inicio_y = max(3.0, izquierda - CLEARANCE_BRAILLE - ancho_y)
-        modelo = agregar_numero_braille(modelo, valor_y, inicio_y, y_fis, decimales_y)
+        agregar_numero_braille(piezas, valor_y, inicio_y, y_fis, decimales_y)
 
     # ================================================================
     # 11b. TÍTULOS EN BRAILLE (título del gráfico, nombre de cada eje)
@@ -1148,7 +1275,7 @@ def generar_modelo_desde_recta(
             _sanear_texto_braille(titulo_eje_x_txt), ancho_disponible_titulo
         )
         y_titulo_x = (abajo - CLEARANCE_BRAILLE) - fila_reservada + ALTURA_FILA_BRAILLE / 2
-        modelo = agregar_texto_braille(modelo, texto, izquierda, y_titulo_x)
+        agregar_texto_braille(piezas, texto, izquierda, y_titulo_x)
         if recortado:
             print(f"[STL] Título del eje X recortado para que quepa en la placa.", flush=True)
 
@@ -1161,7 +1288,7 @@ def generar_modelo_desde_recta(
         )
         y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
             + fila_arriba * fila_reservada
-        modelo = agregar_texto_braille(modelo, texto, izquierda, y_fila)
+        agregar_texto_braille(piezas, texto, izquierda, y_fila)
         if recortado:
             print(f"[STL] Título del {etiqueta} recortado para que quepa en la placa.", flush=True)
         fila_arriba += 1
@@ -1176,8 +1303,8 @@ def generar_modelo_desde_recta(
 
     for indice, puntos_stl in enumerate(series_fisicas):
         estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
-        modelo = agregar_funcion(
-            modelo,
+        agregar_funcion(
+            piezas,
             puntos_stl,
             diametro=estilo["diametro"],
             altura=estilo["altura"],
@@ -1190,19 +1317,20 @@ def generar_modelo_desde_recta(
         )
 
     # ================================================================
-    # 13. EXPORTAR
+    # 13. ENSAMBLAR Y EXPORTAR
     # ================================================================
+    # Una sola concatenación de la placa base con todas las piezas juntas
+    # (no unión booleana una por una): ver _ensamblar más arriba.
 
-    cq.exporters.export(
-        modelo,
-        archivo_salida
-    )
+    print(f"[STL] Ensamblando {len(piezas)} piezas en relieve...", flush=True)
+    triangulos = _ensamblar(modelo, piezas)
+    _guardar_stl(triangulos, archivo_salida)
 
     print(
         f"[STL] Modelo táctil generado: {archivo_salida}",
         flush=True
     )
 
-    return modelo
+    return triangulos
 if __name__ == "__main__":
     generar_modelo_bana()
