@@ -565,6 +565,35 @@ _ESTILOS_SERIE = [
     {"nombre": "punteada", "patron": "punteado", "diametro": DIAM_LINEA * 1.3, "altura": RELIEVE_LINEA - 0.3},
 ]
 
+# Textura de cada eje: distinta entre sí y de las series de datos (que se
+# quedan con la línea sólida, la más alta — "dato > eje > marca de escala").
+# Antes ambos ejes eran una barra lisa idéntica entre sí y de la misma
+# familia de forma que una curva sólida; con esto un eje ya no se confunde
+# al tacto ni con el otro eje ni con un dato. El espaciado es más fino que
+# el de las series para que se sientan como una guía, no como un dato.
+EJE_X_ESTILO = {
+    "patron": "rayado", "diametro": 2.0, "altura": RELIEVE_EJE,
+    "raya_largo": 3.0, "raya_hueco": 2.0, "punteado_espaciado": PUNTEADO_ESPACIADO,
+}
+EJE_Y_ESTILO = {
+    "patron": "punteado", "diametro": 2.0, "altura": RELIEVE_EJE,
+    "raya_largo": RAYA_LARGO, "raya_hueco": RAYA_HUECO, "punteado_espaciado": 4.0,
+}
+
+
+def _linea_recta(p0, p1, paso):
+    """Puntos equiespaciados a lo largo de un segmento recto, cada `paso` mm
+    aprox. Un eje solo tiene 2 puntos (sus extremos); el patrón "punteado"
+    necesita varios puntos intermedios para poner una fila de bultos a lo
+    largo, no solo uno en cada punta."""
+    x0, y0 = p0
+    x1, y1 = p1
+    largo = hypot(x1 - x0, y1 - y0)
+    if largo < 1e-9:
+        return [p0, p1]
+    n = max(2, int(round(largo / paso)) + 1)
+    return [(x0 + (x1 - x0) * (i / (n - 1)), y0 + (y1 - y0) * (i / (n - 1))) for i in range(n)]
+
 
 def agregar_funcion(
     piezas,
@@ -572,34 +601,52 @@ def agregar_funcion(
     diametro=DIAM_LINEA,
     altura=RELIEVE_LINEA,
     patron="solido",
+    raya_largo=RAYA_LARGO,
+    raya_hueco=RAYA_HUECO,
+    punteado_espaciado=PUNTEADO_ESPACIADO,
 ):
     """
     Agrega una polilínea en relieve a la lista `piezas`.
 
     Los puntos deben estar ya convertidos a coordenadas físicas.
 
-    `patron` distingue táctilmente varias series superpuestas en la misma
-    placa (el segmentador ya avisa cuando detecta más de una: "cada serie
-    necesita su propia textura"):
-      - "solido"   -> línea continua (serie 1).
-      - "rayado"   -> tramos discontinuos (serie 2).
-      - "punteado" -> bultos redondos aislados, sin línea (serie 3).
+    `patron` distingue táctilmente varios elementos superpuestos en la
+    misma placa (series de datos entre sí, y cada eje de la curva):
+      - "solido"   -> línea continua.
+      - "rayado"   -> tramos discontinuos (largo/hueco configurables).
+      - "punteado" -> bultos redondos aislados, sin línea (espaciado
+        configurable). Con solo 2 puntos (un tramo recto, como un eje) hay
+        que densificarlo primero — ver `_linea_recta` — porque si no el
+        patrón solo pondría un bulto en cada punta.
     """
 
     if not puntos or len(puntos) < 2:
         return
 
     if patron == "punteado":
-        for p in _puntos_espaciados(puntos, PUNTEADO_ESPACIADO):
+        if len(puntos) == 2:
+            puntos = _linea_recta(puntos[0], puntos[1], punteado_espaciado)
+        for p in _puntos_espaciados(puntos, punteado_espaciado):
             agregar_punto_relieve(piezas, p, diametro, altura)
         return
 
     for p0, p1 in zip(puntos[:-1], puntos[1:]):
         if patron == "rayado":
-            for a, b in _dividir_en_rayas(p0, p1):
+            for a, b in _dividir_en_rayas(p0, p1, raya_largo, raya_hueco):
                 agregar_segmento_relieve(piezas, a, b, diametro, altura)
         else:
             agregar_segmento_relieve(piezas, p0, p1, diametro, altura)
+
+
+def _agregar_eje(piezas, p0, p1, estilo):
+    """Dibuja un eje (tramo recto de p0 a p1) con su textura propia
+    (ver EJE_X_ESTILO / EJE_Y_ESTILO)."""
+    agregar_funcion(
+        piezas, [p0, p1],
+        diametro=estilo["diametro"], altura=estilo["altura"], patron=estilo["patron"],
+        raya_largo=estilo["raya_largo"], raya_hueco=estilo["raya_hueco"],
+        punteado_espaciado=estilo["punteado_espaciado"],
+    )
 
 
 def _ensamblar(base, piezas):
@@ -1186,21 +1233,11 @@ def generar_modelo_desde_recta(
         dim_y - arriba
     )
 
-    agregar_segmento_relieve(
-        piezas,
-        eje_x_inicio,
-        eje_x_fin,
-        2.0,
-        RELIEVE_EJE
-    )
-
-    agregar_segmento_relieve(
-        piezas,
-        eje_y_inicio,
-        eje_y_fin,
-        2.0,
-        RELIEVE_EJE
-    )
+    # Cada eje con su propia textura (rayado el X, punteado el Y) para que
+    # no se confundan entre sí ni con una curva de datos (que se queda con
+    # la línea sólida): ver EJE_X_ESTILO / EJE_Y_ESTILO.
+    _agregar_eje(piezas, eje_x_inicio, eje_x_fin, EJE_X_ESTILO)
+    _agregar_eje(piezas, eje_y_inicio, eje_y_fin, EJE_Y_ESTILO)
 
     # ================================================================
     # 11. TICKS
