@@ -95,33 +95,73 @@ def agregar_numero_braille(modelo, valor, cx, cy):
 
 
 def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
-    """Crea un tramo en relieve con dos cilindros en los extremos."""
-    x0, y0 = p0
-    x1, y1 = p1
-    largo = hypot(x1 - x0, y1 - y0)
+    """Crea un tramo recto en relieve con dos extremos redondeados."""
+
+    x0 = float(p0[0])
+    y0 = float(p0[1])
+    x1 = float(p1[0])
+    y1 = float(p1[1])
+
+    dx = x1 - x0
+    dy = y1 - y0
+
+    largo = hypot(dx, dy)
+
     if largo < 1e-6:
         return modelo
-    angulo = degrees(atan2(y1 - y0, x1 - x0))
-    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
 
+    angulo = degrees(atan2(dy, dx))
+
+    mx = (x0 + x1) / 2
+    my = (y0 + y1) / 2
+
+    # Crear el rectángulo centrado en el origen.
     cuerpo = (
         cq.Workplane("XY")
         .workplane(offset=BASE_THICKNESS)
-        .center(mx, my)
-        .transformed(rotate=(0, 0, angulo))
-        .box(largo, diametro, altura, centered=(True, True, False))
+        .box(
+            largo,
+            float(diametro),
+            float(altura),
+            centered=(True, True, False)
+        )
     )
+
+    # Girarlo alrededor del eje Z.
+    cuerpo = cuerpo.rotate(
+        (0, 0, 0),
+        (0, 0, 1),
+        angulo
+    )
+
+    # Llevarlo al punto medio del segmento.
+    cuerpo = cuerpo.translate(
+        (mx, my, 0)
+    )
+
+    # Extremos redondeados.
     tapa0 = (
-        cq.Workplane("XY").workplane(offset=BASE_THICKNESS)
-        .center(x0, y0).circle(diametro / 2).extrude(altura)
+        cq.Workplane("XY")
+        .workplane(offset=BASE_THICKNESS)
+        .center(x0, y0)
+        .circle(float(diametro) / 2)
+        .extrude(float(altura))
     )
+
     tapa1 = (
-        cq.Workplane("XY").workplane(offset=BASE_THICKNESS)
-        .center(x1, y1).circle(diametro / 2).extrude(altura)
+        cq.Workplane("XY")
+        .workplane(offset=BASE_THICKNESS)
+        .center(x1, y1)
+        .circle(float(diametro) / 2)
+        .extrude(float(altura))
     )
-    return modelo.union(cuerpo).union(tapa0).union(tapa1)
 
-
+    return (
+        modelo
+        .union(cuerpo)
+        .union(tapa0)
+        .union(tapa1)
+    )
 def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
     """
     Simplifica una polilínea conservando su forma aproximada.
