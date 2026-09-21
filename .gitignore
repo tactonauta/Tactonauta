@@ -1,0 +1,16 @@
+# Entornos virtuales de Python. Además de ".venv"/"venv", en este repo se
+# crearon por accidente un par de veces con otros nombres ("git", "status"
+# dentro de tactiver/cod/) — esos no los detecta ningún patrón por nombre,
+# así que si aparecen de nuevo, bórralos o usa siempre ".venv".
+.venv/
+venv/
+env/
+ENV/
+
+# Bytecode y cachés de Python
+__pycache__/
+*.py[cod]
+
+# Basura de sistema operativo
+.DS_Store
+Thumbs.db

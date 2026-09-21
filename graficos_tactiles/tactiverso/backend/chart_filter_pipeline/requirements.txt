@@ -1,6 +1,0 @@
-pymupdf
-pillow
-opencv-python-headless
-numpy
-torch
-transformers
