@@ -69,6 +69,17 @@ POST /api/segmentar/<id>
 
     Respuesta: igual formato que /api/procesar (ver abajo).
 
+POST /api/segmentar/<id>?stl=1
+    Igual, pero en la misma llamada genera también la lámina táctil y
+    agrega "stl_url" / "stl_download_url" a la respuesta (o "stl_error"
+    si la gráfica no daba para una lámina). Sin el parámetro no se
+    genera nada: el STL tarda bastante más que la segmentación.
+
+POST /api/generar-stl/<id>
+    Segmenta esa figura y devuelve directamente la lámina STL.
+    Cuerpo JSON opcional: {"ancho": 210, "alto": 148} (milímetros;
+    mínimo 130 x 90).
+
 POST /api/procesar
     Recibe una imagen (multipart/form-data, campo "imagen") y devuelve
     un JSON con el resumen de lo detectado + las URLs para descargar
@@ -80,8 +91,10 @@ POST /api/procesar
     {
       "ok": true,
       "resumen": { ... },
+      "advertencias": ["..."],
       "csv_url": "/api/resultados/descripcion_xxxx.csv",
       "csv_download_url": "/api/resultados/descripcion_xxxx.csv/descargar",
+      "json_url": "/api/resultados/grafica_xxxx.json",
       "overlay_url": "/api/resultados/overlay_xxxx.png"
     }
 
@@ -103,6 +116,7 @@ GET /api/salud
 """
 
 import os
+import json
 import shutil
 import uuid
 import traceback
@@ -158,15 +172,109 @@ def salud():
     return jsonify({"ok": True})
 
 
-def crear_stl_desde_imagen(ruta_imagen, prefijo="grafica"):
-    """Segmenta una gráfica lineal y convierte sus extremos a una placa STL."""
-    resultado = procesar_imagen(ruta_imagen, RESULTADOS_DIR)
+# ------------------------------------------------------------------
+# Puente segmentador -> generador de STL
+# ------------------------------------------------------------------
+# `procesar_imagen()` devuelve series, puntos y resumen, pero la calibración
+# de los ejes (la recta píxel -> valor real) solo queda escrita en el JSON de
+# resultados. `generar_modelo_desde_recta()` la busca en la clave "ejes", así
+# que aquí se vuelve a juntar todo antes de llamarlo. Si el JSON no se puede
+# leer, el generador reconstruye la escala a partir de los propios puntos.
+
+def _leer_json_extra(resultado):
+    """Devuelve (ejes, textos) del JSON del segmentador.
+
+    Ninguno de los dos bloques viene en lo que procesar_imagen() regresa
+    directamente: la calibración de los ejes y los títulos/etiquetas leídos
+    por OCR solo quedan escritos en el archivo JSON de resultados. El
+    generador de STL los necesita para dibujar números fieles a lo que
+    realmente decía la gráfica (no una escala inventada) y para grabar el
+    título y los nombres de los ejes en Braille.
+    """
+    ruta_json = resultado.get("ruta_json")
+    if not ruta_json or not os.path.isfile(ruta_json):
+        return {}, {}
+    try:
+        with open(ruta_json, encoding="utf-8") as f:
+            datos = json.load(f)
+    except (OSError, ValueError):
+        return {}, {}
+    return datos.get("ejes") or {}, datos.get("textos") or {}
+
+
+def _payload_stl(resultado):
+    """Arma la entrada completa que espera el generador de STL."""
+    ejes, textos = _leer_json_extra(resultado)
+    return {
+        "series": resultado.get("series") or [],
+        "puntos_curva": resultado.get("puntos_curva") or [],
+        "resumen": resultado.get("resumen") or {},
+        "ejes": ejes,
+        "textos": textos,
+    }
+
+
+def crear_stl_desde_resultado(resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0):
+    """Convierte una segmentación ya hecha en una placa táctil STL.
+
+    Devuelve (nombre_stl, advertencias). Lanza ValueError con un mensaje
+    entendible si la gráfica no da para una lámina.
+    """
+    payload = _payload_stl(resultado)
+    if not payload["series"] and not payload["puntos_curva"]:
+        raise ValueError(
+            "El segmentador no encontró ninguna curva en la imagen: no hay nada "
+            "que llevar a la lámina táctil."
+        )
+
+    advertencias = list(resultado.get("advertencias") or [])
+    if not (resultado.get("resumen") or {}).get("listo_para_stl"):
+        advertencias.append(
+            "La lámina se generó SIN calibración completa de los ejes: la forma de "
+            "la curva es correcta, pero la escala y los números en Braille pueden "
+            "faltar o no corresponder a los valores reales. Revisar el overlay "
+            "antes de imprimir."
+        )
+
     nombre = f"{prefijo}_{uuid.uuid4().hex[:8]}.stl"
     generar_modelo_desde_recta(
-        resultado["puntos_curva"],
+        payload,
+        dim_x=dim_x,
+        dim_y=dim_y,
         archivo_salida=os.path.join(STL_DIR, nombre),
     )
-    return resultado, nombre
+    return nombre, advertencias
+
+
+def crear_stl_desde_imagen(ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0):
+    """Segmenta una gráfica lineal y genera su placa táctil STL.
+
+    Devuelve (resultado_segmentador, nombre_stl, advertencias).
+    """
+    resultado = procesar_imagen(ruta_imagen, RESULTADOS_DIR)
+    nombre, advertencias = crear_stl_desde_resultado(resultado, prefijo, dim_x, dim_y)
+    return resultado, nombre, advertencias
+
+
+def _dimensiones_placa(datos):
+    """Lee ancho/alto (mm) del cuerpo de la petición, con los valores A5 por defecto."""
+    try:
+        return float(datos.get("ancho", 210)), float(datos.get("alto", 148))
+    except (TypeError, ValueError):
+        raise ValueError("'ancho' y 'alto' deben ser números en milímetros.")
+
+
+def _respuesta_segmentacion(resultado):
+    """Campos comunes que toda respuesta del segmentador devuelve al frontend."""
+    return {
+        "ok": True,
+        "resumen": resultado["resumen"],
+        "advertencias": resultado.get("advertencias", []),
+        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
+        "csv_download_url": f"/api/resultados/{resultado['nombre_csv']}/descargar",
+        "json_url": f"/api/resultados/{resultado['nombre_json']}",
+        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+    }
 
 
 @app.route("/api/generar-stl", methods=["POST"])
@@ -205,13 +313,28 @@ def generar_stl():
 
 @app.route("/api/generar-stl/<path:id_grafico>", methods=["POST"])
 def generar_stl_desde_grafico(id_grafico):
-    """Convierte una gráfica extraída previamente por /api/clasificar a STL."""
+    """Convierte una gráfica extraída previamente por /api/clasificar a STL.
+
+    Cuerpo JSON opcional: {"ancho": 210, "alto": 148} en milímetros.
+    """
     nombre_seguro = secure_filename(id_grafico)
     ruta_imagen = os.path.join(RESULTADOS_DIR, nombre_seguro)
     if not os.path.isfile(ruta_imagen):
         return jsonify({"ok": False, "error": "No se encontró esa gráfica clasificada."}), 404
+
     try:
-        resultado, nombre = crear_stl_desde_imagen(ruta_imagen, "grafica_tactil")
+        dim_x, dim_y = _dimensiones_placa(request.get_json(silent=True) or {})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    try:
+        resultado, nombre, advertencias = crear_stl_desde_imagen(
+            ruta_imagen, "grafica_tactil", dim_x, dim_y
+        )
+    except ValueError as e:
+        # La imagen se segmentó, pero no da para una lámina (sin curva, placa
+        # demasiado chica...). Es un problema del contenido, no del servidor.
+        return jsonify({"ok": False, "error": str(e)}), 422
     except Exception as e:
         print("ERROR GENERANDO STL:", flush=True)
         print(traceback.format_exc(), flush=True)
@@ -219,15 +342,14 @@ def generar_stl_desde_grafico(id_grafico):
             "ok": False,
             "error": f"No se pudo generar el STL: {e}"
         }), 500
-    return jsonify({
-        "ok": True,
-        "resumen": resultado["resumen"],
-        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
-        "csv_download_url": f"/api/resultados/{resultado['nombre_csv']}/descargar",
-        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+
+    respuesta = _respuesta_segmentacion(resultado)
+    respuesta.update({
+        "advertencias": advertencias,
         "stl_url": f"/api/resultados/stl/{nombre}",
         "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
-    }), 201
+    })
+    return jsonify(respuesta), 201
 
 
 @app.route("/api/pdf-a-stl", methods=["POST"])
@@ -254,14 +376,22 @@ def pdf_a_stl():
         if not grafico.get("es_lineal"):
             continue
         try:
-            resultado, nombre = crear_stl_desde_imagen(grafico["file_path"], "grafica_tactil")
+            resultado, nombre, advertencias = crear_stl_desde_imagen(
+                grafico["file_path"], "grafica_tactil"
+            )
             stls.append({
                 "pagina": grafico["page"], "tipo": grafico["tipo"],
                 "resumen": resultado["resumen"],
+                "advertencias": advertencias,
+                "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
+                "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
                 "stl_url": f"/api/resultados/stl/{nombre}",
                 "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
             })
         except Exception as e:
+            # Una gráfica que falla no debe tumbar el lote entero.
+            print(f"ERROR EN {grafico['file_path']}:", flush=True)
+            print(traceback.format_exc(), flush=True)
             stls.append({
                 "pagina": grafico["page"], "tipo": grafico["tipo"], "error": str(e),
             })
@@ -330,13 +460,28 @@ def segmentar_extraido(id_grafico):
     except Exception as e:
         return jsonify({"ok": False, "error": f"Error al segmentar la imagen: {e}"}), 500
 
-    return jsonify({
-        "ok": True,
-        "resumen": resultado["resumen"],
-        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
-        "csv_download_url": f"/api/resultados/{resultado['nombre_csv']}/descargar",
-        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
-    })
+    respuesta = _respuesta_segmentacion(resultado)
+
+    # Con ?stl=1 la misma llamada devuelve también la lámina, sin volver a
+    # segmentar la imagen. Sin el parámetro el comportamiento no cambia: la
+    # generación del STL es lenta y no todas las pantallas la necesitan.
+    if request.args.get("stl") in ("1", "true", "si", "sí"):
+        try:
+            nombre, advertencias = crear_stl_desde_resultado(resultado, "grafica_tactil")
+        except ValueError as e:
+            respuesta["stl_error"] = str(e)
+        except Exception as e:
+            print("ERROR GENERANDO STL:", flush=True)
+            print(traceback.format_exc(), flush=True)
+            respuesta["stl_error"] = f"No se pudo generar el STL: {e}"
+        else:
+            respuesta.update({
+                "advertencias": advertencias,
+                "stl_url": f"/api/resultados/stl/{nombre}",
+                "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
+            })
+
+    return jsonify(respuesta)
 
 
 # ------------------------------------------------------------------
@@ -366,13 +511,7 @@ def procesar():
     if request.args.get("formato") == "csv":
         return send_from_directory(RESULTADOS_DIR, resultado["nombre_csv"], as_attachment=True)
 
-    return jsonify({
-        "ok": True,
-        "resumen": resultado["resumen"],
-        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
-        "csv_download_url": f"/api/resultados/{resultado['nombre_csv']}/descargar",
-        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
-    })
+    return jsonify(_respuesta_segmentacion(resultado))
 
 
 @app.route("/api/resultados/<path:nombre_archivo>", methods=["GET"])

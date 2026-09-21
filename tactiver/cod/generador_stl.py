@@ -6,6 +6,7 @@ compatibilidad con la API y con el flujo de segmentación existente.
 """
 
 import math
+import unicodedata
 from math import atan2, degrees, hypot
 
 import cadquery as cq
@@ -24,6 +25,19 @@ RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
 MARGEN_BORDE = 25.0
 
+# Una fila de texto Braille ocupa esto de alto (dos filas de puntos + su
+# diámetro), y la separación de BANA entre elementos Braille no relacionados
+# es CLEARANCE_BRAILLE. Se usan para reservar espacio para títulos.
+ALTURA_FILA_BRAILLE = ESPACIADO_BRAILLE * 2 + DIAM_PUNTO_BRAILLE
+
+# Patrón "rayado" (serie 2): largo del tramo dibujado y del hueco, en mm.
+RAYA_LARGO = 6.0
+RAYA_HUECO = 3.5
+
+# Patrón "punteado" (serie 3): separación mínima entre bultos, en mm, para
+# que no se junten hasta parecer una línea continua otra vez.
+PUNTEADO_ESPACIADO = 5.0
+
 LETRAS = {
     "a": [1], "b": [1, 2], "c": [1, 4], "d": [1, 4, 5], "e": [1, 5],
     "f": [1, 2, 4], "g": [1, 2, 4, 5], "h": [1, 2, 5], "i": [2, 4],
@@ -40,6 +54,14 @@ _ORDEN_DIGITOS = list("abcdefghij")
 BRAILLE = dict(LETRAS)
 BRAILLE["numeral"] = [3, 4, 5, 6]
 BRAILLE["menos"] = [3, 6]
+# Punto decimal Nemeth. A diferencia de las letras/dígitos de arriba (tabla
+# estándar), este signo se agregó para poder mostrar valores no enteros
+# (ejes 0-1 de accuracy/loss, por ejemplo) y NO se verificó contra una
+# fuente Nemeth impresa. Antes de usar láminas con decimales en un
+# contexto educativo real, pedir a un transcriptor Braille certificado que
+# confirme este patrón de puntos (ver también la nota equivalente sobre
+# alturas de relieve en AplicarFormato/Bloque3).
+BRAILLE["punto"] = [4, 6]
 for _n, _letra in enumerate(_ORDEN_DIGITOS, start=1):
     _digito = str(_n % 10)
     BRAILLE[_digito] = sorted(_DESPLAZAMIENTO_NEMETH[d] for d in LETRAS[_letra])
@@ -80,18 +102,122 @@ def agregar_texto_braille(modelo, texto, cx, cy):
     return modelo
 
 
-def agregar_numero_braille(modelo, valor, cx, cy):
-    """Coloca un número entero en formato Nemeth."""
+def _decimales_necesarios(valores, max_decimales=3):
+    """Cuántos decimales hacen falta para que los valores de un eje (sus
+    marcas/ticks) se distingan entre sí al redondear, sin pasarse de
+    `max_decimales`.
+
+    Reemplaza el `round()` a entero que antes se aplicaba siempre: con un eje
+    0.0-1.0 (accuracy, loss, probabilidad — habitual en papers) cinco marcas
+    equiespaciadas redondeaban a "0, 0, 0, 1, 1", es decir, dos valores
+    Braille repetidos para cinco marcas físicas distintas.
+    """
+    if len(valores) < 2:
+        return 0
+    for nd in range(max_decimales + 1):
+        redondeados = {round(v, nd) for v in valores}
+        if len(redondeados) == len(valores):
+            return nd
+    return max_decimales
+
+
+def _formatear_valor_braille(valor, decimales):
+    """(es_negativo, dígitos_enteros, dígitos_decimales) para dibujar `valor`
+    redondeado a `decimales` cifras decimales."""
+    valor_r = round(float(valor), decimales)
+    es_negativo = valor_r < 0
+    valor_abs = abs(valor_r)
+    if decimales <= 0:
+        return es_negativo, str(int(round(valor_abs))), ""
+    texto = f"{valor_abs:.{decimales}f}"
+    entero, _, frac = texto.partition(".")
+    return es_negativo, entero, frac
+
+
+def agregar_numero_braille(modelo, valor, cx, cy, decimales=0):
+    """Coloca un número en formato Nemeth: signo menos si corresponde,
+    indicador numeral, parte entera y, si `decimales` > 0, punto decimal
+    Nemeth + parte decimal.
+
+    Con `decimales=0` (el valor por defecto) el comportamiento es idéntico
+    al de la versión anterior, que solo aceptaba enteros.
+    """
+    es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
     x = cx
-    if valor < 0:
+    if es_negativo:
         modelo = agregar_caracter_braille(modelo, "menos", x, cy)
         x += CELDA_PITCH
     modelo = agregar_caracter_braille(modelo, "numeral", x, cy)
     x += CELDA_PITCH
-    for ch in str(abs(valor)):
+    for ch in entero:
         modelo = agregar_caracter_braille(modelo, ch, x, cy)
         x += CELDA_PITCH
+    if frac:
+        modelo = agregar_caracter_braille(modelo, "punto", x, cy)
+        x += CELDA_PITCH
+        for ch in frac:
+            modelo = agregar_caracter_braille(modelo, ch, x, cy)
+            x += CELDA_PITCH
     return modelo
+
+
+def _valores_reales_eje(etiquetas, minimo, valor_min, valor_max, tolerancia=0.15):
+    """Valores de eje realmente leídos por OCR (los que el segmentador
+    reporta en "textos.etiquetas_eje_x/y"), en vez de inventar marcas
+    equiespaciadas. Descarta duplicados y cualquier lectura muy fuera del
+    dominio calibrado [valor_min, valor_max]: esas son justo las que
+    ajustar_lineal_robusto() del segmentador ya identificó como probable
+    error de OCR y excluyó de la calibración, así que tampoco deberían
+    terminar impresas en la placa.
+
+    Devuelve una lista ordenada y sin duplicados, o [] si hay menos de
+    `minimo` valores utilizables (el llamador debe usar un respaldo).
+    """
+    margen = tolerancia * ((valor_max - valor_min) or 1.0)
+    vistos = set()
+    valores = []
+    for e in etiquetas or []:
+        valor = e.get("valor")
+        if valor is None or not math.isfinite(valor):
+            continue
+        if valor < valor_min - margen or valor > valor_max + margen:
+            continue
+        clave = round(float(valor), 6)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        valores.append(float(valor))
+    if len(valores) < minimo:
+        return []
+    valores.sort()
+    return valores
+
+
+def _sanear_texto_braille(texto):
+    """Deja el texto en minúsculas y sin tildes para que las letras
+    encuentren su signo en la tabla BRAILLE.
+
+    Limitación conocida: no hay indicador de "vuelta a letras" dentro de un
+    texto corrido, así que un dígito incrustado en un título (p. ej.
+    "figura 3") se dibuja con la misma forma que una letra, sin el
+    indicador numeral — ambigüedad aceptable para un título, pero por eso
+    los NÚMEROS DE LOS EJES (el dato que importa) se dibujan siempre con
+    agregar_numero_braille(), no con esta función.
+    """
+    sin_tildes = unicodedata.normalize("NFKD", texto)
+    sin_tildes = "".join(c for c in sin_tildes if not unicodedata.combining(c))
+    return sin_tildes.lower()
+
+
+def _truncar_para_ancho(texto, ancho_disponible, maximo_absoluto=40):
+    """Recorta un texto para que su versión Braille quepa en el ancho
+    disponible (evita que un título largo se salga de la placa o dispare el
+    número de figuras/uniones del STL). Devuelve (texto_recortado, se_recortó).
+    """
+    max_celdas = max(0, min(maximo_absoluto, int(ancho_disponible // CELDA_PITCH)))
+    if len(texto) <= max_celdas:
+        return texto, False
+    return texto[:max_celdas], True
 
 
 def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
@@ -162,6 +288,64 @@ def agregar_segmento_relieve(modelo, p0, p1, diametro, altura):
         .union(tapa0)
         .union(tapa1)
     )
+
+
+def agregar_punto_relieve(modelo, punto, diametro, altura):
+    """Un bulto redondo aislado en el punto dado (usado por el patrón
+    "punteado" para distinguir una tercera serie al tacto)."""
+    x, y = float(punto[0]), float(punto[1])
+    bulto = (
+        cq.Workplane("XY")
+        .workplane(offset=BASE_THICKNESS)
+        .center(x, y)
+        .circle(float(diametro) / 2)
+        .extrude(float(altura))
+    )
+    return modelo.union(bulto)
+
+
+def _puntos_espaciados(puntos, distancia_min):
+    """Filtra una polilínea para que sus puntos queden separados al menos
+    `distancia_min` mm entre sí. Sin esto, un patrón "punteado" con muchos
+    puntos cercanos vuelve a parecer una línea continua."""
+    if not puntos:
+        return []
+    filtrados = [puntos[0]]
+    for p in puntos[1:]:
+        if hypot(p[0] - filtrados[-1][0], p[1] - filtrados[-1][1]) >= distancia_min:
+            filtrados.append(p)
+    if filtrados[-1] != puntos[-1]:
+        filtrados.append(puntos[-1])
+    return filtrados
+
+
+def _dividir_en_rayas(p0, p1, largo_raya=RAYA_LARGO, largo_hueco=RAYA_HUECO):
+    """Divide un segmento recto en tramos alternos "encendido"/"apagado"
+    para simular una línea discontinua (patrón "rayado", segunda serie).
+
+    El patrón reinicia en cada segmento de la polilínea ya simplificada (no
+    se arrastra el hueco pendiente del segmento anterior); es una
+    aproximación suficiente para distinguir series al tacto, no una réplica
+    exacta de un patrón de líneas discontinuas de un editor CAD.
+    """
+    x0, y0 = p0
+    x1, y1 = p1
+    largo = hypot(x1 - x0, y1 - y0)
+    if largo < 1e-9:
+        return []
+    ux, uy = (x1 - x0) / largo, (y1 - y0) / largo
+    ciclo = largo_raya + largo_hueco
+    tramos = []
+    pos = 0.0
+    while pos < largo - 1e-9:
+        fin = min(pos + largo_raya, largo)
+        a = (x0 + ux * pos, y0 + uy * pos)
+        b = (x0 + ux * fin, y0 + uy * fin)
+        tramos.append((a, b))
+        pos += ciclo
+    return tramos
+
+
 def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
     """
     Simplifica una polilínea conservando su forma aproximada.
@@ -258,29 +442,47 @@ def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
     return resultado
 
 
+_ESTILOS_SERIE = [
+    {"nombre": "sólida", "patron": "solido", "diametro": DIAM_LINEA, "altura": RELIEVE_LINEA},
+    {"nombre": "rayada", "patron": "rayado", "diametro": DIAM_LINEA * 0.85, "altura": RELIEVE_LINEA + 0.4},
+    {"nombre": "punteada", "patron": "punteado", "diametro": DIAM_LINEA * 1.3, "altura": RELIEVE_LINEA - 0.3},
+]
+
+
 def agregar_funcion(
     modelo,
     puntos,
     diametro=DIAM_LINEA,
-    altura=RELIEVE_LINEA
+    altura=RELIEVE_LINEA,
+    patron="solido",
 ):
     """
     Dibuja una polilínea en relieve.
 
     Los puntos deben estar ya convertidos a coordenadas físicas.
+
+    `patron` distingue táctilmente varias series superpuestas en la misma
+    placa (el segmentador ya avisa cuando detecta más de una: "cada serie
+    necesita su propia textura"):
+      - "solido"   -> línea continua (serie 1).
+      - "rayado"   -> tramos discontinuos (serie 2).
+      - "punteado" -> bultos redondos aislados, sin línea (serie 3).
     """
 
     if not puntos or len(puntos) < 2:
         return modelo
 
+    if patron == "punteado":
+        for p in _puntos_espaciados(puntos, PUNTEADO_ESPACIADO):
+            modelo = agregar_punto_relieve(modelo, p, diametro, altura)
+        return modelo
+
     for p0, p1 in zip(puntos[:-1], puntos[1:]):
-        modelo = agregar_segmento_relieve(
-            modelo,
-            p0,
-            p1,
-            diametro,
-            altura
-        )
+        if patron == "rayado":
+            for a, b in _dividir_en_rayas(p0, p1):
+                modelo = agregar_segmento_relieve(modelo, a, b, diametro, altura)
+        else:
+            modelo = agregar_segmento_relieve(modelo, p0, p1, diametro, altura)
 
     return modelo
 def _valores_tick(v_min, v_max, intervalo):
@@ -409,8 +611,17 @@ def _ticks(minimo, maximo, intervalo):
     return _valores_tick(minimo, maximo, intervalo)
 
 
-def _ancho_numero(valor):
-    return CELDA_PITCH * (len(str(abs(int(round(valor))))) + 1)
+def _ancho_numero(valor, decimales=0):
+    """Ancho horizontal (mm) que ocupará `agregar_numero_braille` para este
+    valor: se calcula con el mismo formateo que usa el dibujo, así que
+    coincide celda por celda (antes no contaba la celda del signo menos en
+    valores negativos, y el número podía quedar más pegado al vecino de lo
+    estimado)."""
+    es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
+    celdas = 1 + len(entero)                  # numeral + dígitos enteros
+    celdas += 1 if es_negativo else 0         # signo menos
+    celdas += (1 + len(frac)) if frac else 0  # punto decimal + dígitos
+    return CELDA_PITCH * celdas
 
 
 def generar_modelo_desde_recta(
@@ -477,6 +688,14 @@ def generar_modelo_desde_recta(
             "La entrada debe ser el resultado del segmentador "
             "o una lista de puntos."
         )
+
+    # Título, nombres de ejes, leyenda y etiquetas numéricas realmente
+    # leídas por OCR ("textos" del JSON del segmentador). Con el formato
+    # antiguo (lista de puntos) no hay nada de esto disponible.
+    textos = resultado.get("textos") or {}
+    titulo_grafico = (textos.get("titulo") or "").strip()
+    titulo_eje_x_txt = (textos.get("titulo_eje_x") or "").strip()
+    titulo_eje_y_txt = (textos.get("titulo_eje_y") or "").strip()
 
     # ================================================================
     # 2. OBTENER LAS SERIES
@@ -674,11 +893,20 @@ def generar_modelo_desde_recta(
     # ================================================================
     # 6. ÁREA FÍSICA DEL GRÁFICO
     # ================================================================
+    # Los márgenes base alcanzan para los ejes, las marcas y sus números.
+    # Si además hay título de eje X, de eje Y o título del gráfico (leídos
+    # por OCR), se reserva una fila extra de Braille por cada uno —
+    # respetando la separación BANA entre elementos no relacionados— para
+    # que ese texto no quede pegado a los números ni se salga de la placa.
+
+    fila_reservada = ALTURA_FILA_BRAILLE + CLEARANCE_BRAILLE
 
     izquierda = 55.0
     derecha = 15.0
-    abajo = 25.0
-    arriba = 15.0
+    abajo = 25.0 + (fila_reservada if titulo_eje_x_txt else 0.0)
+
+    filas_arriba = int(bool(titulo_grafico)) + int(bool(titulo_eje_y_txt))
+    arriba = 15.0 + filas_arriba * fila_reservada
 
     ancho_plot = dim_x - izquierda - derecha
     alto_plot = dim_y - abajo - arriba
@@ -850,106 +1078,115 @@ def generar_modelo_desde_recta(
     # ================================================================
     # 11. TICKS
     # ================================================================
+    # Antes las marcas eran siempre 5 valores equiespaciados entre x_min y
+    # x_max (derivados del borde del rectángulo del gráfico), así que casi
+    # nunca coincidían con los números que realmente estaban impresos en la
+    # gráfica original. Ahora, si el segmentador leyó al menos 2 etiquetas
+    # numéricas reales por eje, se usan ESAS —mismo valor que vio el OCR—;
+    # solo se cae a marcas sintéticas equiespaciadas si no hay etiquetas
+    # reales suficientes (p. ej. calibración hecha con las etiquetas de dato
+    # pegadas a la curva, sin números de eje legibles).
+    NUM_TICKS_SINTETICOS = 5
+    MAX_TICKS_POR_EJE = 12  # límite defensivo: no cubrir la placa de números
 
-    NUM_TICKS = 5
+    valores_x, valores_y = [], []
+    if calibrados:
+        etiquetas_x_json = textos.get("etiquetas_eje_x") or []
+        etiquetas_y_json = textos.get("etiquetas_eje_y") or []
 
-    for i in range(NUM_TICKS):
+        valores_x = _valores_reales_eje(etiquetas_x_json, 2, x_min, x_max)
+        if not valores_x:
+            valores_x = [x_min + (i / (NUM_TICKS_SINTETICOS - 1)) * rango_x
+                         for i in range(NUM_TICKS_SINTETICOS)]
 
-        fraccion = i / (NUM_TICKS - 1)
+        valores_y = _valores_reales_eje(etiquetas_y_json, 2, y_min, y_max)
+        if not valores_y:
+            valores_y = [y_min + (i / (NUM_TICKS_SINTETICOS - 1)) * rango_y
+                         for i in range(NUM_TICKS_SINTETICOS)]
 
-        x_fis = (
-            izquierda
-            + fraccion * ancho_plot
-        )
+        valores_x = valores_x[:MAX_TICKS_POR_EJE]
+        valores_y = valores_y[:MAX_TICKS_POR_EJE]
 
-        y_fis = (
-            abajo
-            + fraccion * alto_plot
-        )
+    decimales_x = _decimales_necesarios(valores_x) if valores_x else 0
+    decimales_y = _decimales_necesarios(valores_y) if valores_y else 0
 
-        # Tick X
+    for valor_x in valores_x:
+        x_fis = min(max(valor_a_fisico(valor_x, y_min)[0], izquierda), izquierda + ancho_plot)
+
         modelo = agregar_segmento_relieve(
-            modelo,
-            (x_fis, abajo - 3),
-            (x_fis, abajo + 3),
-            1.5,
-            RELIEVE_TICK
+            modelo, (x_fis, abajo - 3), (x_fis, abajo + 3), 1.5, RELIEVE_TICK
         )
 
-        # Tick Y
+        ancho_x = _ancho_numero(valor_x, decimales_x)
+        inicio_x = min(max(3.0, x_fis - ancho_x / 2), dim_x - ancho_x - 3.0)
+        modelo = agregar_numero_braille(
+            modelo, valor_x, inicio_x, abajo - CLEARANCE_BRAILLE, decimales_x
+        )
+
+    for valor_y in valores_y:
+        y_fis = min(max(valor_a_fisico(x_min, valor_y)[1], abajo), abajo + alto_plot)
+
         modelo = agregar_segmento_relieve(
-            modelo,
-            (izquierda - 3, y_fis),
-            (izquierda + 3, y_fis),
-            1.5,
-            RELIEVE_TICK
+            modelo, (izquierda - 3, y_fis), (izquierda + 3, y_fis), 1.5, RELIEVE_TICK
         )
 
-        # Valores Braille
-        if calibrados:
+        ancho_y = _ancho_numero(valor_y, decimales_y)
+        inicio_y = max(3.0, izquierda - CLEARANCE_BRAILLE - ancho_y)
+        modelo = agregar_numero_braille(modelo, valor_y, inicio_y, y_fis, decimales_y)
 
-            x_valor = (
-                x_min
-                + fraccion * rango_x
-            )
+    # ================================================================
+    # 11b. TÍTULOS EN BRAILLE (título del gráfico, nombre de cada eje)
+    # ================================================================
+    # Antes ninguno de estos textos —que el segmentador sí extrae por
+    # OCR— llegaba a la placa: solo se dibujaban números y la curva, sin
+    # ningún contexto. Se recortan al ancho disponible en vez de desbordar
+    # la placa o multiplicar sin límite las uniones del STL.
+    ancho_disponible_titulo = dim_x - izquierda - derecha
 
-            y_valor = (
-                y_min
-                + fraccion * rango_y
-            )
+    if titulo_eje_x_txt:
+        texto, recortado = _truncar_para_ancho(
+            _sanear_texto_braille(titulo_eje_x_txt), ancho_disponible_titulo
+        )
+        y_titulo_x = (abajo - CLEARANCE_BRAILLE) - fila_reservada + ALTURA_FILA_BRAILLE / 2
+        modelo = agregar_texto_braille(modelo, texto, izquierda, y_titulo_x)
+        if recortado:
+            print(f"[STL] Título del eje X recortado para que quepa en la placa.", flush=True)
 
-            # ------------------------------
-            # X
-            # ------------------------------
-
-            ancho_x = _ancho_numero(x_valor)
-
-            inicio_x = min(
-                max(
-                    3.0,
-                    x_fis - ancho_x / 2
-                ),
-                dim_x - ancho_x - 3.0
-            )
-
-            modelo = agregar_numero_braille(
-                modelo,
-                round(x_valor),
-                inicio_x,
-                abajo - CLEARANCE_BRAILLE
-            )
-
-            # ------------------------------
-            # Y
-            # ------------------------------
-
-            ancho_y = _ancho_numero(y_valor)
-
-            inicio_y = max(
-                3.0,
-                izquierda
-                - CLEARANCE_BRAILLE
-                - ancho_y
-            )
-
-            modelo = agregar_numero_braille(
-                modelo,
-                round(y_valor),
-                inicio_y,
-                y_fis
-            )
+    fila_arriba = 0
+    for etiqueta, texto_crudo in (("eje Y", titulo_eje_y_txt), ("gráfico", titulo_grafico)):
+        if not texto_crudo:
+            continue
+        texto, recortado = _truncar_para_ancho(
+            _sanear_texto_braille(texto_crudo), ancho_disponible_titulo
+        )
+        y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
+            + fila_arriba * fila_reservada
+        modelo = agregar_texto_braille(modelo, texto, izquierda, y_fila)
+        if recortado:
+            print(f"[STL] Título del {etiqueta} recortado para que quepa en la placa.", flush=True)
+        fila_arriba += 1
 
     # ================================================================
     # 12. DIBUJAR TODAS LAS SERIES
     # ================================================================
+    # Cada serie usa una textura distinta (sólida / rayada / punteada) para
+    # que, con más de una curva en la misma placa, se puedan distinguir al
+    # tacto — antes todas se dibujaban idénticas pese a que el segmentador
+    # ya avisa que "cada serie necesita su propia textura".
 
-    for puntos_stl in series_fisicas:
-
+    for indice, puntos_stl in enumerate(series_fisicas):
+        estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
         modelo = agregar_funcion(
             modelo,
             puntos_stl,
-            diametro=DIAM_LINEA,
-            altura=RELIEVE_LINEA
+            diametro=estilo["diametro"],
+            altura=estilo["altura"],
+            patron=estilo["patron"],
+        )
+        print(
+            f"[STL] Serie {indice + 1} dibujada con textura '{estilo['nombre']}' "
+            f"(patrón {estilo['patron']}).",
+            flush=True,
         )
 
     # ================================================================

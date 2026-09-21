@@ -21,5 +21,8 @@ COPY . /app
 # Puerto de Render
 EXPOSE 10000
 
-# Ejecutar Flask mediante Gunicorn
-CMD ["gunicorn", "--chdir", "tactiver/cod", "--bind", "0.0.0.0:10000", "api:app"]
+# Ejecutar Flask mediante Gunicorn.
+# --timeout 300: generar un STL (varias series, texturas, texto en Braille)
+# puede tardar bien por encima de los 30s por defecto de gunicorn; sin este
+# valor, el worker se mata a mitad de la generación y la API devuelve 502.
+CMD ["gunicorn", "--chdir", "tactiver/cod", "--bind", "0.0.0.0:10000", "--timeout", "300", "api:app"]
