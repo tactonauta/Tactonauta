@@ -349,6 +349,16 @@
   .request-card .fig-thumbs { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: 0.7rem; }
   .request-card .fig-thumbs li { border: 1px solid var(--line); border-radius: 6px; padding: 0.7rem; background: #fff; }
   .request-card .fig-thumbs img { max-width: 100%; height: auto; display: block; margin-top: 0.5rem; border-radius: 4px; }
+  .request-card .fig-thumbs .warnings { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--error); }
+  .request-card .fig-thumbs .warnings li { border: none; padding: 0; background: none; margin-bottom: 0.2rem; }
+  .link-btn {
+    display: inline-block; margin-top: 0.6rem; font: inherit; font-weight: 700; font-size: 0.9rem;
+    text-decoration: none; border-radius: var(--radius); padding: 0.5em 1em; cursor: pointer;
+  }
+  .link-btn.primary { background: var(--night); color: #fff; }
+  .link-btn.primary:hover { background: var(--night-deep); }
+  .link-btn.secondary { background: none; border: 1px solid var(--line); color: var(--ink); }
+  .link-btn.secondary:hover { border-color: var(--ink); }
   .empty-note { color: #55504a; font-style: italic; }
 
   section.audience {
@@ -1423,7 +1433,7 @@
     const campos = [
       ['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
       ['Código', s.estudiante.codigo], ['Facultad', s.estudiante.facultad], ['Carrera', s.estudiante.carrera],
-      ['Documento', s.archivoNombre || '—']
+      ['Documento', s.archivo_nombre || '—']
     ];
     campos.forEach(([dt, dd]) => {
       const dtEl = document.createElement('dt'); dtEl.textContent = dt;
@@ -1437,13 +1447,52 @@
       const li = document.createElement('li');
       const strong = document.createElement('strong');
       strong.textContent = (i + 1) + '. ' + f.titulo + ' — página ' + f.pagina;
-      const p = document.createElement('p');
-      p.textContent = f.caption;
+      li.appendChild(strong);
+
+      if (f.error) {
+        // Esta figura en particular falló al autorizar (imagen perdida,
+        // error del segmentador, etc.) — no tiró abajo el resto de la
+        // solicitud, pero acá no hay nada para descargar.
+        const err = document.createElement('p');
+        err.className = 'status error';
+        err.textContent = f.error;
+        li.appendChild(err);
+      } else {
+        const p = document.createElement('p');
+        p.textContent = f.caption;
+        li.appendChild(p);
+      }
+
       const img = document.createElement('img');
-      img.src = f.imagen_url;
-      img.alt = 'Vista previa: ' + f.caption;
+      // El overlay (ejes/curva detectados) reemplaza la vista previa cruda
+      // en cuanto existe: es lo que hay que revisar antes de imprimir.
+      img.src = f.overlay_url ? (API_BASE + f.overlay_url) : f.imagen_url;
+      img.alt = f.overlay_url
+        ? 'Overlay de verificación: ejes en rojo/azul, curva en verde'
+        : 'Vista previa: ' + f.caption;
       img.loading = 'lazy';
-      li.appendChild(strong); li.appendChild(p); li.appendChild(img);
+      li.appendChild(img);
+
+      if (f.advertencias && f.advertencias.length) {
+        const advs = document.createElement('ul');
+        advs.className = 'warnings';
+        f.advertencias.forEach(a => {
+          const item = document.createElement('li');
+          item.textContent = a;
+          advs.appendChild(item);
+        });
+        li.appendChild(advs);
+      }
+
+      if (f.stl_download_url) {
+        const link = document.createElement('a');
+        link.className = 'link-btn primary';
+        link.href = API_BASE + f.stl_download_url;
+        link.textContent = 'Descargar STL';
+        link.setAttribute('download', '');
+        li.appendChild(link);
+      }
+
       ul.appendChild(li);
     });
 
@@ -1453,17 +1502,18 @@
     return wrap;
   }
 
-  function pintarSolicitudesSupervisor() {
+  async function pintarSolicitudesSupervisor() {
     if (!usuarioActual) return;
     const hintCodigo = document.getElementById('supervisor-codigo-hint');
     if (hintCodigo) {
       hintCodigo.textContent = 'Tu código de conexión para estudiantes: ' + usuarioActual.usuario;
     }
-    const solicitudes = cargarSolicitudes();
-    const propias = solicitudes.filter(s => s.supervisorId === usuarioActual.id);
 
-    const pendientes = propias.filter(s => s.estadoSupervisor === 'en_espera');
-    const autorizadas = propias.filter(s => s.estadoSupervisor === 'aprobada');
+    const { resp, datos } = await llamarApi('/api/solicitudes/supervisor', { method: 'GET' });
+    const propias = (resp.ok && datos.ok) ? datos.solicitudes : [];
+
+    const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera');
+    const autorizadas = propias.filter(s => s.estado_supervisor === 'aprobada');
 
     const listaPendientes = document.getElementById('lista-supervisor-pendientes');
     const listaAutorizadas = document.getElementById('lista-supervisor-autorizadas');
@@ -1486,13 +1536,14 @@
     const detailId = 'detalle-' + s.id;
     btnResumen.setAttribute('aria-expanded', 'false');
     btnResumen.setAttribute('aria-controls', detailId);
-    const imp = etiquetaImprenta(s.estadoImprenta);
+    const imp = etiquetaImprenta(s.estado_imprenta);
+    const cantidad = s.figuras.length;
     btnResumen.innerHTML =
       '<strong>' + s.estudiante.nombre + '</strong>' +
-      '<span class="meta">' + s.seleccionados.length + (s.seleccionados.length === 1 ? ' lámina' : ' láminas') + '</span>' +
+      '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>' +
       '<span class="badges">' +
-        (s.estadoSupervisor === 'aprobada' ? '<span class="badge ok">Autorizada</span>' : '<span class="badge wait">En espera</span>') +
-        (s.estadoSupervisor === 'aprobada' ? '<span class="badge ' + imp.clase + '">' + imp.texto + '</span>' : '') +
+        (s.estado_supervisor === 'aprobada' ? '<span class="badge ok">Autorizada</span>' : '<span class="badge wait">En espera</span>') +
+        (s.estado_supervisor === 'aprobada' ? '<span class="badge ' + imp.clase + '">' + imp.texto + '</span>' : '') +
       '</span>';
 
     const detalle = document.createElement('div');
@@ -1510,16 +1561,20 @@
     const acciones = document.createElement('div');
     acciones.className = 'actions';
 
-    if (s.estadoSupervisor === 'en_espera') {
+    if (s.estado_supervisor === 'en_espera') {
       const btnAutorizar = document.createElement('button');
       btnAutorizar.type = 'button';
       btnAutorizar.className = 'primary';
       btnAutorizar.textContent = 'Autorizar';
       btnAutorizar.addEventListener('click', () => autorizarSolicitud(s.id, btnAutorizar, status));
       acciones.appendChild(btnAutorizar);
-    } else if (s.estadoSupervisor === 'aprobada' && !s.stlGenerado) {
-      status.textContent = 'Generando láminas en braille y modelo STL…';
-    } else if (s.stlGenerado && s.estadoImprenta === 'no_enviada') {
+    } else if (s.estado_supervisor === 'aprobada' && !s.stl_generado) {
+      // Autorizar es síncrono (no hay un trabajo en curso aparte): si llegó
+      // hasta acá con stl_generado en false es porque NINGUNA figura pudo
+      // convertirse — no "está generando", ya terminó y falló.
+      status.textContent = 'No se pudo generar ninguna lámina para esta solicitud — revisá el detalle de cada gráfico arriba.';
+      status.classList.add('error');
+    } else if (s.stl_generado && s.estado_imprenta === 'no_enviada') {
       const btnEnviar = document.createElement('button');
       btnEnviar.type = 'button';
       btnEnviar.className = 'primary';
@@ -1544,67 +1599,46 @@
   }
 
   async function autorizarSolicitud(id, boton, status) {
-    const solicitudes = cargarSolicitudes();
-    const idx = solicitudes.findIndex(s => s.id === id);
-    if (idx === -1) return;
-
-    solicitudes[idx].estadoSupervisor = 'aprobada';
-    guardarSolicitudes(solicitudes);
-
     boton.disabled = true;
     status.classList.remove('error');
-    status.textContent = 'Generando láminas en braille y modelo STL…';
+    status.textContent = 'Generando láminas en braille y modelo STL… puede tardar un rato.';
 
-    try {
-      const resp = await fetch('/api/imprimir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: solicitudes[idx].jobId, seleccionados: solicitudes[idx].seleccionados })
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json.error || 'Error al generar el braille y el STL.');
-
-      const solicitudesActualizadas = cargarSolicitudes();
-      const idx2 = solicitudesActualizadas.findIndex(s => s.id === id);
-      if (idx2 > -1) {
-        solicitudesActualizadas[idx2].stlGenerado = true;
-        solicitudesActualizadas[idx2].orden = json.orden;
-        solicitudesActualizadas[idx2].laminas = json.laminas;
-        guardarSolicitudes(solicitudesActualizadas);
-      }
-      pintarSolicitudesSupervisor();
-    } catch (err) {
-      status.textContent = 'No se pudo generar el braille y el STL: ' + err.message;
+    const { resp, datos } = await postJson('/api/solicitudes/' + id + '/autorizar');
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudo generar el braille y el STL.';
       status.classList.add('error');
       boton.disabled = false;
+      return;
     }
+
+    status.textContent = '';
+    await pintarSolicitudesSupervisor();
   }
 
-  function enviarAImprenta(id, boton, status) {
-    if (!usuarioActual) return;
-    const solicitudes = cargarSolicitudes();
-    const idx = solicitudes.findIndex(s => s.id === id);
-    if (idx === -1) return;
-
+  async function enviarAImprenta(id, boton, status) {
     boton.disabled = true;
-    solicitudes[idx].estadoImprenta = 'pendiente';
-    solicitudes[idx].imprentaId = usuarioActual.imprenta_predeterminada_id;
-    guardarSolicitudes(solicitudes);
+    const { resp, datos } = await postJson('/api/solicitudes/' + id + '/enviar-imprenta');
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudo enviar a la imprenta.';
+      status.classList.add('error');
+      boton.disabled = false;
+      return;
+    }
     status.textContent = 'Enviado a la imprenta.';
-    pintarSolicitudesSupervisor();
+    await pintarSolicitudesSupervisor();
   }
 
   // ---------------------------------------------------------------
   // APP: IMPRENTA
   // ---------------------------------------------------------------
-  function pintarSolicitudesImprenta() {
+  async function pintarSolicitudesImprenta() {
     if (!usuarioActual) return;
-    const solicitudes = cargarSolicitudes();
-    const propias = solicitudes.filter(s => s.imprentaId === usuarioActual.id);
+    const { resp, datos } = await llamarApi('/api/solicitudes/imprenta', { method: 'GET' });
+    const propias = (resp.ok && datos.ok) ? datos.solicitudes : [];
 
-    const pendientes = propias.filter(s => s.estadoImprenta === 'pendiente');
-    const imprimiendo = propias.filter(s => s.estadoImprenta === 'imprimiendo');
-    const impresos = propias.filter(s => s.estadoImprenta === 'impreso');
+    const pendientes = propias.filter(s => s.estado_imprenta === 'pendiente');
+    const imprimiendo = propias.filter(s => s.estado_imprenta === 'imprimiendo');
+    const impresos = propias.filter(s => s.estado_imprenta === 'impreso');
 
     const listaPendientes = document.getElementById('lista-imprenta-pendientes');
     const listaImprimiendo = document.getElementById('lista-imprenta-imprimiendo');
@@ -1624,34 +1658,60 @@
   function construirTarjetaImprenta(s, estado) {
     const li = document.createElement('li');
     li.className = 'request-card';
-    const cantidad = s.laminas ? s.laminas.length : s.seleccionados.length;
+    const cantidad = s.figuras.length;
+    const detailId = 'detalle-imprenta-' + s.id;
 
-    const resumen = document.createElement('div');
-    resumen.className = 'request-summary';
-    resumen.innerHTML =
+    const btnResumen = document.createElement('button');
+    btnResumen.type = 'button';
+    btnResumen.className = 'request-summary';
+    btnResumen.setAttribute('aria-expanded', 'false');
+    btnResumen.setAttribute('aria-controls', detailId);
+    btnResumen.innerHTML =
       '<strong>' + s.estudiante.nombre + ' — ' + s.estudiante.carrera + '</strong>' +
-      '<span class="meta">Orden ' + (s.orden || '#' + s.id.slice(-6)) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
+      '<span class="meta">Orden ' + (s.orden || String(s.id).padStart(5, '0')) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
 
-    li.appendChild(resumen);
+    const detalle = document.createElement('div');
+    detalle.className = 'request-detail';
+    detalle.id = detailId;
+    detalle.hidden = true;
+    detalle.appendChild(crearDetalleSolicitud(s));
+
+    btnResumen.addEventListener('click', () => {
+      const abierto = detalle.hidden;
+      detalle.hidden = !abierto;
+      btnResumen.setAttribute('aria-expanded', String(abierto));
+    });
+
+    li.appendChild(btnResumen);
+    li.appendChild(detalle);
 
     if (estado === 'pendiente' || estado === 'imprimiendo') {
       const acciones = document.createElement('div');
       acciones.className = 'actions';
       acciones.style.padding = '0 1.1rem 1.1rem';
+      const status = document.createElement('p');
+      status.className = 'status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'primary';
       btn.textContent = estado === 'pendiente' ? 'Empezar impresión' : 'Impresión lista';
-      btn.addEventListener('click', () => {
-        const solicitudes = cargarSolicitudes();
-        const idx = solicitudes.findIndex(x => x.id === s.id);
-        if (idx === -1) return;
-        solicitudes[idx].estadoImprenta = (estado === 'pendiente') ? 'imprimiendo' : 'impreso';
-        guardarSolicitudes(solicitudes);
-        pintarSolicitudesImprenta();
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        status.classList.remove('error');
+        const { resp, datos } = await postJson('/api/solicitudes/' + s.id + '/estado-imprenta');
+        if (!resp.ok || !datos.ok) {
+          status.textContent = datos.error || 'No se pudo actualizar.';
+          status.classList.add('error');
+          btn.disabled = false;
+          return;
+        }
+        await pintarSolicitudesImprenta();
       });
       acciones.appendChild(btn);
-      li.appendChild(acciones);
+      detalle.appendChild(status);
+      detalle.appendChild(acciones);
     }
 
     return li;

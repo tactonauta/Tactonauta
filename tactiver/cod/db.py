@@ -17,7 +17,6 @@ IDÉNTICOS en los dos caminos; lo único que cambia es cómo se abre la conexió
 definir las 2 variables de entorno y agregar `libsql-client` a
 requirements.txt — no hace falta tocar el resto de este archivo ni api.py.
 """
-
 import json
 import os
 import sqlite3
@@ -389,3 +388,44 @@ def solicitudes_de_supervisor(supervisor_id):
         (supervisor_id,),
     )
     return [_fila_a_solicitud(f) for f in filas]
+
+
+def solicitudes_de_imprenta(imprenta_id):
+    con = _obtener_conexion()
+    filas = con.ejecutar(
+        "SELECT * FROM solicitudes WHERE imprenta_id = ? ORDER BY id DESC",
+        (imprenta_id,),
+    )
+    return [_fila_a_solicitud(f) for f in filas]
+
+
+_CAMPOS_SOLICITUD_DIRECTOS = (
+    "supervisor_id", "imprenta_id", "estado_supervisor", "estado_imprenta",
+    "stl_generado", "orden",
+)
+
+
+def actualizar_solicitud(id_solicitud, cambios):
+    """`cambios` puede traer columnas directas (estado_supervisor,
+    estado_imprenta, imprenta_id, orden, stl_generado) y/o `figuras`/
+    `laminas` como listas de Python — estas últimas se serializan solas a
+    JSON antes de guardarse."""
+    con = _obtener_conexion()
+    columnas, valores = [], []
+    for c in _CAMPOS_SOLICITUD_DIRECTOS:
+        if c in cambios:
+            columnas.append(c)
+            valores.append(cambios[c])
+    if "figuras" in cambios:
+        columnas.append("figuras_json")
+        valores.append(json.dumps(cambios["figuras"], ensure_ascii=False))
+    if "laminas" in cambios:
+        columnas.append("laminas_json")
+        valor = cambios["laminas"]
+        valores.append(json.dumps(valor, ensure_ascii=False) if valor is not None else None)
+    if not columnas:
+        return buscar_solicitud(id_solicitud)
+    set_sql = ", ".join(f"{c} = ?" for c in columnas)
+    valores.append(id_solicitud)
+    con.ejecutar_escritura(f"UPDATE solicitudes SET {set_sql} WHERE id = ?", valores)
+    return buscar_solicitud(id_solicitud)

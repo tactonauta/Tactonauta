@@ -382,6 +382,160 @@ def mis_solicitudes():
     return jsonify({"ok": True, "solicitudes": db.solicitudes_de_estudiante(session["usuario_id"])})
 
 
+def _con_estudiante(solicitud):
+    """Agrega los datos del estudiante (nombre, correo, código, facultad,
+    carrera) a una solicitud, para que el supervisor los vea sin tener que
+    resolverlos aparte."""
+    if not solicitud:
+        return solicitud
+    estudiante = db.buscar_por_id(solicitud["estudiante_id"]) or {}
+    solicitud["estudiante"] = {
+        "nombre": estudiante.get("nombre"),
+        "correo": estudiante.get("correo"),
+        "codigo": estudiante.get("codigo"),
+        "facultad": estudiante.get("facultad"),
+        "carrera": estudiante.get("carrera"),
+    }
+    return solicitud
+
+
+@app.route("/api/solicitudes/supervisor", methods=["GET"])
+def solicitudes_supervisor():
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+    solicitudes = [_con_estudiante(s) for s in db.solicitudes_de_supervisor(session["usuario_id"])]
+    return jsonify({"ok": True, "solicitudes": solicitudes})
+
+
+# ====================================================================
+# FASE 3 — Autorizar (segmentación + STL real) y flujo de imprenta
+# ====================================================================
+# "Autorizar" reusa exactamente el mismo puente segmentador->STL que ya
+# usan /api/generar-stl/<id> y /api/pdf-a-stl (crear_stl_desde_imagen, más
+# abajo) — no hay una ruta nueva de generación, solo se la conecta acá.
+#
+# Nota sobre almacenamiento: la imagen original de cada figura vive en
+# RESULTADOS_DIR desde que se clasificó el PDF (paso 3 del estudiante). Ese
+# disco es efímero en el plan gratuito de Render — si el contenedor se
+# reinició entre que el estudiante subió el PDF y el supervisor autoriza,
+# esa imagen ya no está. Por eso cada figura se procesa en un try/except
+# propio: una que falle (imagen perdida, o cualquier otro error) no tira
+# abajo el resto de la solicitud, y queda marcada con su propio "error" en
+# vez de romper todo silenciosamente. Subir esos archivos a un storage
+# persistente (Cloudflare R2) es el siguiente paso natural, pendiente.
+
+@app.route("/api/solicitudes/<int:id_solicitud>/autorizar", methods=["POST"])
+def autorizar_solicitud(id_solicitud):
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+
+    solicitud = db.buscar_solicitud(id_solicitud)
+    if not solicitud or solicitud["supervisor_id"] != session["usuario_id"]:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+    if solicitud["estado_supervisor"] != "en_espera":
+        return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
+
+    figuras_actualizadas = []
+    algun_exito = False
+
+    for figura in solicitud["figuras"]:
+        figura_actualizada = dict(figura)
+        nombre_seguro = secure_filename(figura.get("id") or "")
+        ruta_imagen = os.path.join(RESULTADOS_DIR, nombre_seguro)
+
+        if not nombre_seguro or not os.path.isfile(ruta_imagen):
+            figura_actualizada["error"] = (
+                "La imagen original ya no está disponible en el servidor "
+                "(pudo reiniciarse desde que se subió el PDF). Hay que volver "
+                "a subir el documento para esta gráfica."
+            )
+            figuras_actualizadas.append(figura_actualizada)
+            continue
+
+        try:
+            resultado, nombre_stl, advertencias = crear_stl_desde_imagen(
+                ruta_imagen, "grafica_tactil"
+            )
+            figura_actualizada.update({
+                "resumen": resultado["resumen"],
+                "advertencias": advertencias,
+                "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
+                "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+                "stl_url": f"/api/resultados/stl/{nombre_stl}",
+                "stl_download_url": f"/api/resultados/stl/{nombre_stl}/descargar",
+            })
+            algun_exito = True
+        except Exception as e:
+            print(f"ERROR AUTORIZANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
+            print(traceback.format_exc(), flush=True)
+            figura_actualizada["error"] = str(e)
+
+        figuras_actualizadas.append(figura_actualizada)
+
+    solicitud = db.actualizar_solicitud(id_solicitud, {
+        "estado_supervisor": "aprobada",
+        "stl_generado": algun_exito,
+        "figuras": figuras_actualizadas,
+    })
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/enviar-imprenta", methods=["POST"])
+def enviar_a_imprenta(id_solicitud):
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+
+    solicitud = db.buscar_solicitud(id_solicitud)
+    if not solicitud or solicitud["supervisor_id"] != session["usuario_id"]:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+    if solicitud["estado_supervisor"] != "aprobada":
+        return jsonify({"ok": False, "error": "Primero hay que autorizar la solicitud."}), 400
+    if solicitud["estado_imprenta"] != "no_enviada":
+        return jsonify({"ok": False, "error": "Ya fue enviada a la imprenta."}), 400
+
+    supervisor = db.buscar_por_id(session["usuario_id"])
+    if not supervisor or not supervisor.get("imprenta_predeterminada_id"):
+        return jsonify({"ok": False, "error": "No tenés una imprenta conectada."}), 400
+
+    solicitud = db.actualizar_solicitud(id_solicitud, {
+        "imprenta_id": supervisor["imprenta_predeterminada_id"],
+        "estado_imprenta": "pendiente",
+        "orden": f"TV-{id_solicitud:05d}",
+    })
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/imprenta", methods=["GET"])
+def solicitudes_imprenta():
+    if session.get("rol") != "imprenta":
+        return jsonify({"ok": False, "error": "Iniciá sesión como imprenta primero."}), 401
+    solicitudes = [_con_estudiante(s) for s in db.solicitudes_de_imprenta(session["usuario_id"])]
+    return jsonify({"ok": True, "solicitudes": solicitudes})
+
+
+_TRANSICIONES_IMPRENTA = {"pendiente": "imprimiendo", "imprimiendo": "impreso"}
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/estado-imprenta", methods=["POST"])
+def avanzar_estado_imprenta(id_solicitud):
+    """Avanza un paso en la cola (pendiente -> imprimiendo -> impreso). No
+    recibe el estado destino del frontend: siempre avanza uno solo, así no
+    hay forma de saltarse un paso mandando el JSON equivocado."""
+    if session.get("rol") != "imprenta":
+        return jsonify({"ok": False, "error": "Iniciá sesión como imprenta primero."}), 401
+
+    solicitud = db.buscar_solicitud(id_solicitud)
+    if not solicitud or solicitud["imprenta_id"] != session["usuario_id"]:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+
+    siguiente = _TRANSICIONES_IMPRENTA.get(solicitud["estado_imprenta"])
+    if not siguiente:
+        return jsonify({"ok": False, "error": "Esta solicitud ya está impresa."}), 400
+
+    solicitud = db.actualizar_solicitud(id_solicitud, {"estado_imprenta": siguiente})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
 @app.route("/", methods=["GET"])
 def index():
     # Puntito (tactiverso 10): flujo de 3 roles (estudiante/supervisor/
