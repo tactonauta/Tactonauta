@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tactiverso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #101114;
+    --paper: #faf7f2;
+    --paper-raised: #e8dfc6;
+    --night: #1b1e4d;
+    --night-deep: #0d0f2e;
+    --gold: #a3660d;
+    --gold-soft: #f3e3c2;
+    --line: #b7ac8e;
+    --focus: #a3660d;
+    --radius: 6px;
+    --error: #8c2a09;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  body {
+    min-height: 100vh;
+    background-image:
+      radial-gradient(1.6px 1.6px at 20px 30px, var(--paper-raised) 100%, transparent 100%),
+      radial-gradient(1.6px 1.6px at 60px 80px, var(--paper-raised) 100%, transparent 100%),
+      radial-gradient(1.6px 1.6px at 100px 20px, var(--paper-raised) 100%, transparent 100%);
+    background-size: 130px 110px;
+  }
+
+  h1, h2, h3 { font-family: 'Fraunces', serif; line-height: 1.15; margin: 0 0 0.4em; }
+  h1 { font-weight: 700; }
+  h2 { font-weight: 600; }
+
+  a { color: var(--night); }
+
+  a:focus-visible, button:focus-visible, input:focus-visible,
+  label.dropzone:focus-within {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .skip-link {
+    position: absolute; left: -9999px; top: 0;
+    background: var(--ink); color: var(--paper);
+    padding: 0.75em 1.2em; z-index: 100;
+    border-radius: 0 0 var(--radius) 0;
+  }
+  .skip-link:focus { left: 0; }
+
+  header.top {
+    padding: 1.8rem 1.5rem 1.5rem;
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .wordmark {
+    font-family: 'Fraunces', serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .wordmark .dot { color: var(--gold); }
+  .tagline { color: #3a362e; font-size: 1rem; }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0.5rem 1.5rem 3.5rem;
+  }
+
+  .step {
+    display: none;
+    border-top: 1px solid var(--line);
+    padding-top: 2rem;
+    margin-top: 2rem;
+  }
+  .step.active { display: block; }
+  .step:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+  .step-eyebrow {
+    display: inline-block;
+    background: var(--night);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.15em 0.7em;
+    border-radius: 999px;
+    margin-bottom: 0.8rem;
+  }
+
+  .lede { max-width: 48ch; color: #24211c; margin-bottom: 1.6rem; }
+
+  ol.instructions {
+    padding-left: 1.3rem;
+    margin: 0 0 1.8rem;
+  }
+  ol.instructions li { margin-bottom: 0.6rem; }
+
+  button.primary {
+    background: var(--night);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.85em 1.6em;
+    font: inherit;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button.primary:hover { background: var(--night-deep); }
+  button.primary:disabled { background: #c3c0b8; cursor: not-allowed; }
+
+  button.secondary {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.8em 1.4em;
+    font: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  button.secondary:hover { border-color: var(--ink); }
+
+  .actions { display: flex; gap: 0.9rem; flex-wrap: wrap; margin-top: 1.6rem; }
+
+  /* Dropzone (paso 2) */
+  .dropzone {
+    display: block;
+    border: 2px dashed var(--line);
+    border-radius: 10px;
+    background: #fffdf8;
+    padding: 2.4rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone.dragover { border-color: var(--night); background: var(--gold-soft); }
+  .dropzone.has-file { border-style: solid; border-color: var(--night); }
+  .dropzone .icon {
+    display: inline-flex; width: 3.2rem; height: 3.2rem; border-radius: 50%;
+    background: var(--gold-soft); align-items: center; justify-content: center;
+    margin-bottom: 0.9rem;
+  }
+  .dropzone .icon svg { width: 1.5rem; height: 1.5rem; }
+  .dropzone .primary-text { font-family: 'Fraunces', serif; font-size: 1.15rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .dropzone .secondary-text { color: #3a362e; font-size: 0.95rem; }
+  .dropzone input[type="file"] {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+
+  .file-summary {
+    margin-top: 1.2rem;
+    display: none;
+    align-items: center; justify-content: space-between; gap: 1rem;
+    border: 1px solid var(--line);
+    background: #fffdf8;
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+  }
+  .file-summary.visible { display: flex; }
+  .file-summary .name { font-weight: 700; word-break: break-all; }
+  .file-summary .meta { font-size: 0.9rem; color: #3a362e; }
+
+  .status { margin-top: 0.9rem; font-size: 0.95rem; color: var(--night); min-height: 1.4em; }
+  .status.error { color: var(--error); }
+
+  /* Paso 3: gráficos detectados */
+  .graphic-list { list-style: none; margin: 0 0 1.6rem; padding: 0; display: grid; gap: 0.8rem; }
+  .graphic-item {
+    display: flex; flex-direction: column; gap: 0.7rem;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 0.9rem 1.1rem; background: #fffdf8;
+  }
+  .graphic-item-main { display: flex; align-items: center; gap: 0.9rem; }
+  .graphic-item .thumb {
+    flex-shrink: 0; width: 3.6rem; height: 2.6rem; border-radius: 6px;
+    background: var(--gold-soft); object-fit: cover;
+    border: 1px solid var(--line);
+  }
+  .graphic-item .swatch {
+    flex-shrink: 0; width: 2.6rem; height: 2.6rem; border-radius: 6px;
+    background: var(--gold-soft);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--night);
+    font-weight: 700; font-family: 'Fraunces', serif;
+  }
+  .graphic-item .info { flex: 1; min-width: 0; }
+  .graphic-item .info strong { display: block; }
+  .graphic-item .info span { font-size: 0.9rem; color: #3a362e; }
+  .graphic-item .info .badge {
+    display: inline-block; margin-top: 0.2rem; font-size: 0.78rem;
+    font-weight: 700; padding: 0.1em 0.6em; border-radius: 999px;
+    background: var(--gold-soft); color: var(--night);
+  }
+  .graphic-item .not-compatible {
+    font-size: 0.85rem; color: #6b6659; flex-shrink: 0; text-align: right; max-width: 9rem;
+  }
+  button.primary.small, a.primary.small {
+    padding: 0.5em 1em; font-size: 0.9rem; flex-shrink: 0;
+    text-decoration: none; display: inline-block;
+  }
+  button.secondary.small, a.secondary.small {
+    padding: 0.5em 1em; font-size: 0.9rem; flex-shrink: 0;
+    text-decoration: none; display: inline-block;
+  }
+  .item-status { margin: 0; font-size: 0.9rem; color: var(--night); }
+  .item-status.error { color: var(--error); }
+  .item-status:empty { display: none; }
+  .item-result {
+    border-top: 1px dashed var(--line); padding-top: 0.8rem;
+    display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  .item-result .desc { font-size: 0.95rem; color: #24211c; margin: 0; }
+  .item-result ul.warnings {
+    margin: 0; padding-left: 1.2rem; font-size: 0.88rem; color: var(--error);
+  }
+  .item-result ul.warnings li { margin-bottom: 0.25rem; }
+  .item-result .overlay-preview { max-width: 100%; border-radius: 6px; border: 1px solid var(--line); }
+  .item-result .result-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+  .progress-line {
+    display: flex; align-items: center; gap: 0.7rem;
+    margin-bottom: 1.4rem; color: #24211c; font-size: 0.95rem;
+  }
+  .spinner {
+    width: 1.1rem; height: 1.1rem; border-radius: 50%;
+    border: 2.5px solid var(--paper-raised); border-top-color: var(--night);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Paso 4: confirmación */
+  .confirm-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fffdf8;
+    padding: 1.6rem 1.5rem;
+    margin-bottom: 1.6rem;
+  }
+  .confirm-card .ticket {
+    font-family: 'Fraunces', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--night);
+  }
+  .confirm-card p { margin: 0.5rem 0 0; color: #24211c; }
+
+  section.audience {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+  }
+  section.audience ul {
+    list-style: none; margin: 1rem 0 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;
+  }
+  section.audience li {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 1rem 1.1rem; background: #fffdf8;
+  }
+  section.audience li strong { display: block; font-family: 'Fraunces', serif; font-size: 1.05rem; margin-bottom: 0.25rem; }
+
+  footer.bottom {
+    max-width: 720px; margin: 0 auto; padding: 1.4rem 1.5rem 2.5rem;
+    color: #55504a; font-size: 0.9rem;
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* -------------------------------------------------------- */
+  /* Editor de corrección ("pizarra") — modal sobre el paso 3  */
+  /* -------------------------------------------------------- */
+  .item-result .result-actions button.editar-btn {
+    background: none; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 0.5em 1em; font: inherit; font-size: 0.9rem; cursor: pointer; color: var(--ink);
+  }
+  .item-result .result-actions button.editar-btn:hover { border-color: var(--ink); }
+
+  .editor-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(16, 17, 20, 0.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .editor-overlay[hidden] { display: none; }
+
+  .editor-dialog {
+    background: var(--paper); color: var(--ink);
+    border-radius: 10px; border: 1px solid var(--line);
+    width: min(1080px, 100%); max-height: 92vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(13, 15, 46, 0.35);
+  }
+  .editor-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.3rem; border-bottom: 1px solid var(--line);
+    background: var(--night); color: #fff;
+  }
+  .editor-header h2 { margin: 0; font-size: 1.15rem; color: #fff; }
+  .editor-close {
+    background: none; border: none; color: #fff; font-size: 1.2rem;
+    cursor: pointer; line-height: 1; padding: 0.3em 0.5em; border-radius: var(--radius);
+  }
+  .editor-close:hover { background: rgba(255,255,255,0.15); }
+
+  .editor-body {
+    display: grid; grid-template-columns: 1fr 300px; gap: 0;
+    overflow: auto;
+  }
+  @media (max-width: 760px) { .editor-body { grid-template-columns: 1fr; } }
+
+  .editor-canvas-col { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.8rem; }
+  .editor-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .tool-btn {
+    background: #fffdf8; border: 1px solid var(--line); color: #3a362e;
+    padding: 0.45em 0.9em; border-radius: var(--radius); font: inherit; font-size: 0.85rem;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 0.4em;
+  }
+  .tool-btn .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .tool-btn.active { border-color: var(--night); background: var(--gold-soft); color: var(--ink); }
+
+  .editor-lienzo-wrap {
+    position: relative; line-height: 0; max-width: 100%;
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    background: repeating-conic-gradient(#efe9da 0% 25%, #e6dfcb 0% 50%) 50% / 16px 16px;
+  }
+  .editor-lienzo-wrap img { display: block; width: 100%; height: auto; }
+  .editor-lienzo-wrap canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair;
+  }
+  .editor-instrucciones { font-size: 0.85rem; color: #3a362e; line-height: 1.5; margin: 0; }
+
+  .editor-side {
+    padding: 1.1rem; border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 1rem; background: #fffdf8;
+  }
+  @media (max-width: 760px) { .editor-side { border-left: none; border-top: 1px solid var(--line); } }
+
+  .editor-block {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem;
+    background: var(--paper);
+  }
+  .editor-block h3 {
+    font-family: 'Fraunces', serif; font-size: 0.85rem; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #3a362e; margin: 0 0 0.5rem;
+  }
+  #editor-estado { margin: 0; font-size: 0.88rem; }
+  #editor-estado div { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+  #editor-estado .ok { color: #1b6b3a; font-weight: 700; }
+  #editor-estado .err { color: var(--error); font-weight: 700; }
+
+  ul.editor-advertencias {
+    margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--error);
+  }
+  ul.editor-advertencias li { margin-bottom: 0.3rem; }
+
+  table.editor-tabla { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.editor-tabla td { padding: 0.2rem 0; }
+  table.editor-tabla input {
+    width: 100%; border: 1px solid var(--line); border-radius: 4px;
+    padding: 0.3em 0.5em; font: inherit; font-size: 0.85rem; background: #fff;
+  }
+
+  .editor-acciones { display: flex; flex-direction: column; gap: 0.6rem; }
+  .editor-acciones button.primary,
+  .editor-acciones button.secondary { width: 100%; text-align: center; }
+  .editor-acciones .status { margin: 0; font-size: 0.85rem; min-height: 1.3em; }
+  .editor-acciones .status.error { color: var(--error); }
+  .editor-acciones .status.ok { color: #1b6b3a; }
+  .editor-block-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;
+  }
+  .editor-block-header h3 { margin: 0; }
+  button.mini-add {
+    background: var(--gold-soft); border: 1px solid var(--gold); color: #5c3d05;
+    font-size: 0.75rem; font-weight: 700; padding: 0.25em 0.6em; border-radius: 999px;
+    cursor: pointer;
+  }
+  button.mini-add:hover { background: var(--gold); color: #fff; }
+
+  table.editor-tabla tr { display: flex; align-items: center; gap: 0.4rem; }
+  table.editor-tabla td.celda-input { flex: 1; }
+  table.editor-tabla input.pendiente { border-color: var(--gold); background: #fff8e6; }
+  button.mini-del {
+    background: none; border: none; color: #a15a4a; font-size: 1rem; line-height: 1;
+    cursor: pointer; padding: 0.2em 0.3em; flex-shrink: 0;
+  }
+  button.mini-del:hover { color: var(--error); }
+
+  #editor-series-toolbar .tool-btn.nueva-serie {
+    border-style: dashed; color: #3a362e;
+  }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#step-1-heading">Saltar al contenido principal</a>
+
+<header class="top">
+  <span class="wordmark">tacti<span class="dot">·</span>verso</span>
+  <span class="tagline">Gráficos táctiles en braille, de tu PDF a la imprenta</span>
+</header>
+
+<main>
+
+  <!-- PASO 1: Instrucciones -->
+  <section class="step active" id="step-1" aria-labelledby="step-1-heading">
+    <span class="step-eyebrow">Paso 1 de 4</span>
+    <h1 id="step-1-heading" tabindex="-1">Bienvenido a tactiverso</h1>
+    <p class="lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
+
+    <ol class="instructions">
+      <li>Sube el PDF que tiene los gráficos que quieres convertir.</li>
+      <li>tactiverso detecta los gráficos y los prepara en braille.</li>
+      <li>Revisas y confirmas qué imagen deseas imprimir.</li>
+      <li>Se envía directo a la cola de impresión en relieve.</li>
+    </ol>
+
+    <div class="actions">
+      <button type="button" class="primary" data-goto="step-2">Comenzar: subir un PDF</button>
+    </div>
+  </section>
+
+  <!-- PASO 2: Subir PDF -->
+  <section class="step" id="step-2" aria-labelledby="step-2-heading">
+    <span class="step-eyebrow">Paso 2 de 4</span>
+    <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
+    <p class="lede">Elige el PDF desde tu dispositivo. Si alguien te está ayudando, puede seleccionarlo por ti; si estás solo, tu lector de pantalla te guiará por este botón.</p>
+
+    <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
+      <span class="icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#262a63" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12"></path><path d="M7 8l5-5 5 5"></path>
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+        </svg>
+      </span>
+      <span class="primary-text">Arrastra tu PDF aquí o presiona Enter para elegir un archivo</span>
+      <span class="secondary-text">Formato aceptado: PDF · Un archivo a la vez</span>
+      <input type="file" id="pdf-input" accept="application/pdf" aria-describedby="upload-status">
+    </label>
+
+    <div class="file-summary" id="file-summary">
+      <div>
+        <div class="name" id="file-name"></div>
+        <div class="meta" id="file-meta"></div>
+      </div>
+      <button type="button" class="secondary" id="remove-file">Quitar archivo</button>
+    </div>
+
+    <p class="status" id="upload-status" role="status" aria-live="polite"></p>
+
+    <div class="actions">
+      <button type="button" class="secondary" data-goto="step-1">Atrás</button>
+      <button type="button" class="primary" id="to-step-3" disabled>Procesar gráficos</button>
+    </div>
+  </section>
+
+  <!-- PASO 3: Gráficos detectados -->
+  <section class="step" id="step-3" aria-labelledby="step-3-heading">
+    <span class="step-eyebrow">Paso 3 de 4</span>
+    <h2 id="step-3-heading" tabindex="-1">Gráficos detectados</h2>
+
+    <div class="progress-line" id="progress-line">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Buscando gráficos en el documento…</span>
+    </div>
+
+    <div id="graphic-results" hidden>
+      <p class="lede">Encontramos estos gráficos. Los de tipo línea se pueden segmentar para generar su descripción y el CSV con los datos.</p>
+      <ul class="graphic-list" id="graphic-list"></ul>
+      <p class="status" role="status" aria-live="polite" id="detect-status"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="step-2">Atrás</button>
+        <button type="button" class="primary" id="to-step-4" disabled>Ver resumen final</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PASO 4: Confirmación -->
+  <section class="step" id="step-4" aria-labelledby="step-4-heading">
+    <span class="step-eyebrow">Paso 4 de 4</span>
+    <h2 id="step-4-heading" tabindex="-1">Láminas listas</h2>
+    <div class="confirm-card">
+      <span class="ticket" id="ticket-number">Orden #TV-0000</span>
+      <p id="confirm-summary">Gráficos segmentados y listos para descargar.</p>
+    </div>
+    <ul class="graphic-list" id="final-list"></ul>
+    <p class="status" role="status" aria-live="polite" id="confirm-status"></p>
+    <div class="actions">
+      <button type="button" class="primary" data-goto="step-1">Subir otro documento</button>
+    </div>
+  </section>
+
+
+</main>
+
+<!-- Editor de corrección ("pizarra"): se abre al presionar "Editar" sobre
+     una gráfica ya segmentada, en el paso 3. -->
+<div class="editor-overlay" id="editor-overlay" hidden>
+  <div class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-heading">
+    <div class="editor-header">
+      <h2 id="editor-heading">Corregir segmentación</h2>
+      <button type="button" class="editor-close" id="editor-close" aria-label="Cerrar editor">✕</button>
+    </div>
+    <div class="editor-body">
+      <div class="editor-canvas-col">
+        <div class="editor-toolbar">
+          <button type="button" class="tool-btn active" data-modo="mover">
+            <span class="dot" style="background:#6b6659"></span> Mover puntos
+          </button>
+          <button type="button" class="tool-btn" data-modo="agregar">
+            <span class="dot" style="background:#2e8b57"></span> Agregar punto a la curva
+          </button>
+          <button type="button" class="tool-btn" data-modo="etiqueta-x">
+            <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje X
+          </button>
+          <button type="button" class="tool-btn" data-modo="etiqueta-y">
+            <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje Y
+          </button>
+          <button type="button" class="tool-btn" data-modo="borrar">
+            <span class="dot" style="background:#8c2a09"></span> Borrar punto
+          </button>
+        </div>
+        <div class="editor-toolbar" id="editor-series-toolbar"></div>
+        <div class="editor-lienzo-wrap" id="editor-lienzo-wrap">
+          <img id="editor-img" alt="Overlay de la gráfica a corregir">
+          <canvas id="editor-canvas"></canvas>
+        </div>
+        <p class="editor-instrucciones">
+          <strong>Ejes:</strong> arrastra los extremos rojo (eje X) y azul (eje Y) hasta que
+          calcen con las líneas reales de la gráfica, sobre todo donde se ve que no se conectan.
+          <strong>Curva:</strong> arrastra los puntos de cada serie para que sigan su línea; si hay
+          varias series, elige cuál está activa abajo antes de usar "Agregar punto", o crea una serie
+          nueva con "+ Nueva serie" si la gráfica tiene una curva que no se detectó.
+          <strong>Etiquetas:</strong> si un número del eje no se leyó, usa "Agregar etiqueta" y haz
+          clic justo sobre ese número en la imagen — aparece un cuadrado amarillo ahí y una casilla
+          abajo para que escribas tú el valor.
+        </p>
+      </div>
+      <div class="editor-side">
+        <div class="editor-block">
+          <h3>Estado</h3>
+          <div id="editor-estado"></div>
+          <ul class="editor-advertencias" id="editor-advertencias"></ul>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Etiquetas del eje X</h3>
+            <button type="button" class="mini-add" id="editor-add-etiqueta-x" title="Agregar etiqueta al centro del eje X">+ Agregar</button>
+          </div>
+          <table class="editor-tabla"><tbody id="editor-tabla-x"></tbody></table>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Etiquetas del eje Y</h3>
+            <button type="button" class="mini-add" id="editor-add-etiqueta-y" title="Agregar etiqueta al centro del eje Y">+ Agregar</button>
+          </div>
+          <table class="editor-tabla"><tbody id="editor-tabla-y"></tbody></table>
+        </div>
+        <div class="editor-block editor-acciones">
+          <button type="button" class="primary" id="editor-recalcular">Recalcular con mis correcciones</button>
+          <button type="button" class="secondary" id="editor-deshacer">Deshacer cambios sin guardar</button>
+          <button type="button" class="primary" id="editor-confirmar" disabled>Guardar y cerrar</button>
+          <p class="status" id="editor-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --------------------------------------------------------------
+  // Dirección base de tu api.py (Flask). Si sirves este HTML desde
+  // el mismo Flask (p. ej. con send_from_directory), déjalo como
+  // cadena vacía ''. Si lo abres como archivo suelto o en otro
+  // puerto/dominio, apunta aquí a donde corre "python api.py".
+  // --------------------------------------------------------------
+  const API_BASE = 'http://localhost:5000';
+  function apiUrl(path) { return API_BASE + path; }
+
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  const steps = ['step-1', 'step-2', 'step-3', 'step-4'];
+
+  function goTo(stepId) {
+    steps.forEach(id => document.getElementById(id).classList.toggle('active', id === stepId));
+    const heading = document.querySelector('#' + stepId + ' h1, #' + stepId + ' h2');
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus();
+    }
+    if (stepId === 'step-3') runDetection();
+  }
+
+  document.querySelectorAll('[data-goto]').forEach(btn => {
+    btn.addEventListener('click', () => goTo(btn.getAttribute('data-goto')));
+  });
+
+  // Paso 2: carga de archivo
+  const dropzone = document.getElementById('dropzone');
+  const input = document.getElementById('pdf-input');
+  const summary = document.getElementById('file-summary');
+  const fileName = document.getElementById('file-name');
+  const fileMeta = document.getElementById('file-meta');
+  const removeBtn = document.getElementById('remove-file');
+  const uploadStatus = document.getElementById('upload-status');
+  const toStep3 = document.getElementById('to-step-3');
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  let uploadedFile = null;
+  let ultimosGraficos = [];
+  let procesados = {}; // id -> { resumen, csv_download_url, overlay_url }
+
+  function showFile(file) {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      uploadStatus.textContent = 'Ese archivo no es un PDF. Elige un archivo con extensión .pdf.';
+      uploadStatus.classList.add('error');
+      return;
+    }
+    uploadStatus.classList.remove('error');
+    uploadedFile = file;
+    fileName.textContent = file.name;
+    fileMeta.textContent = formatSize(file.size);
+    summary.classList.add('visible');
+    dropzone.classList.add('has-file');
+    uploadStatus.textContent = 'Archivo cargado: ' + file.name + ', ' + formatSize(file.size) + '.';
+    toStep3.disabled = false;
+  }
+
+  function clearFile() {
+    input.value = '';
+    uploadedFile = null;
+    summary.classList.remove('visible');
+    dropzone.classList.remove('has-file');
+    uploadStatus.textContent = 'Archivo quitado.';
+    toStep3.disabled = true;
+  }
+
+  input.addEventListener('change', () => { if (input.files && input.files[0]) showFile(input.files[0]); });
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  ['dragenter', 'dragover'].forEach(evt => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); }));
+  ['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) { input.files = e.dataTransfer.files; showFile(file); }
+  });
+  removeBtn.addEventListener('click', clearFile);
+  toStep3.addEventListener('click', () => goTo('step-3'));
+
+  // Paso 3: subir el PDF a /api/clasificar y mostrar los gráficos reales
+  const TIPO_LABEL = {
+    linea: 'Gráfico de líneas',
+    barra_o_torta: 'Gráfico de barras o de torta',
+    compuesta: 'Figura compuesta (varios paneles)',
+    indeterminado: 'Tipo no determinado',
+  };
+
+  async function runDetection() {
+    const progress = document.getElementById('progress-line');
+    const progressText = progress.querySelector('span:last-child');
+    const results = document.getElementById('graphic-results');
+    const detectStatus = document.getElementById('detect-status');
+    const listEl = document.getElementById('graphic-list');
+
+    detectStatus.classList.remove('error');
+    progress.style.display = 'flex';
+    progressText.textContent = 'Buscando gráficos en el documento…';
+    results.hidden = true;
+    listEl.innerHTML = '';
+    procesados = {};
+    document.getElementById('to-step-4').disabled = true;
+
+    if (!uploadedFile) {
+      progress.style.display = 'none';
+      detectStatus.textContent = 'No hay ningún PDF cargado. Vuelve al paso anterior.';
+      detectStatus.classList.add('error');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('pdf', uploadedFile);
+
+    try {
+      const resp = await fetch(apiUrl('/api/clasificar'), { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'No se pudo analizar el PDF.');
+
+      ultimosGraficos = data.graficos || [];
+      progress.style.display = 'none';
+      results.hidden = false;
+
+      if (ultimosGraficos.length === 0) {
+        detectStatus.textContent = 'No se encontraron gráficos en este PDF.';
+      } else {
+        const nLineales = ultimosGraficos.filter(g => g.es_lineal).length;
+        detectStatus.textContent =
+          `Se detectaron ${ultimosGraficos.length} gráfico(s); ${nLineales} de tipo línea se pueden segmentar.`;
+        ultimosGraficos.forEach(renderGraphicItem);
+      }
+    } catch (err) {
+      progress.style.display = 'none';
+      results.hidden = false;
+      detectStatus.textContent = 'No se pudo analizar el PDF: ' + err.message;
+      detectStatus.classList.add('error');
+    }
+  }
+
+  function renderGraphicItem(grafico) {
+    const listEl = document.getElementById('graphic-list');
+    const li = document.createElement('li');
+    li.className = 'graphic-item';
+    li.dataset.id = grafico.id;
+
+    const tipoLabel = TIPO_LABEL[grafico.tipo] || grafico.tipo;
+    const accionHtml = grafico.es_lineal
+      ? `<button type="button" class="primary small" data-action="segmentar">Segmentar y generar CSV</button>`
+      : `<span class="not-compatible">Este tipo aún no se convierte automáticamente</span>`;
+
+    li.innerHTML = `
+      <div class="graphic-item-main">
+        <img class="thumb" src="${escapeHtml(apiUrl(grafico.preview_url))}" alt="" loading="lazy">
+        <span class="info">
+          <strong>${escapeHtml(tipoLabel)} — página ${escapeHtml(grafico.pagina)}</strong>
+          <span>${escapeHtml(grafico.ancho)}×${escapeHtml(grafico.alto)} px · confianza ${escapeHtml(grafico.confianza)}</span>
+        </span>
+        ${accionHtml}
+      </div>
+      <p class="item-status status" role="status" aria-live="polite"></p>
+      <div class="item-result" hidden></div>
+    `;
+
+    const btn = li.querySelector('[data-action="segmentar"]');
+    if (btn) {
+      btn.addEventListener('click', () => segmentarGrafico(grafico.id, li));
+    }
+    listEl.appendChild(li);
+  }
+
+  function describirResumen(resumen) {
+    const partes = [];
+    partes.push(resumen.titulo
+      ? `Título detectado: "${resumen.titulo}".`
+      : 'No se detectó un título en la gráfica.');
+    partes.push(resumen.eje_x_detectado ? 'Eje X detectado.' : 'Eje X no detectado.');
+    partes.push(resumen.eje_y_detectado ? 'Eje Y detectado.' : 'Eje Y no detectado.');
+    partes.push(`${resumen.n_series} serie(s) de datos con ${resumen.n_puntos_curva} puntos en total.`);
+    if (resumen.titulo_eje_x) partes.push(`Eje X: "${resumen.titulo_eje_x}".`);
+    if (resumen.titulo_eje_y) partes.push(`Eje Y: "${resumen.titulo_eje_y}".`);
+    if (resumen.leyenda) partes.push(`Leyenda: "${resumen.leyenda}".`);
+    partes.push(resumen.listo_para_stl
+      ? 'La gráfica quedó lista para preparar la lámina táctil.'
+      : 'Todavía falta calibración de ejes para preparar la lámina.');
+    return partes.join(' ');
+  }
+
+  function pintarResultadoEnItem(li, id, data) {
+    const itemResult = li.querySelector('.item-result');
+    const resumen = data.resumen;
+    const advertencias = data.advertencias || [];
+    const warningsHtml = advertencias.length
+      ? `<ul class="warnings">${advertencias.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>`
+      : '';
+
+    itemResult.innerHTML = `
+      <p class="desc">${escapeHtml(describirResumen(resumen))}</p>
+      ${warningsHtml}
+      <img class="overlay-preview" src="${escapeHtml(apiUrl(data.overlay_url))}?t=${Date.now()}" alt="Overlay de verificación con ejes, curva y textos detectados">
+      <div class="result-actions">
+        <a class="primary small" href="${escapeHtml(apiUrl(data.csv_download_url))}">Descargar CSV</a>
+        <a class="secondary small" href="${escapeHtml(apiUrl(data.overlay_url))}" target="_blank" rel="noopener">Ver overlay en grande</a>
+        <button type="button" class="editar-btn" data-action="editar">Editar segmentación</button>
+      </div>
+    `;
+    itemResult.hidden = false;
+
+    procesados[id] = {
+      resumen, csv_download_url: data.csv_download_url, overlay_url: data.overlay_url,
+      json_url: data.json_url, correccion_id: data.correccion_id, advertencias,
+    };
+    document.getElementById('to-step-4').disabled = Object.keys(procesados).length === 0;
+
+    const editBtn = itemResult.querySelector('[data-action="editar"]');
+    if (editBtn) editBtn.addEventListener('click', () => Editor.abrir(id, li));
+  }
+
+  async function segmentarGrafico(id, li) {
+    const btn = li.querySelector('[data-action="segmentar"]');
+    const itemStatus = li.querySelector('.item-status');
+    const itemResult = li.querySelector('.item-result');
+
+    btn.disabled = true;
+    itemStatus.classList.remove('error');
+    itemStatus.innerHTML = '<span class="spinner" aria-hidden="true"></span> Segmentando esta gráfica (ejes, curva y textos)…';
+    itemResult.hidden = true;
+    itemResult.innerHTML = '';
+
+    try {
+      const resp = await fetch(apiUrl('/api/segmentar/' + encodeURIComponent(id)), { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'Error al segmentar la imagen.');
+
+      itemStatus.textContent = 'Segmentación completa.';
+      btn.textContent = 'Segmentar de nuevo';
+      btn.disabled = false;
+
+      pintarResultadoEnItem(li, id, data);
+    } catch (err) {
+      itemStatus.textContent = 'Error: ' + err.message;
+      itemStatus.classList.add('error');
+      btn.disabled = false;
+    }
+  }
+
+  // Paso 4: resumen final con todo lo ya segmentado
+  document.getElementById('to-step-4').addEventListener('click', () => {
+    const ids = Object.keys(procesados);
+    const ticket = 'Orden #TV-' + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('ticket-number').textContent = ticket;
+    document.getElementById('confirm-summary').textContent =
+      `${ids.length} lámina(s) táctil(es) con su CSV de datos listas para descargar.`;
+
+    const finalList = document.getElementById('final-list');
+    finalList.innerHTML = '';
+    ids.forEach(id => {
+      const info = procesados[id];
+      const grafico = ultimosGraficos.find(g => g.id === id);
+      const etiqueta = grafico ? `${TIPO_LABEL[grafico.tipo] || grafico.tipo} — página ${grafico.pagina}` : id;
+      const li = document.createElement('li');
+      li.className = 'graphic-item';
+      li.innerHTML = `
+        <div class="graphic-item-main">
+          <span class="info">
+            <strong>${escapeHtml(etiqueta)}</strong>
+            <span>${escapeHtml(describirResumen(info.resumen))}</span>
+          </span>
+          <a class="primary small" href="${escapeHtml(apiUrl(info.csv_download_url))}">Descargar CSV</a>
+        </div>
+      `;
+      finalList.appendChild(li);
+    });
+
+    document.getElementById('confirm-status').textContent = ticket + ': CSV listos para descargar.';
+    goTo('step-4');
+  });
+  // ------------------------------------------------------------------
+  // Editor de corrección ("pizarra"): se abre desde el botón "Editar
+  // segmentación" de un resultado ya procesado, en el paso 3. Deja
+  // arrastrar los ejes y los puntos de la curva y recalcula llamando a
+  // /api/corregir/<id> (definido en api.py junto a segmentador.py).
+  // ------------------------------------------------------------------
+  const Editor = (() => {
+    const overlayEl = document.getElementById('editor-overlay');
+    const imgEl = document.getElementById('editor-img');
+    const canvas = document.getElementById('editor-canvas');
+    const closeBtn = document.getElementById('editor-close');
+    const estadoEl = document.getElementById('editor-estado');
+    const advertenciasEl = document.getElementById('editor-advertencias');
+    const tablaX = document.getElementById('editor-tabla-x');
+    const tablaY = document.getElementById('editor-tabla-y');
+    const seriesToolbar = document.getElementById('editor-series-toolbar');
+    const btnRecalcular = document.getElementById('editor-recalcular');
+    const btnDeshacer = document.getElementById('editor-deshacer');
+    const btnConfirmar = document.getElementById('editor-confirmar');
+    const statusEl = document.getElementById('editor-status');
+
+    // Misma paleta que _calibrar_y_exportar() en segmentador.py (colores BGR
+    // (0,255,0)/(0,200,255)/(255,200,0) -> aquí en RGB), así el color de cada
+    // serie en la pizarra coincide con el color ya pintado en el overlay.
+    const PALETA = ['#00ff00', '#ffc800', '#00c8ff', '#ff5588', '#aa66ff', '#ffaa00'];
+
+    let graficoId = null;   // id del /api/clasificar (para actualizar procesados[])
+    let li = null;          // <li> de ese gráfico en el paso 3
+    let modo = 'mover';     // mover | agregar | borrar
+    let serieActiva = 0;    // a qué serie se le agregan puntos nuevos en modo "agregar"
+    let arrastrando = null;
+
+    let estado = { correccionId: null, ejeX: null, ejeY: null, series: [],
+                   etiquetasX: [], etiquetasY: [], ancho: 0, alto: 0 };
+    let estadoOriginal = null;
+    let ultimoGuardado = null; // última respuesta de /api/corregir o /api/segmentar
+
+    function radioPunto() { return Math.max(5, estado.ancho * 0.008); }
+
+    async function abrir(id, liEl) {
+      const info = procesados[id];
+      if (!info) return;
+      graficoId = id;
+      li = liEl;
+      ultimoGuardado = info;
+      overlayEl.hidden = false;
+      document.body.style.overflow = 'hidden';
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+      btnConfirmar.disabled = true;
+      await cargarDesde(info);
+      closeBtn.focus();
+    }
+
+    function cerrar() {
+      overlayEl.hidden = true;
+      document.body.style.overflow = '';
+      if (li) li.querySelector('[data-action="editar"]')?.focus();
+    }
+
+    async function cargarDesde(info) {
+      estado.correccionId = info.correccion_id;
+      imgEl.src = apiUrl(info.overlay_url) + `?t=${Date.now()}`;
+
+      const jsonRes = await fetch(apiUrl(info.json_url));
+      const j = await jsonRes.json();
+
+      estado.ancho = j.imagen.ancho;
+      estado.alto = j.imagen.alto;
+      estado.ejeX = j.ejes.eje_x;
+      estado.ejeY = j.ejes.eje_y;
+      estado.etiquetasX = (j.textos.etiquetas_eje_x || []).map(e => ({ centro_x: e.px, valor: e.valor }));
+      estado.etiquetasY = (j.textos.etiquetas_eje_y || []).map(e => ({ centro_y: e.py, valor: e.valor }));
+
+      const seriesJson = j.series || [];
+      estado.series = seriesJson.map((s, i) => {
+        const puntos = s.puntos || [];
+        const paso = Math.max(1, Math.floor(puntos.length / 35));
+        return {
+          color: PALETA[i % PALETA.length],
+          puntos: puntos.filter((_, k) => k % paso === 0).map(p => ({ px: p.px, py: p.py })),
+        };
+      });
+      if (estado.series.length === 0) estado.series = [{ color: PALETA[0], puntos: [] }];
+      serieActiva = Math.min(serieActiva, estado.series.length - 1);
+
+      estadoOriginal = JSON.parse(JSON.stringify(estado));
+
+      pintarEstado(info.resumen, info.advertencias || []);
+      refrescarTablaX();
+      refrescarTablaY();
+      pintarSelectorSeries();
+
+      await new Promise(r => { imgEl.onload = r; if (imgEl.complete) r(); });
+      canvas.width = estado.ancho;
+      canvas.height = estado.alto;
+      dibujar();
+    }
+
+    function pintarSelectorSeries() {
+      seriesToolbar.innerHTML = '';
+      estado.series.forEach((s, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tool-btn' + (i === serieActiva ? ' active' : '');
+        btn.dataset.serieIdx = String(i);
+        btn.innerHTML = `<span class="dot" style="background:${s.color}"></span> Serie ${i + 1} (${s.puntos.length} pts)`;
+        btn.title = 'Los puntos nuevos en modo "Agregar punto" se añaden a esta serie';
+        btn.addEventListener('click', () => {
+          serieActiva = i;
+          seleccionarModo('agregar');
+          pintarSelectorSeries();
+        });
+        seriesToolbar.appendChild(btn);
+      });
+      const nuevaBtn = document.createElement('button');
+      nuevaBtn.type = 'button';
+      nuevaBtn.className = 'tool-btn nueva-serie';
+      nuevaBtn.textContent = '+ Nueva serie (otro color, otra curva)';
+      nuevaBtn.title = 'Crea una curva nueva si la gráfica tiene una serie que no se detectó';
+      nuevaBtn.addEventListener('click', () => {
+        estado.series.push({ color: PALETA[estado.series.length % PALETA.length], puntos: [] });
+        serieActiva = estado.series.length - 1;
+        marcarPendiente();
+        seleccionarModo('agregar');
+        pintarSelectorSeries();
+      });
+      seriesToolbar.appendChild(nuevaBtn);
+    }
+
+    function pintarEstado(resumen, advertencias) {
+      const fmt = (b, txt) => `<span class="${b ? 'ok' : 'err'}">${txt}</span>`;
+      estadoEl.innerHTML = `
+        <div><span>Eje X</span>${fmt(resumen.eje_x_detectado, resumen.eje_x_detectado ? 'detectado' : 'no detectado')}</div>
+        <div><span>Eje Y</span>${fmt(resumen.eje_y_detectado, resumen.eje_y_detectado ? 'detectado' : 'no detectado')}</div>
+        <div><span>Series</span><span>${resumen.n_series}</span></div>
+        <div><span>Curva</span>${fmt(resumen.curva_detectada, resumen.n_puntos_curva + ' puntos (serie 1)')}</div>
+        <div><span>R² eje X</span><span>${resumen.r2_x != null ? resumen.r2_x.toFixed(4) : '—'}</span></div>
+        <div><span>R² eje Y</span><span>${resumen.r2_y != null ? resumen.r2_y.toFixed(4) : '—'}</span></div>
+      `;
+      advertenciasEl.innerHTML = '';
+      advertencias.forEach(a => {
+        const liAdv = document.createElement('li');
+        liAdv.textContent = a;
+        advertenciasEl.appendChild(liAdv);
+      });
+    }
+
+    function pintarTabla(tbody, lista, onBorrar) {
+      tbody.innerHTML = '';
+      lista.forEach((e, i) => {
+        const tr = document.createElement('tr');
+
+        const tdInput = document.createElement('td');
+        tdInput.className = 'celda-input';
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.step = 'any';
+        if (Number.isFinite(e.valor)) inp.value = e.valor;
+        else { inp.placeholder = 'valor?'; inp.classList.add('pendiente'); }
+        inp.addEventListener('input', () => {
+          const v = parseFloat(inp.value);
+          lista[i].valor = v;
+          inp.classList.toggle('pendiente', !Number.isFinite(v));
+          marcarPendiente();
+        });
+        tdInput.appendChild(inp);
+        tr.appendChild(tdInput);
+
+        const tdDel = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'mini-del'; del.textContent = '✕';
+        del.title = 'Quitar esta etiqueta';
+        del.addEventListener('click', () => onBorrar(e));
+        tdDel.appendChild(del);
+        tr.appendChild(tdDel);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function refrescarTablaX() {
+      pintarTabla(tablaX, estado.etiquetasX, (e) => {
+        estado.etiquetasX = estado.etiquetasX.filter(x => x !== e);
+        marcarPendiente(); dibujar(); refrescarTablaX();
+      });
+    }
+    function refrescarTablaY() {
+      pintarTabla(tablaY, estado.etiquetasY, (e) => {
+        estado.etiquetasY = estado.etiquetasY.filter(y => y !== e);
+        marcarPendiente(); dibujar(); refrescarTablaY();
+      });
+    }
+
+    function marcarPendiente() {
+      btnConfirmar.disabled = true;
+      statusEl.className = 'status';
+      statusEl.textContent = 'Hay cambios sin recalcular todavía.';
+    }
+
+    function dibujar() {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const r = radioPunto();
+
+      estado.series.forEach(s => {
+        if (s.puntos.length >= 2) {
+          ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          s.puntos.forEach((p, i) => i === 0 ? ctx.moveTo(p.px, p.py) : ctx.lineTo(p.px, p.py));
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        s.puntos.forEach(p => punto(ctx, p.px, p.py, r * 0.75, s.color));
+      });
+      if (estado.ejeX) dibujarEje(ctx, estado.ejeX, '#c0392b');
+      if (estado.ejeY) dibujarEje(ctx, estado.ejeY, '#2255cc');
+
+      estado.etiquetasX.forEach(e => {
+        const y = estado.ejeX ? estado.ejeX[1] : estado.alto - 10;
+        cuadrado(ctx, e.centro_x, y, r, Number.isFinite(e.valor) ? '#e8c400' : '#ff9900');
+      });
+      estado.etiquetasY.forEach(e => {
+        const x = estado.ejeY ? estado.ejeY[0] : 10;
+        cuadrado(ctx, x, e.centro_y, r, Number.isFinite(e.valor) ? '#e8c400' : '#ff9900');
+      });
+    }
+
+    function cuadrado(ctx, x, y, r, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#101114';
+      ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    function dibujarEje(ctx, e, color) {
+      const r = radioPunto();
+      ctx.strokeStyle = color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(e[0], e[1]); ctx.lineTo(e[2], e[3]); ctx.stroke();
+      punto(ctx, e[0], e[1], r, color); punto(ctx, e[2], e[3], r, color);
+    }
+
+    function punto(ctx, x, y, r, color) {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#101114'; ctx.stroke();
+    }
+
+    function coordsDesdeEvento(ev) {
+      const rect = canvas.getBoundingClientRect();
+      const escalaX = estado.ancho / rect.width;
+      const escalaY = estado.alto / rect.height;
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      return { x: (clientX - rect.left) * escalaX, y: (clientY - rect.top) * escalaY };
+    }
+
+    function puntosArrastrables() {
+      const lista = [];
+      if (estado.ejeX) {
+        lista.push({ x: estado.ejeX[0], y: estado.ejeX[1], set: (x, y) => { estado.ejeX[0] = x; estado.ejeX[1] = y; } });
+        lista.push({ x: estado.ejeX[2], y: estado.ejeX[3], set: (x, y) => { estado.ejeX[2] = x; estado.ejeX[3] = y; } });
+      }
+      if (estado.ejeY) {
+        lista.push({ x: estado.ejeY[0], y: estado.ejeY[1], set: (x, y) => { estado.ejeY[0] = x; estado.ejeY[1] = y; } });
+        lista.push({ x: estado.ejeY[2], y: estado.ejeY[3], set: (x, y) => { estado.ejeY[2] = x; estado.ejeY[3] = y; } });
+      }
+      estado.series.forEach(s => {
+        s.puntos.forEach(p => {
+          lista.push({ x: p.px, y: p.py, set: (x, y) => { p.px = x; p.py = y; }, esCurva: true, ref: p, serie: s });
+        });
+      });
+      estado.etiquetasX.forEach(e => {
+        const y = estado.ejeX ? estado.ejeX[1] : estado.alto - 10;
+        lista.push({ x: e.centro_x, y, set: (x) => { e.centro_x = x; }, esEtiquetaX: true, ref: e });
+      });
+      estado.etiquetasY.forEach(e => {
+        const x = estado.ejeY ? estado.ejeY[0] : 10;
+        lista.push({ x, y: e.centro_y, set: (_, y) => { e.centro_y = y; }, esEtiquetaY: true, ref: e });
+      });
+      return lista;
+    }
+
+    function puntoMasCercano(x, y) {
+      const r = radioPunto() * 1.8;
+      let mejor = null, mejorDist = r;
+      puntosArrastrables().forEach(p => {
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < mejorDist) { mejor = p; mejorDist = d; }
+      });
+      return mejor;
+    }
+
+    function iniciarArrastre(ev) {
+      ev.preventDefault();
+      const { x, y } = coordsDesdeEvento(ev);
+      if (modo === 'agregar') {
+        const s = estado.series[serieActiva];
+        const nuevo = { px: x, py: y };
+        const idx = s.puntos.findIndex(p => p.px > x);
+        if (idx === -1) s.puntos.push(nuevo); else s.puntos.splice(idx, 0, nuevo);
+        marcarPendiente(); dibujar(); pintarSelectorSeries();
+        return;
+      }
+      if (modo === 'etiqueta-x') {
+        const nueva = { centro_x: x, valor: NaN };
+        estado.etiquetasX.push(nueva);
+        marcarPendiente(); dibujar(); refrescarTablaX();
+        enfocarUltimoInput(tablaX);
+        return;
+      }
+      if (modo === 'etiqueta-y') {
+        const nueva = { centro_y: y, valor: NaN };
+        estado.etiquetasY.push(nueva);
+        marcarPendiente(); dibujar(); refrescarTablaY();
+        enfocarUltimoInput(tablaY);
+        return;
+      }
+      if (modo === 'borrar') {
+        const cercano = puntoMasCercano(x, y);
+        if (cercano) {
+          if (cercano.esCurva) {
+            cercano.serie.puntos = cercano.serie.puntos.filter(p => p !== cercano.ref);
+            pintarSelectorSeries();
+          } else if (cercano.esEtiquetaX) {
+            estado.etiquetasX = estado.etiquetasX.filter(e => e !== cercano.ref);
+            refrescarTablaX();
+          } else if (cercano.esEtiquetaY) {
+            estado.etiquetasY = estado.etiquetasY.filter(e => e !== cercano.ref);
+            refrescarTablaY();
+          }
+          marcarPendiente(); dibujar();
+        }
+        return;
+      }
+      const cercano = puntoMasCercano(x, y);
+      if (cercano) arrastrando = cercano;
+    }
+
+    function enfocarUltimoInput(tbody) {
+      const inputs = tbody.querySelectorAll('input');
+      const ultimo = inputs[inputs.length - 1];
+      if (ultimo) { ultimo.focus(); ultimo.select(); }
+    }
+
+    function moverArrastre(ev) {
+      if (!arrastrando) return;
+      ev.preventDefault();
+      const { x, y } = coordsDesdeEvento(ev);
+      arrastrando.set(Math.max(0, Math.min(estado.ancho, x)), Math.max(0, Math.min(estado.alto, y)));
+      marcarPendiente(); dibujar();
+    }
+
+    function terminarArrastre() { arrastrando = null; }
+
+    canvas.addEventListener('mousedown', iniciarArrastre);
+    canvas.addEventListener('mousemove', moverArrastre);
+    window.addEventListener('mouseup', terminarArrastre);
+    canvas.addEventListener('touchstart', iniciarArrastre, { passive: false });
+    canvas.addEventListener('touchmove', moverArrastre, { passive: false });
+    window.addEventListener('touchend', terminarArrastre);
+
+    function seleccionarModo(nombre) {
+      modo = nombre;
+      document.querySelectorAll('#editor-overlay .editor-toolbar:first-of-type .tool-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.modo === nombre);
+      });
+    }
+
+    document.querySelectorAll('#editor-overlay .editor-toolbar:first-of-type .tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => seleccionarModo(btn.dataset.modo));
+    });
+
+    document.getElementById('editor-add-etiqueta-x').addEventListener('click', () => {
+      const cx = estado.ejeX ? (estado.ejeX[0] + estado.ejeX[2]) / 2 : estado.ancho / 2;
+      estado.etiquetasX.push({ centro_x: cx, valor: NaN });
+      marcarPendiente(); dibujar(); refrescarTablaX();
+      enfocarUltimoInput(tablaX);
+      seleccionarModo('mover');
+    });
+    document.getElementById('editor-add-etiqueta-y').addEventListener('click', () => {
+      const cy = estado.ejeY ? (estado.ejeY[1] + estado.ejeY[3]) / 2 : estado.alto / 2;
+      estado.etiquetasY.push({ centro_y: cy, valor: NaN });
+      marcarPendiente(); dibujar(); refrescarTablaY();
+      enfocarUltimoInput(tablaY);
+      seleccionarModo('mover');
+    });
+
+    btnDeshacer.addEventListener('click', () => {
+      estado = JSON.parse(JSON.stringify(estadoOriginal));
+      dibujar();
+      refrescarTablaX();
+      refrescarTablaY();
+      pintarSelectorSeries();
+      statusEl.className = 'status'; statusEl.textContent = 'Cambios deshechos.';
+    });
+
+    btnRecalcular.addEventListener('click', async () => {
+      const etiquetasXValidas = estado.etiquetasX.filter(e => Number.isFinite(e.valor));
+      const etiquetasYValidas = estado.etiquetasY.filter(e => Number.isFinite(e.valor));
+      const faltantes = (estado.etiquetasX.length - etiquetasXValidas.length)
+                       + (estado.etiquetasY.length - etiquetasYValidas.length);
+
+      btnRecalcular.disabled = true;
+      const textoOriginal = btnRecalcular.textContent;
+      btnRecalcular.textContent = 'Recalculando…';
+      try {
+        const correcciones = {
+          eje_x: estado.ejeX, eje_y: estado.ejeY,
+          etiquetas_x: etiquetasXValidas, etiquetas_y: etiquetasYValidas,
+          series: estado.series.map(s => ({ puntos_px: s.puntos.map(p => [p.px, p.py]) })),
+        };
+        const res = await fetch(apiUrl('/api/corregir/' + encodeURIComponent(estado.correccionId)), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(correcciones),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido.');
+
+        ultimoGuardado = data;
+        await cargarDesde(data);
+        btnConfirmar.disabled = false;
+        statusEl.className = 'status ok';
+        statusEl.textContent = faltantes > 0
+          ? `Recalculado (se ignoraron ${faltantes} etiqueta(s) sin valor escrito). Revisa el overlay y guarda cuando esté bien.`
+          : 'Recalculado. Revisa el overlay y guarda cuando esté bien.';
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Error al recalcular: ' + err.message;
+      } finally {
+        btnRecalcular.disabled = false;
+        btnRecalcular.textContent = textoOriginal;
+      }
+    });
+
+    btnConfirmar.addEventListener('click', () => {
+      if (graficoId && li && ultimoGuardado) {
+        pintarResultadoEnItem(li, graficoId, ultimoGuardado);
+      }
+      cerrar();
+    });
+
+    closeBtn.addEventListener('click', cerrar);
+    overlayEl.addEventListener('click', (e) => { if (e.target === overlayEl) cerrar(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlayEl.hidden) cerrar();
+    });
+
+    return { abrir, cerrar };
+  })();
+</script>
+
+</body>
+</html>
