@@ -801,6 +801,18 @@
     catch (e) { datos = { ok: false, error: 'Respuesta inválida del servidor.' }; }
     return { resp, datos };
   }
+  // Si una imagen (vista previa u overlay) no carga -- típicamente porque el
+  // archivo ya no está en el disco del servidor, que es efímero -- se
+  // reemplaza por un mensaje claro en vez de dejar el ícono roto del
+  // navegador sin ninguna explicación.
+  function manejarErrorImagen(img, mensaje) {
+    const nota = document.createElement('p');
+    nota.className = 'status error';
+    nota.style.margin = '0.5rem 0 0';
+    nota.textContent = mensaje;
+    img.replaceWith(nota);
+  }
+
   function postJson(ruta, cuerpo) {
     return llamarApi(ruta, {
       method: 'POST',
@@ -1296,6 +1308,7 @@
       img.src = f.imagen_url;
       img.alt = 'Vista previa del gráfico ' + (i + 1) + '. ' + f.caption;
       img.loading = 'lazy';
+      img.onerror = () => manejarErrorImagen(img, 'No se pudo cargar la vista previa de este gráfico.');
       thumbWrap.appendChild(img);
       li.appendChild(thumbWrap);
 
@@ -1471,6 +1484,9 @@
         ? 'Overlay de verificación: ejes en rojo/azul, curva en verde'
         : 'Vista previa: ' + f.caption;
       img.loading = 'lazy';
+      img.onerror = () => manejarErrorImagen(img,
+        'No se pudo cargar la imagen (puede que ya no esté disponible en el ' +
+        'servidor — pedile al estudiante que vuelva a subir el documento).');
       li.appendChild(img);
 
       if (f.advertencias && f.advertencias.length) {
