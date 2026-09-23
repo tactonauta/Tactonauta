@@ -858,8 +858,8 @@
     goTo('screen-landing');
   });
 
-  navVerEstado.addEventListener('click', () => {
-    pintarEstadoEstudiante();
+  navVerEstado.addEventListener('click', async () => {
+    await pintarEstadoEstudiante();
     goTo('screen-estado-estudiante');
   });
 
@@ -869,8 +869,8 @@
     goTo('screen-config-estudiante');
   });
 
-  document.getElementById('ir-a-estado').addEventListener('click', () => {
-    pintarEstadoEstudiante();
+  document.getElementById('ir-a-estado').addEventListener('click', async () => {
+    await pintarEstadoEstudiante();
     goTo('screen-estado-estudiante');
   });
 
@@ -1107,8 +1107,17 @@
   const toStep3 = document.getElementById('to-step-3');
 
   let archivoElegido = null;
-  let jobId = null;
+  let loteId = null;
   let figuras = [];
+
+  // Nombre amigable por tipo de gráfico (hoy solo se muestran los de línea:
+  // son los únicos que el segmentador puede convertir a lámina táctil).
+  const TIPO_LABEL = {
+    linea: 'Gráfico de línea',
+    barra_o_torta: 'Gráfico de barra o torta',
+    compuesta: 'Figura compuesta (varios paneles)',
+    indeterminado: 'Tipo no identificado',
+  };
 
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -1181,29 +1190,41 @@
     detectStatus.textContent = '';
     detectStatus.classList.remove('error');
 
-    const datos = new FormData();
-    datos.append('pdf', archivoElegido);
+    const cuerpo = new FormData();
+    cuerpo.append('pdf', archivoElegido);
 
     try {
-      const resp = await fetch('/api/procesar', { method: 'POST', body: datos });
-      const json = await resp.json();
+      const { resp, datos } = await llamarApi('/api/clasificar', { method: 'POST', body: cuerpo });
+      if (!resp.ok || !datos.ok) throw new Error(datos.error || 'Error al procesar el documento.');
 
-      if (!resp.ok) throw new Error(json.error || 'Error al procesar el documento.');
-
-      jobId = json.job_id;
-      figuras = json.figuras;
+      loteId = datos.lote_id;
+      // Por ahora solo se pueden convertir gráficos de línea (es lo único
+      // que el segmentador sabe transformar en lámina táctil); el resto se
+      // detecta pero no se ofrece para elegir.
+      const detectados = datos.graficos || [];
+      figuras = detectados.filter(g => g.es_lineal).map(g => ({
+        id: g.id,
+        pagina: g.pagina,
+        tipo: g.tipo,
+        confianza: g.confianza,
+        imagen_url: API_BASE + g.preview_url,
+        titulo: TIPO_LABEL[g.tipo] || g.tipo,
+        caption: g.ancho + '×' + g.alto + 'px · confianza ' + g.confianza,
+      }));
       progress.style.display = 'none';
 
       if (figuras.length === 0) {
         noResults.hidden = false;
-        detectStatus.textContent = 'No se encontraron gráficos de líneas en el documento.';
+        detectStatus.textContent = detectados.length > 0
+          ? 'Se detectaron ' + detectados.length + ' figura(s), pero ninguna es un gráfico de línea (por ahora es lo único que se puede convertir).'
+          : 'No se encontraron gráficos en el documento.';
         return;
       }
 
       pintarFiguras();
       results.hidden = false;
       detectStatus.textContent = 'Se encontraron ' + figuras.length +
-        (figuras.length === 1 ? ' gráfico.' : ' gráficos.') +
+        (figuras.length === 1 ? ' gráfico de línea.' : ' gráficos de línea.') +
         ' Todos están marcados. Puedes desmarcar los que no necesites.';
 
     } catch (err) {
@@ -1247,7 +1268,7 @@
       titulo.textContent = f.titulo + ' — página ' + f.pagina;
 
       const caption = document.createElement('span');
-      caption.className = 'caption' + (f.tiene_caption ? '' : ' missing');
+      caption.className = 'caption';
       caption.textContent = f.caption;
 
       info.appendChild(titulo);
@@ -1280,7 +1301,11 @@
   }
 
   function seleccionadas() {
-    return casillas().filter(c => c.checked).map(c => parseInt(c.value, 10));
+    // Los ids de /api/clasificar son nombres de archivo (strings), no
+    // números — antes se parseaban con parseInt() y nunca coincidían con
+    // figuras.id al filtrar, así que "Enviar solicitud" siempre mandaba una
+    // lista vacía.
+    return casillas().filter(c => c.checked).map(c => c.value);
   }
 
   function figurasSeleccionadasDetalle(ids) {
@@ -1312,37 +1337,29 @@
   // ---------------------------------------------------------------
   // Paso 4: crear la solicitud (queda en espera de tu supervisor)
   // ---------------------------------------------------------------
-  toStep4.addEventListener('click', () => {
+  toStep4.addEventListener('click', async () => {
     const elegidas = seleccionadas();
     if (elegidas.length === 0) return;
 
     if (!usuarioActual || usuarioActual.rol !== 'estudiante') { goTo('screen-landing'); return; }
     const usuario = usuarioActual;
 
-    const solicitudes = cargarSolicitudes();
-    const nuevaSolicitud = {
-      id: 'SOL-' + Date.now(),
-      fecha: new Date().toISOString(),
-      estudiante: {
-        id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, codigo: usuario.codigo,
-        facultad: usuario.facultad, carrera: usuario.carrera
-      },
-      supervisorId: usuario.supervisor_predeterminado_id,
-      archivoNombre: archivoElegido ? archivoElegido.name : '',
-      jobId: jobId,
-      seleccionados: elegidas,
+    toStep4.disabled = true;
+    const { resp, datos } = await postJson('/api/solicitudes', {
+      lote_id: loteId,
+      archivo_nombre: archivoElegido ? archivoElegido.name : '',
       figuras: figurasSeleccionadasDetalle(elegidas),
-      estadoSupervisor: 'en_espera',
-      estadoImprenta: 'no_enviada',
-      stlGenerado: false,
-      imprentaId: null,
-      orden: null,
-      laminas: null
-    };
-    solicitudes.push(nuevaSolicitud);
-    guardarSolicitudes(solicitudes);
+    });
+    toStep4.disabled = false;
 
-    document.getElementById('ticket-number').textContent = 'Solicitud #' + nuevaSolicitud.id.slice(-6);
+    if (!resp.ok || !datos.ok) {
+      detectStatus.textContent = datos.error || 'No se pudo enviar la solicitud.';
+      detectStatus.classList.add('error');
+      return;
+    }
+
+    const solicitud = datos.solicitud;
+    document.getElementById('ticket-number').textContent = 'Solicitud #' + String(solicitud.id).padStart(5, '0');
     document.getElementById('ticket-detail').textContent =
       elegidas.length + (elegidas.length === 1 ? ' lámina táctil enviada' : ' láminas táctiles enviadas') +
       ' a tu supervisor (' + (usuario.supervisor_codigo || 'sin definir') + ') para su aprobación.';
@@ -1367,27 +1384,28 @@
     return { texto: 'Aún no enviada a imprenta', clase: 'neutral' };
   }
 
-  function pintarEstadoEstudiante() {
+  async function pintarEstadoEstudiante() {
     const contenedor = document.getElementById('lista-estado-estudiante');
     const vacio = document.getElementById('estado-estudiante-vacio');
     contenedor.innerHTML = '';
     if (!usuarioActual) return;
 
-    const propias = cargarSolicitudes().filter(s => s.estudiante.id === usuarioActual.id)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const { resp, datos } = await llamarApi('/api/solicitudes/mias', { method: 'GET' });
+    if (!resp.ok || !datos.ok) return;
+    const propias = datos.solicitudes;
 
     vacio.hidden = propias.length > 0;
 
     propias.forEach(s => {
       const li = document.createElement('li');
       li.className = 'request-card';
-      const sup = etiquetaSupervisor(s.estadoSupervisor);
-      const imp = etiquetaImprenta(s.estadoImprenta);
-      const cantidad = s.seleccionados.length;
+      const sup = etiquetaSupervisor(s.estado_supervisor);
+      const imp = etiquetaImprenta(s.estado_imprenta);
+      const cantidad = s.figuras.length;
       li.innerHTML =
         '<div class="request-summary">' +
-          '<strong>Solicitud #' + s.id.slice(-6) + '</strong>' +
-          '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + ' · ' + new Date(s.fecha).toLocaleDateString('es-PE') + '</span>' +
+          '<strong>Solicitud #' + String(s.id).padStart(5, '0') + '</strong>' +
+          '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + ' · ' + new Date(s.creado_en).toLocaleDateString('es-PE') + '</span>' +
           '<span class="badges">' +
             '<span class="badge ' + sup.clase + '">Supervisor: ' + sup.texto + '</span>' +
             '<span class="badge ' + imp.clase + '">Imprenta: ' + imp.texto + '</span>' +

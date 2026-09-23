@@ -1,6 +1,6 @@
 """db.py
-Acceso a datos de Puntito (cuentas de usuario por ahora; solicitudes quedan
-para la próxima fase).
+Acceso a datos de Puntito: cuentas de usuario y solicitudes (fase 2 — todavía
+sin la generación real de STL, eso queda para la fase siguiente).
 
 Habla SQL parametrizado estándar contra uno de dos backends, elegido por
 variables de entorno:
@@ -18,6 +18,7 @@ definir las 2 variables de entorno y agregar `libsql-client` a
 requirements.txt — no hace falta tocar el resto de este archivo ni api.py.
 """
 
+import json
 import os
 import sqlite3
 import time
@@ -54,6 +55,25 @@ _ESQUEMA = [
     CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_usuario
         ON usuarios(rol, usuario) WHERE usuario IS NOT NULL
     """,
+    """
+    CREATE TABLE IF NOT EXISTS solicitudes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        estudiante_id INTEGER NOT NULL REFERENCES usuarios(id),
+        supervisor_id INTEGER REFERENCES usuarios(id),
+        imprenta_id INTEGER REFERENCES usuarios(id),
+        lote_id TEXT,
+        archivo_nombre TEXT,
+        figuras_json TEXT NOT NULL,
+        estado_supervisor TEXT NOT NULL DEFAULT 'en_espera'
+            CHECK(estado_supervisor IN ('en_espera','aprobada')),
+        estado_imprenta TEXT NOT NULL DEFAULT 'no_enviada'
+            CHECK(estado_imprenta IN ('no_enviada','pendiente','imprimiendo','impreso')),
+        stl_generado INTEGER NOT NULL DEFAULT 0,
+        orden TEXT,
+        laminas_json TEXT,
+        creado_en TEXT NOT NULL
+    )
+    """,
 ]
 
 
@@ -85,26 +105,92 @@ class _ConexionSQLite:
 
 
 class _ConexionTurso:
-    """Camino de producción: Turso, vía el cliente síncrono de libsql-client
-    (`create_client_sync` / `ClientSync.execute`) — mismo SQL que el camino
-    local, sin necesitar asyncio en el resto de api.py.
+    """Camino de producción: Turso por HTTP puro (protocolo Hrana sobre
+    HTTP, endpoint `/v2/pipeline`), con `urllib` de la librería estándar —
+    sin ninguna dependencia nueva.
 
-    Import diferido: si no hay credenciales de Turso configuradas, nunca se
-    intenta importar `libsql_client` (no hace falta tenerlo instalado para
-    correr en modo local).
+    Se armó así en vez de usar el paquete `libsql-client` porque ese cliente
+    usa WebSocket por defecto, y esa conexión falló (probado: la misma URL y
+    token funcionan perfecto por HTTP normal, pero la negociación de
+    WebSocket se cuelga/falla según la red desde donde se corra). HTTP puro
+    es además más simple y no depende de asyncio.
     """
 
     def __init__(self, url, token):
-        import libsql_client  # import diferido: ver docstring de la clase
-        self._cliente = libsql_client.create_client_sync(url=url, auth_token=token)
+        # Turso muestra la URL como "libsql://...."; acá se habla por HTTPS.
+        if url.startswith("libsql://"):
+            url = "https://" + url[len("libsql://"):]
+        self._endpoint = url.rstrip("/") + "/v2/pipeline"
+        self._headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+    @staticmethod
+    def _tipar(valor):
+        """Python -> valor tipado del protocolo Hrana."""
+        if valor is None:
+            return {"type": "null"}
+        if isinstance(valor, bool):
+            return {"type": "integer", "value": str(int(valor))}
+        if isinstance(valor, int):
+            return {"type": "integer", "value": str(valor)}
+        if isinstance(valor, float):
+            return {"type": "float", "value": valor}
+        return {"type": "text", "value": str(valor)}
+
+    @staticmethod
+    def _destipar(celda):
+        """Valor tipado del protocolo Hrana -> Python."""
+        tipo = celda.get("type")
+        if tipo == "null":
+            return None
+        if tipo == "integer":
+            return int(celda["value"])
+        if tipo == "float":
+            return float(celda["value"])
+        if tipo == "blob":
+            return celda.get("base64")
+        return celda.get("value")  # "text" y cualquier otro caso
+
+    def _ejecutar_pipeline(self, sql, parametros):
+        import urllib.error
+        import urllib.request
+
+        cuerpo = json.dumps({
+            "requests": [
+                {"type": "execute", "stmt": {
+                    "sql": sql,
+                    "args": [self._tipar(p) for p in parametros],
+                }},
+                {"type": "close"},
+            ]
+        }).encode("utf-8")
+        peticion = urllib.request.Request(
+            self._endpoint, data=cuerpo, headers=self._headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(peticion, timeout=20) as resp:
+                datos = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detalle = e.read().decode("utf-8", "replace")
+            raise RuntimeError(f"Turso respondió HTTP {e.code}: {detalle}")
+
+        primero = datos["results"][0]
+        if primero.get("type") == "error":
+            raise RuntimeError(primero.get("error", {}).get("message", "Error desconocido de Turso"))
+        return primero["response"]["result"]
 
     def ejecutar(self, sql, parametros=()):
-        rs = self._cliente.execute(sql, list(parametros))
-        return [dict(zip(rs.columns, fila)) for fila in rs.rows]
+        resultado = self._ejecutar_pipeline(sql, parametros)
+        columnas = [c["name"] for c in resultado.get("cols", [])]
+        filas = resultado.get("rows", [])
+        return [dict(zip(columnas, (self._destipar(c) for c in fila))) for fila in filas]
 
     def ejecutar_escritura(self, sql, parametros=()):
-        rs = self._cliente.execute(sql, list(parametros))
-        return getattr(rs, "last_insert_rowid", None)
+        resultado = self._ejecutar_pipeline(sql, parametros)
+        rowid = resultado.get("last_insert_rowid")
+        return int(rowid) if rowid is not None else None
 
 
 _conexion = None
@@ -230,3 +316,76 @@ def primera_imprenta():
         "SELECT * FROM usuarios WHERE rol = 'imprenta' ORDER BY id ASC LIMIT 1"
     )
     return _sin_clave(filas[0]) if filas else None
+
+
+# ============================================================
+# Solicitudes
+# ============================================================
+# `figuras` (y, más adelante, `laminas`) se guardan como JSON en una sola
+# columna en vez de una tabla aparte: para esta fase alcanza con un snapshot
+# de lo que el estudiante eligió, sin necesitar más JOINs. Si en el futuro
+# hace falta consultarlas por separado (por página, por tipo...), ahí sí
+# conviene una tabla propia.
+
+def _fila_a_solicitud(fila):
+    if fila is None:
+        return None
+    figuras_json = fila.get("figuras_json")
+    laminas_json = fila.get("laminas_json")
+    return {
+        "id": fila.get("id"),
+        "estudiante_id": fila.get("estudiante_id"),
+        "supervisor_id": fila.get("supervisor_id"),
+        "imprenta_id": fila.get("imprenta_id"),
+        "lote_id": fila.get("lote_id"),
+        "archivo_nombre": fila.get("archivo_nombre"),
+        "figuras": json.loads(figuras_json) if figuras_json else [],
+        "estado_supervisor": fila.get("estado_supervisor"),
+        "estado_imprenta": fila.get("estado_imprenta"),
+        "stl_generado": bool(fila.get("stl_generado")),
+        "orden": fila.get("orden"),
+        "laminas": json.loads(laminas_json) if laminas_json else None,
+        "creado_en": fila.get("creado_en"),
+    }
+
+
+def crear_solicitud(estudiante_id, supervisor_id, lote_id, archivo_nombre, figuras):
+    con = _obtener_conexion()
+    id_creado = con.ejecutar_escritura(
+        """
+        INSERT INTO solicitudes (
+            estudiante_id, supervisor_id, lote_id, archivo_nombre, figuras_json,
+            creado_en
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            estudiante_id, supervisor_id, lote_id, archivo_nombre,
+            json.dumps(figuras, ensure_ascii=False),
+            time.strftime("%Y-%m-%dT%H:%M:%S"),
+        ),
+    )
+    return buscar_solicitud(id_creado)
+
+
+def buscar_solicitud(id_solicitud):
+    con = _obtener_conexion()
+    filas = con.ejecutar("SELECT * FROM solicitudes WHERE id = ?", (id_solicitud,))
+    return _fila_a_solicitud(filas[0]) if filas else None
+
+
+def solicitudes_de_estudiante(estudiante_id):
+    con = _obtener_conexion()
+    filas = con.ejecutar(
+        "SELECT * FROM solicitudes WHERE estudiante_id = ? ORDER BY id DESC",
+        (estudiante_id,),
+    )
+    return [_fila_a_solicitud(f) for f in filas]
+
+
+def solicitudes_de_supervisor(supervisor_id):
+    con = _obtener_conexion()
+    filas = con.ejecutar(
+        "SELECT * FROM solicitudes WHERE supervisor_id = ? ORDER BY id DESC",
+        (supervisor_id,),
+    )
+    return [_fila_a_solicitud(f) for f in filas]

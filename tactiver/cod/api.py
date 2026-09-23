@@ -339,6 +339,49 @@ def auth_reintentar_imprenta():
     return jsonify({"ok": True, "usuario": usuario})
 
 
+# ====================================================================
+# SOLICITUDES — Fase 2 de Puntito
+# ====================================================================
+# El estudiante ya clasificó su PDF con /api/clasificar (existente, más
+# abajo) y eligió qué gráficos de línea quiere convertir; acá se guarda esa
+# elección como una solicitud real, visible para su supervisor. Todavía no
+# dispara la segmentación/STL de verdad — eso es la fase siguiente
+# ("Autorizar" en la pantalla de supervisor).
+
+@app.route("/api/solicitudes", methods=["POST"])
+def crear_solicitud():
+    if session.get("rol") != "estudiante":
+        return jsonify({"ok": False, "error": "Iniciá sesión como estudiante primero."}), 401
+
+    estudiante = db.buscar_por_id(session["usuario_id"])
+    if not estudiante or not estudiante.get("supervisor_predeterminado_id"):
+        return jsonify({
+            "ok": False,
+            "error": "Conectate con un supervisor antes de enviar una solicitud.",
+        }), 400
+
+    datos = request.get_json(silent=True) or {}
+    figuras = datos.get("figuras")
+    if not isinstance(figuras, list) or not figuras:
+        return jsonify({"ok": False, "error": "Elegí al menos un gráfico para enviar."}), 400
+
+    solicitud = db.crear_solicitud(
+        estudiante_id=estudiante["id"],
+        supervisor_id=estudiante["supervisor_predeterminado_id"],
+        lote_id=str(datos.get("lote_id") or ""),
+        archivo_nombre=str(datos.get("archivo_nombre") or ""),
+        figuras=figuras,
+    )
+    return jsonify({"ok": True, "solicitud": solicitud}), 201
+
+
+@app.route("/api/solicitudes/mias", methods=["GET"])
+def mis_solicitudes():
+    if session.get("rol") != "estudiante":
+        return jsonify({"ok": False, "error": "Iniciá sesión como estudiante primero."}), 401
+    return jsonify({"ok": True, "solicitudes": db.solicitudes_de_estudiante(session["usuario_id"])})
+
+
 @app.route("/", methods=["GET"])
 def index():
     # Puntito (tactiverso 10): flujo de 3 roles (estudiante/supervisor/
