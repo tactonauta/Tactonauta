@@ -193,28 +193,53 @@ def detectar_ejes(gris, tol=None):
     gv = [g for g in _fusionar_lineas(verticales, "v", t["tol_linea"] * 2)
           if g["largo"] >= t["largo_min_v"] and 0.01 * ancho < g["pos"] < 0.98 * ancho]
 
-    eje_x, eje_y = _elegir_esquina(gh, gv, t, alto, ancho)
+    # Un "marco" (borde del recorte de la figura, típico al extraer imágenes de
+    # un PDF con algo de relleno) es MUY largo y toca las dos puntas de su
+    # propio eje (columna/fila 0 y la última). Un eje real, aunque sea largo,
+    # casi nunca toca el borde exacto: siempre queda margen para las etiquetas
+    # y el título. El filtro anterior (por posición) no distinguía esto, así
+    # que un marco le podía ganar al eje real en `_elegir_esquina` por ser más
+    # largo, dejando los ejes detectados pegados al borde de toda la imagen en
+    # vez de sobre las líneas reales del gráfico.
+    margen_marco = max(3, int(round(0.01 * min(alto, ancho))))
+
+    def _es_marco(g, dim):
+        return g["a"] <= margen_marco and g["b"] >= dim - 1 - margen_marco
+
+    gh_sin_marco = [g for g in gh if not _es_marco(g, ancho)]
+    gv_sin_marco = [g for g in gv if not _es_marco(g, alto)]
+
+    eje_x, eje_y = _elegir_esquina(gh_sin_marco, gv_sin_marco, t, alto, ancho)
+    if eje_x is None and eje_y is None:
+        # Ninguna L sin marco: se reintenta con las líneas originales (mejor un
+        # eje pegado al borde que ninguno, por si la figura de verdad no tiene
+        # margen alrededor del gráfico).
+        eje_x, eje_y = _elegir_esquina(gh, gv, t, alto, ancho)
     if eje_x is not None or eje_y is not None:
         return eje_x, eje_y
 
     # ---- Respaldo (no hay ninguna L clara): heurística anterior ----
+    # Igual que arriba: se prefieren las líneas sin marco si hay alguna.
+    gh_resp = gh_sin_marco or gh
+    gv_resp = gv_sin_marco or gv
+
     eje_x = None
-    if gh:
+    if gh_resp:
         # el eje X es la horizontal larga más baja del gráfico
-        mejor = max(gh, key=lambda g: (round(g["pos"]), g["largo"]))
+        mejor = max(gh_resp, key=lambda g: (round(g["pos"]), g["largo"]))
         fila = int(round(mejor["pos"]))
         eje_x = (int(mejor["a"]), fila, int(mejor["b"]), fila)
 
     eje_y = None
-    if gv:
+    if gv_resp:
         if eje_x is not None:
             x_esq, y_esq = eje_x[0], eje_x[1]
             mejor = min(
-                gv,
+                gv_resp,
                 key=lambda g: abs(g["pos"] - x_esq) + 0.5 * abs(g["b"] - y_esq) - 0.2 * g["largo"],
             )
         else:
-            mejor = min(gv, key=lambda g: g["pos"])
+            mejor = min(gv_resp, key=lambda g: g["pos"])
         col = int(round(mejor["pos"]))
         eje_y = (col, int(mejor["a"]), col, int(mejor["b"]))
 
@@ -1190,89 +1215,21 @@ def mascara_a_polilinea(mascara, n_puntos=300, ventana_mediana=5):
 # 6) PIPELINE COMPLETO
 # ============================================================
 
-def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None):
+def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
+                          eje_x, eje_y, rect, series, txt,
+                          etiquetas_x, etiquetas_y, etiquetas_dato,
+                          titulo_eje_y, titulo_eje_y_bbox,
+                          advertencias, n_puntos=300):
     """
-    Ejecuta el pipeline y devuelve un dict con:
-      ruta_csv / nombre_csv, ruta_json / nombre_json, ruta_overlay /
-      nombre_overlay, resumen, advertencias, series, puntos_curva.
+    Segunda mitad del pipeline: a partir de ejes/etiquetas/curva(s) YA
+    DECIDIDOS (por la detección automática, o por el usuario corrigiendo en
+    la pizarra) hace la calibración píxel->valor y escribe CSV/JSON/overlay.
 
-    (El docstring anterior prometía un ZIP con 4 CSVs y devolvía un solo CSV;
-    aquí la documentación y el retorno ya coinciden.)
+    Cada elemento de `series` puede venir de dos formas:
+      - {"mascara": np.ndarray bool, "hue":.., "modo":..}      (detección automática)
+      - {"puntos_px": [(px,py), ...], "hue":.., "modo":..}     (curva editada a mano)
     """
-    os.makedirs(dir_resultados, exist_ok=True)
-    uid = uuid.uuid4().hex[:8]
-    advertencias = []
-
-    imagen = cv2.imread(ruta_imagen)
-    if imagen is None:
-        raise ValueError(f"No se pudo abrir la imagen: {ruta_imagen}")
-
     alto_imagen, ancho_imagen = imagen.shape[:2]
-    t = _tolerancias(imagen.shape)
-    gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-
-    # --- Ejes ---
-    eje_x, eje_y = detectar_ejes(gris, tol=t)
-    if eje_x is None:
-        advertencias.append("No se detectó el eje X: no habrá calibración horizontal.")
-    if eje_y is None:
-        advertencias.append("No se detectó el eje Y: no habrá calibración vertical.")
-    eje_x_fila = float((eje_x[1] + eje_x[3]) / 2) if eje_x else None
-    eje_y_col = float((eje_y[0] + eje_y[2]) / 2) if eje_y else None
-    rect = area_de_dibujo(eje_x, eje_y, imagen.shape)
-
-    # --- Curvas ---
-    series = detectar_curvas(imagen, rect=rect, area_minima=t["area_min_curva"],
-                             max_series=max_series)
-    if not series:
-        advertencias.append("No se detectó ninguna curva dentro del área de dibujo.")
-    elif series[0]["modo"] == "intensidad":
-        advertencias.append(
-            "Curva detectada por intensidad (gráfica sin color): verificar el overlay, "
-            "puede incluir rejilla o marcadores."
-        )
-    if len(series) > 1:
-        advertencias.append(
-            f"Se detectaron {len(series)} series; cada una necesita su propia textura BANA."
-        )
-    mascaras = [s["mascara"] for s in series]
-
-    # --- Etiquetas numéricas de los ejes (lectura por regiones) ---
-    reg_x, reg_y = detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=rect, tol=t)
-    usa_reg_x, usa_reg_y = len(reg_x) >= 2, len(reg_y) >= 2
-    excluir = (reg_x if usa_reg_x else []) + (reg_y if usa_reg_y else [])
-
-    # --- Texto (títulos, leyenda, etiquetas de dato) ---
-    txt = detectar_textos(gris, eje_x_fila, eje_y_col, rect=rect,
-                          mascaras_curva=mascaras, tol=t, lang=lang,
-                          excluir=excluir)
-    # Si la lectura por regiones no consiguió al menos 2 números en un eje, se
-    # queda con lo mejor de las dos lecturas.
-    etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
-    etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
-    etiquetas_dato = txt["etiquetas_dato"]
-
-    # --- Título del eje Y (vertical) ---
-    # El límite es el borde izquierdo de los NÚMEROS del eje, no el eje mismo.
-    x_limite_vertical = None
-    if etiquetas_y:
-        x_limite_vertical = min(e["px"] for e in etiquetas_y)
-    elif eje_y is not None:
-        x_limite_vertical = _limite_titulo_vertical(
-            gris, eje_y, eje_x, int(np.median(gris)), t["margen_texto"])
-    titulo_eje_y, titulo_eje_y_bbox = ("", None)
-    if x_limite_vertical is not None:
-        titulo_eje_y, titulo_eje_y_bbox = detectar_texto_vertical(
-            gris, x_limite_vertical, lang=lang)
-
-    # --- Corrección por consistencia (punto decimal perdido, cero de más...) ---
-    for nombre, etqs, clave in (("X", etiquetas_x, lambda e: e["centro_x"]),
-                                ("Y", etiquetas_y, lambda e: e["centro_y"])):
-        for antes, despues in rescatar_etiquetas(etqs, clave):
-            advertencias.append(
-                f"Eje {nombre}: la etiqueta leída como '{antes}' se corrigió a '{despues}' "
-                "para que sea coherente con el resto de la escala; verifícalo en el overlay."
-            )
 
     # --- Calibración ---
     m_x, b_x, info_x = ajustar_lineal_robusto(
@@ -1281,7 +1238,10 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         [e["centro_y"] for e in etiquetas_y], [e["valor"] for e in etiquetas_y])
 
     # --- Respaldo: calibrar Y con las etiquetas pegadas a la curva ---
+    # (solo tiene sentido si la curva viene como máscara; una curva ya editada
+    # a mano por el usuario no necesita este respaldo)
     calibrado_y_por_datos = False
+    mascaras = [s["mascara"] for s in series if "mascara" in s]
     if m_y is None and etiquetas_dato and mascaras:
         union = np.zeros_like(mascaras[0], dtype=bool)
         for m in mascaras:
@@ -1334,16 +1294,20 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     # --- Polilíneas por serie ---
     series_salida = []
     for i, s in enumerate(series, start=1):
-        pl = mascara_a_polilinea(s["mascara"], n_puntos=n_puntos)
-        if pl is None:
-            continue
-        _, _, cols_rs, filas_rs = pl
+        if "puntos_px" in s:
+            puntos_px = s["puntos_px"]
+        else:
+            pl = mascara_a_polilinea(s["mascara"], n_puntos=n_puntos)
+            if pl is None:
+                continue
+            _, _, cols_rs, filas_rs = pl
+            puntos_px = list(zip(cols_rs, filas_rs))
         puntos = [{
             "px": float(c), "py": float(f),
             "valor_x": pixel_a_x(c), "valor_y": pixel_a_y(f),
-        } for c, f in zip(cols_rs, filas_rs)]
+        } for c, f in puntos_px]
         series_salida.append({
-            "id": f"serie_{i}", "hue": s["hue"], "modo": s["modo"],
+            "id": f"serie_{i}", "hue": s.get("hue"), "modo": s.get("modo", "manual"),
             "n_puntos": len(puntos), "puntos": puntos,
         })
 
@@ -1354,7 +1318,12 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     cv2.rectangle(overlay, (rect[0], rect[1]), (rect[2], rect[3]), (200, 200, 200), 1)
     colores = [(0, 255, 0), (0, 200, 255), (255, 200, 0)]
     for i, s in enumerate(series):
-        overlay[s["mascara"]] = colores[i % len(colores)]
+        color = colores[i % len(colores)]
+        if "mascara" in s:
+            overlay[s["mascara"]] = color
+        elif "puntos_px" in s and len(s["puntos_px"]) >= 2:
+            pts = np.array(s["puntos_px"], dtype=np.int32).reshape(-1, 1, 2)
+            cv2.polylines(overlay, [pts], False, color, 2)
     if eje_x:
         cv2.line(overlay, eje_x[:2], eje_x[2:], (0, 0, 255), 2)      # rojo
     if eje_y:
@@ -1431,6 +1400,7 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
             "series": series_salida,
             "resumen": resumen,
             "advertencias": advertencias,
+            "_ruta_imagen_original": os.path.abspath(ruta_imagen),
         }, f, ensure_ascii=False, indent=2)
 
     # --- CSV (mismo esquema de columnas que la versión anterior) ---
@@ -1515,3 +1485,191 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         "advertencias": advertencias,
         "resumen": resumen,
     }
+
+
+def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
+                          ruta_json_original=None, n_puntos=300):
+    """
+    Recalcula CSV/JSON/overlay a partir de lo que el usuario corrigió a mano
+    en la pizarra. `correcciones` trae SOLO lo que el usuario tocó; lo que
+    falte se completa con el resultado original (ruta_json_original), así el
+    usuario no tiene que rehacer todo, solo arreglar lo que falló.
+
+    Formato de `correcciones` (todas las claves son opcionales):
+    {
+      "eje_x": [x1, y1, x2, y2] | null,
+      "eje_y": [x1, y1, x2, y2] | null,
+      "etiquetas_x": [{"centro_x": num, "valor": num}, ...],
+      "etiquetas_y": [{"centro_y": num, "valor": num}, ...],
+      "series": [{"puntos_px": [[px, py], ...]}, ...]
+    }
+    """
+    imagen = cv2.imread(ruta_imagen)
+    if imagen is None:
+        raise ValueError(f"No se pudo abrir la imagen: {ruta_imagen}")
+
+    base = {}
+    if ruta_json_original and os.path.exists(ruta_json_original):
+        with open(ruta_json_original, encoding="utf-8") as f:
+            base = json.load(f)
+    ejes_base = base.get("ejes", {})
+    textos_base = base.get("textos", {})
+
+    def _eje(clave):
+        if clave in correcciones:
+            v = correcciones[clave]
+            return tuple(int(round(x)) for x in v) if v else None
+        v = ejes_base.get(clave)
+        return tuple(v) if v else None
+
+    eje_x, eje_y = _eje("eje_x"), _eje("eje_y")
+    rect = area_de_dibujo(eje_x, eje_y, imagen.shape)
+
+    def _normalizar_etiqueta_x(e):
+        cx = e.get("centro_x", e.get("px", 0))
+        return {"centro_x": float(cx), "valor": float(e["valor"]),
+                "px": int(round(cx)), "py": int(e.get("py", 0)),
+                "pw": int(e.get("pw", 0)), "ph": int(e.get("ph", 0))}
+
+    def _normalizar_etiqueta_y(e):
+        cy = e.get("centro_y", e.get("py", 0))
+        return {"centro_y": float(cy), "valor": float(e["valor"]),
+                "px": int(e.get("px", 0)), "py": int(round(cy)),
+                "pw": int(e.get("pw", 0)), "ph": int(e.get("ph", 0))}
+
+    etiquetas_x = correcciones.get("etiquetas_x")
+    if etiquetas_x is None:
+        etiquetas_x = [{"centro_x": e["px"], "valor": e["valor"]}
+                       for e in textos_base.get("etiquetas_eje_x", [])]
+    etiquetas_x = [_normalizar_etiqueta_x(e) for e in etiquetas_x]
+
+    etiquetas_y = correcciones.get("etiquetas_y")
+    if etiquetas_y is None:
+        etiquetas_y = [{"centro_y": e["py"], "valor": e["valor"]}
+                       for e in textos_base.get("etiquetas_eje_y", [])]
+    etiquetas_y = [_normalizar_etiqueta_y(e) for e in etiquetas_y]
+
+    etiquetas_dato = [
+        {"valor": e["valor"], "px": int(e["px"]), "py": int(e["py"]), "pw": 0, "ph": 0}
+        for e in textos_base.get("etiquetas_dato", [])
+    ]
+
+    if "series" in correcciones:
+        series = [{"puntos_px": [(float(p[0]), float(p[1])) for p in s["puntos_px"]],
+                   "hue": s.get("hue"), "modo": "manual"}
+                  for s in correcciones["series"]]
+    else:
+        series = [{"puntos_px": [(p["px"], p["py"]) for p in s["puntos"]],
+                   "hue": s.get("hue"), "modo": s.get("modo")}
+                  for s in base.get("series", [])]
+
+    txt = {
+        "titulo": textos_base.get("titulo", ""), "titulo_bbox": None,
+        "titulo_x": textos_base.get("titulo_eje_x", ""), "titulo_x_bbox": None,
+        "leyenda": textos_base.get("leyenda", ""),
+    }
+    titulo_eje_y = textos_base.get("titulo_eje_y", "")
+
+    advertencias = ["Resultado corregido manualmente por el usuario en la pizarra."]
+    uid = uuid.uuid4().hex[:8]
+
+    return _calibrar_y_exportar(
+        imagen=imagen, ruta_imagen=ruta_imagen, dir_resultados=dir_resultados, uid=uid,
+        eje_x=eje_x, eje_y=eje_y, rect=rect, series=series, txt=txt,
+        etiquetas_x=etiquetas_x, etiquetas_y=etiquetas_y, etiquetas_dato=etiquetas_dato,
+        titulo_eje_y=titulo_eje_y, titulo_eje_y_bbox=None,
+        advertencias=advertencias, n_puntos=n_puntos,
+    )
+
+
+def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None):
+    """
+    Ejecuta el pipeline y devuelve un dict con:
+      ruta_csv / nombre_csv, ruta_json / nombre_json, ruta_overlay /
+      nombre_overlay, resumen, advertencias, series, puntos_curva.
+
+    (El docstring anterior prometía un ZIP con 4 CSVs y devolvía un solo CSV;
+    aquí la documentación y el retorno ya coinciden.)
+    """
+    os.makedirs(dir_resultados, exist_ok=True)
+    uid = uuid.uuid4().hex[:8]
+    advertencias = []
+
+    imagen = cv2.imread(ruta_imagen)
+    if imagen is None:
+        raise ValueError(f"No se pudo abrir la imagen: {ruta_imagen}")
+
+    alto_imagen, ancho_imagen = imagen.shape[:2]
+    t = _tolerancias(imagen.shape)
+    gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+
+    # --- Ejes ---
+    eje_x, eje_y = detectar_ejes(gris, tol=t)
+    if eje_x is None:
+        advertencias.append("No se detectó el eje X: no habrá calibración horizontal.")
+    if eje_y is None:
+        advertencias.append("No se detectó el eje Y: no habrá calibración vertical.")
+    eje_x_fila = float((eje_x[1] + eje_x[3]) / 2) if eje_x else None
+    eje_y_col = float((eje_y[0] + eje_y[2]) / 2) if eje_y else None
+    rect = area_de_dibujo(eje_x, eje_y, imagen.shape)
+
+    # --- Curvas ---
+    series = detectar_curvas(imagen, rect=rect, area_minima=t["area_min_curva"],
+                             max_series=max_series)
+    if not series:
+        advertencias.append("No se detectó ninguna curva dentro del área de dibujo.")
+    elif series[0]["modo"] == "intensidad":
+        advertencias.append(
+            "Curva detectada por intensidad (gráfica sin color): verificar el overlay, "
+            "puede incluir rejilla o marcadores."
+        )
+    if len(series) > 1:
+        advertencias.append(
+            f"Se detectaron {len(series)} series; cada una necesita su propia textura BANA."
+        )
+    mascaras = [s["mascara"] for s in series]
+
+    # --- Etiquetas numéricas de los ejes (lectura por regiones) ---
+    reg_x, reg_y = detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=rect, tol=t)
+    usa_reg_x, usa_reg_y = len(reg_x) >= 2, len(reg_y) >= 2
+    excluir = (reg_x if usa_reg_x else []) + (reg_y if usa_reg_y else [])
+
+    # --- Texto (títulos, leyenda, etiquetas de dato) ---
+    txt = detectar_textos(gris, eje_x_fila, eje_y_col, rect=rect,
+                          mascaras_curva=mascaras, tol=t, lang=lang,
+                          excluir=excluir)
+    # Si la lectura por regiones no consiguió al menos 2 números en un eje, se
+    # queda con lo mejor de las dos lecturas.
+    etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
+    etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
+    etiquetas_dato = txt["etiquetas_dato"]
+
+    # --- Título del eje Y (vertical) ---
+    # El límite es el borde izquierdo de los NÚMEROS del eje, no el eje mismo.
+    x_limite_vertical = None
+    if etiquetas_y:
+        x_limite_vertical = min(e["px"] for e in etiquetas_y)
+    elif eje_y is not None:
+        x_limite_vertical = _limite_titulo_vertical(
+            gris, eje_y, eje_x, int(np.median(gris)), t["margen_texto"])
+    titulo_eje_y, titulo_eje_y_bbox = ("", None)
+    if x_limite_vertical is not None:
+        titulo_eje_y, titulo_eje_y_bbox = detectar_texto_vertical(
+            gris, x_limite_vertical, lang=lang)
+
+    # --- Corrección por consistencia (punto decimal perdido, cero de más...) ---
+    for nombre, etqs, clave in (("X", etiquetas_x, lambda e: e["centro_x"]),
+                                ("Y", etiquetas_y, lambda e: e["centro_y"])):
+        for antes, despues in rescatar_etiquetas(etqs, clave):
+            advertencias.append(
+                f"Eje {nombre}: la etiqueta leída como '{antes}' se corrigió a '{despues}' "
+                "para que sea coherente con el resto de la escala; verifícalo en el overlay."
+            )
+
+    return _calibrar_y_exportar(
+        imagen=imagen, ruta_imagen=ruta_imagen, dir_resultados=dir_resultados, uid=uid,
+        eje_x=eje_x, eje_y=eje_y, rect=rect, series=series, txt=txt,
+        etiquetas_x=etiquetas_x, etiquetas_y=etiquetas_y, etiquetas_dato=etiquetas_dato,
+        titulo_eje_y=titulo_eje_y, titulo_eje_y_bbox=titulo_eje_y_bbox,
+        advertencias=advertencias, n_puntos=n_puntos,
+    )
