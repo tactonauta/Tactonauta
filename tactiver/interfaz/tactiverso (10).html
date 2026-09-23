@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tactiverso</title>
+<title>Puntito</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
@@ -20,6 +20,9 @@
     --focus: #a3660d;
     --radius: 6px;
     --error: #8c2a09;
+    --ok: #1e6b3a;
+    --ok-soft: #dff0e4;
+    --wait-soft: #f3e3c2;
   }
 
   * { box-sizing: border-box; }
@@ -45,10 +48,11 @@
   h1, h2, h3 { font-family: 'Fraunces', serif; line-height: 1.15; margin: 0 0 0.4em; }
   h1 { font-weight: 700; }
   h2 { font-weight: 600; }
+  h3 { font-weight: 600; font-size: 1.1rem; }
 
   a { color: var(--night); }
 
-  a:focus-visible, button:focus-visible, input:focus-visible,
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
   label.dropzone:focus-within {
     outline: 3px solid var(--focus);
     outline-offset: 3px;
@@ -81,20 +85,39 @@
   .wordmark .dot { color: var(--gold); }
   .tagline { color: #3a362e; font-size: 1rem; }
 
+  /* Barra de usuario autenticado */
+  .user-bar {
+    max-width: 720px; margin: 0 auto; padding: 0 1.5rem 1rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1.1rem;
+    font-size: 0.95rem;
+  }
+  .user-bar[hidden] { display: none; }
+  .user-bar .greeting { font-weight: 700; margin-right: auto; }
+  .user-bar .role-tag {
+    font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    background: var(--night); color: #fff; padding: 0.2em 0.6em; border-radius: 999px;
+  }
+  .user-bar button.linklike {
+    background: none; border: none; padding: 0; font: inherit; font-size: 0.92rem;
+    color: var(--night); text-decoration: underline; cursor: pointer;
+  }
+  .user-bar button.linklike:hover { color: var(--night-deep); }
+
   main {
     max-width: 720px;
     margin: 0 auto;
     padding: 0.5rem 1.5rem 3.5rem;
   }
 
-  .step {
+  .step, .screen {
     display: none;
     border-top: 1px solid var(--line);
     padding-top: 2rem;
     margin-top: 2rem;
   }
-  .step.active { display: block; }
-  .step:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .step.active, .screen.active { display: block; }
+  .step:first-of-type, .screen:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .screen.no-border { border-top: none; margin-top: 0; padding-top: 0; }
 
   .step-eyebrow {
     display: inline-block;
@@ -143,7 +166,37 @@
 
   .actions { display: flex; gap: 0.9rem; flex-wrap: wrap; margin-top: 1.6rem; }
 
-  /* Dropzone (paso 2) */
+  /* Formularios (login / registro / configuración) */
+  .field-group { margin-bottom: 1.1rem; }
+  .field-group label { display: block; font-weight: 700; margin-bottom: 0.35rem; }
+  .field-group .hint { display: block; font-size: 0.85rem; color: #3a362e; margin-top: 0.3rem; }
+  .field-group input, .field-group select {
+    width: 100%; font: inherit; font-size: 1rem; padding: 0.7em 0.8em;
+    border: 1px solid var(--line); border-radius: var(--radius); background: #fffdf8; color: var(--ink);
+  }
+  fieldset.form-fieldset { border: none; margin: 0; padding: 0; }
+
+  .tabs { display: flex; gap: 0.6rem; margin-bottom: 1.6rem; border-bottom: 1px solid var(--line); }
+  .tabs button {
+    background: none; border: none; border-bottom: 3px solid transparent;
+    font: inherit; font-size: 1rem; font-weight: 700; padding: 0.7em 0.2em; margin-bottom: -1px;
+    color: #55504a; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--night); border-bottom-color: var(--night); }
+
+  /* Selección de rol (pantalla de inicio) */
+  .role-buttons { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.8rem; }
+  .role-btn {
+    display: block; width: 100%; text-align: left;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--gold-soft);
+    padding: 1.4rem 1.5rem; cursor: pointer; font: inherit; color: var(--ink);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .role-btn:hover { border-color: var(--gold); background: #efdcae; }
+  .role-btn .role-title { display: block; font-family: 'Fraunces', serif; font-size: 1.3rem; font-weight: 700; color: var(--night); }
+  .role-btn .role-desc { display: block; margin-top: 0.3rem; color: #3a362e; font-size: 0.98rem; }
+
+  /* Dropzone (subir PDF) */
   .dropzone {
     display: block;
     border: 2px dashed var(--line);
@@ -185,18 +238,27 @@
   .status { margin-top: 0.9rem; font-size: 0.95rem; color: var(--night); min-height: 1.4em; }
   .status.error { color: var(--error); }
 
-  /* Paso 3: gráficos detectados */
+  /* Gráficos detectados */
   .graphic-list { list-style: none; margin: 0 0 1.6rem; padding: 0; display: grid; gap: 0.8rem; }
+
   .graphic-item {
-    display: flex; flex-direction: column; gap: 0.7rem;
     border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 0.9rem 1.1rem; background: #fffdf8;
+    background: #fffdf8;
+    padding: 0;
   }
-  .graphic-item-main { display: flex; align-items: center; gap: 0.9rem; }
-  .graphic-item .thumb {
-    flex-shrink: 0; width: 3.6rem; height: 2.6rem; border-radius: 6px;
-    background: var(--gold-soft); object-fit: cover;
-    border: 1px solid var(--line);
+  .graphic-item.chosen { border-color: var(--night); background: #fff; }
+
+  .graphic-item label.pick {
+    display: flex; align-items: flex-start; gap: 0.9rem;
+    padding: 1rem 1.1rem;
+    cursor: pointer;
+  }
+  .graphic-item input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 1.4rem; height: 1.4rem;
+    margin: 0.15rem 0 0;
+    accent-color: var(--night);
+    cursor: pointer;
   }
   .graphic-item .swatch {
     flex-shrink: 0; width: 2.6rem; height: 2.6rem; border-radius: 6px;
@@ -206,38 +268,30 @@
     font-weight: 700; font-family: 'Fraunces', serif;
   }
   .graphic-item .info { flex: 1; min-width: 0; }
-  .graphic-item .info strong { display: block; }
-  .graphic-item .info span { font-size: 0.9rem; color: #3a362e; }
-  .graphic-item .info .badge {
-    display: inline-block; margin-top: 0.2rem; font-size: 0.78rem;
-    font-weight: 700; padding: 0.1em 0.6em; border-radius: 999px;
-    background: var(--gold-soft); color: var(--night);
+  .graphic-item .info strong { display: block; font-family: 'Fraunces', serif; font-size: 1.05rem; }
+  .graphic-item .info .caption { font-size: 0.92rem; color: #3a362e; display: block; margin-top: 0.15rem; }
+  .graphic-item .info .caption.missing { font-style: italic; color: #5c564c; }
+
+  .graphic-item .thumb-wrap { padding: 0 1.1rem 1.1rem 4.3rem; }
+  .graphic-item img.thumb {
+    max-width: 100%; height: auto; display: block;
+    border: 1px solid var(--line); border-radius: 4px; background: #fff;
   }
-  .graphic-item .not-compatible {
-    font-size: 0.85rem; color: #6b6659; flex-shrink: 0; text-align: right; max-width: 9rem;
+
+  .select-all-bar {
+    display: flex; align-items: center; gap: 0.7rem;
+    margin-bottom: 1rem; padding: 0.7rem 1.1rem;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--gold-soft);
   }
-  button.primary.small, a.primary.small {
-    padding: 0.5em 1em; font-size: 0.9rem; flex-shrink: 0;
-    text-decoration: none; display: inline-block;
+  .select-all-bar input[type="checkbox"] {
+    width: 1.4rem; height: 1.4rem; margin: 0; accent-color: var(--night); cursor: pointer;
   }
-  button.secondary.small, a.secondary.small {
-    padding: 0.5em 1em; font-size: 0.9rem; flex-shrink: 0;
-    text-decoration: none; display: inline-block;
-  }
-  .item-status { margin: 0; font-size: 0.9rem; color: var(--night); }
-  .item-status.error { color: var(--error); }
-  .item-status:empty { display: none; }
-  .item-result {
-    border-top: 1px dashed var(--line); padding-top: 0.8rem;
-    display: flex; flex-direction: column; gap: 0.6rem;
-  }
-  .item-result .desc { font-size: 0.95rem; color: #24211c; margin: 0; }
-  .item-result ul.warnings {
-    margin: 0; padding-left: 1.2rem; font-size: 0.88rem; color: var(--error);
-  }
-  .item-result ul.warnings li { margin-bottom: 0.25rem; }
-  .item-result .overlay-preview { max-width: 100%; border-radius: 6px; border: 1px solid var(--line); }
-  .item-result .result-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .select-all-bar label { font-weight: 700; cursor: pointer; }
+  .select-all-bar .count { margin-left: auto; font-size: 0.92rem; color: #24211c; }
+
+  fieldset.picks { border: none; margin: 0; padding: 0; }
+  fieldset.picks legend { padding: 0; }
 
   .progress-line {
     display: flex; align-items: center; gap: 0.7rem;
@@ -247,10 +301,11 @@
     width: 1.1rem; height: 1.1rem; border-radius: 50%;
     border: 2.5px solid var(--paper-raised); border-top-color: var(--night);
     animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Paso 4: confirmación */
+  /* Confirmación */
   .confirm-card {
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -265,6 +320,36 @@
     color: var(--night);
   }
   .confirm-card p { margin: 0.5rem 0 0; color: #24211c; }
+  .confirm-card ul { margin: 0.9rem 0 0; padding-left: 1.2rem; }
+  .confirm-card li { margin-bottom: 0.3rem; }
+
+  /* Estado de solicitudes / listas de solicitudes (supervisor, imprenta) */
+  .badge {
+    display: inline-block; font-size: 0.85rem; font-weight: 700;
+    padding: 0.2em 0.7em; border-radius: 999px;
+  }
+  .badge.wait { background: var(--wait-soft); color: var(--gold); }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.neutral { background: #e7e4db; color: #55504a; }
+
+  .request-list { list-style: none; margin: 0 0 1.6rem; padding: 0; display: grid; gap: 0.9rem; }
+  .request-card { border: 1px solid var(--line); border-radius: 10px; background: #fffdf8; }
+  .request-card .request-summary {
+    width: 100%; text-align: left; background: none; border: none; font: inherit; cursor: pointer;
+    padding: 1rem 1.1rem; display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+  }
+  .request-card .request-summary strong { font-family: 'Fraunces', serif; font-size: 1.05rem; }
+  .request-card .request-summary .meta { font-size: 0.9rem; color: #3a362e; }
+  .request-card .request-summary .badges { margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .request-card .request-detail { padding: 0 1.1rem 1.1rem; border-top: 1px solid var(--line); }
+  .request-card .request-detail[hidden] { display: none; }
+  .request-card .request-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 1rem 0; }
+  .request-card .request-detail dt { font-weight: 700; }
+  .request-card .request-detail dd { margin: 0; }
+  .request-card .fig-thumbs { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: 0.7rem; }
+  .request-card .fig-thumbs li { border: 1px solid var(--line); border-radius: 6px; padding: 0.7rem; background: #fff; }
+  .request-card .fig-thumbs img { max-width: 100%; height: auto; display: block; margin-top: 0.5rem; border-radius: 4px; }
+  .empty-note { color: #55504a; font-style: italic; }
 
   section.audience {
     margin-top: 3rem;
@@ -298,26 +383,129 @@
 </head>
 <body>
 
-<a class="skip-link" href="#step-1-heading">Saltar al contenido principal</a>
+<a class="skip-link" href="#main-heading-target">Saltar al contenido principal</a>
 
 <header class="top">
-  <span class="wordmark">tacti<span class="dot">·</span>verso</span>
+  <span class="wordmark">punti<span class="dot">·</span>to</span>
   <span class="tagline">Gráficos táctiles en braille, de tu PDF a la imprenta</span>
 </header>
 
-<main>
+<div class="user-bar" id="user-bar" hidden>
+  <span class="greeting" id="user-bar-greeting"></span>
+  <span class="role-tag" id="user-bar-role"></span>
+  <button type="button" class="linklike" id="nav-ver-estado" hidden>Ver estado de mis solicitudes</button>
+  <button type="button" class="linklike" id="nav-cambiar-predeterminado" hidden>Cambiar</button>
+  <button type="button" class="linklike" id="nav-cerrar-sesion">Cerrar sesión</button>
+</div>
 
-  <!-- PASO 1: Instrucciones -->
-  <section class="step active" id="step-1" aria-labelledby="step-1-heading">
+<main id="main-heading-target">
+
+  <!-- PANTALLA DE INICIO: elegir rol -->
+  <section class="screen active no-border" id="screen-landing" aria-labelledby="landing-heading">
+    <h1 id="landing-heading" tabindex="-1">Bienvenido a Puntito</h1>
+    <p class="lede">Convierte los gráficos de tus documentos en láminas táctiles en braille. Elige cómo quieres ingresar.</p>
+
+    <div class="role-buttons">
+      <button type="button" class="role-btn" data-role="estudiante">
+        <span class="role-title">Soy estudiante</span>
+        <span class="role-desc">Sube tus documentos y envía solicitudes de láminas táctiles.</span>
+      </button>
+      <button type="button" class="role-btn" data-role="supervisor">
+        <span class="role-title">Soy supervisor</span>
+        <span class="role-desc">Revisa, autoriza y envía a imprenta las solicitudes de los estudiantes.</span>
+      </button>
+      <button type="button" class="role-btn" data-role="imprenta">
+        <span class="role-title">Soy de imprenta</span>
+        <span class="role-desc">Recibe los modelos ya autorizados y márcalos como impresos.</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- AUTENTICACIÓN: ESTUDIANTE -->
+  <section class="screen no-border" id="screen-auth-estudiante" aria-labelledby="auth-estudiante-heading">
+    <h1 id="auth-estudiante-heading" tabindex="-1">Cuenta de estudiante</h1>
+
+    <div class="tabs" role="tablist" aria-label="Iniciar sesión o registrarme como estudiante">
+      <button type="button" role="tab" id="tab-login-estudiante" aria-selected="true" aria-controls="form-login-estudiante">Iniciar sesión</button>
+      <button type="button" role="tab" id="tab-register-estudiante" aria-selected="false" aria-controls="form-register-estudiante">Registrarme</button>
+    </div>
+
+    <form id="form-login-estudiante" role="tabpanel" aria-labelledby="tab-login-estudiante">
+      <div class="field-group">
+        <label for="login-estudiante-correo">Correo institucional</label>
+        <input type="email" id="login-estudiante-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="login-estudiante-clave">Contraseña</label>
+        <input type="password" id="login-estudiante-clave" autocomplete="current-password" required>
+      </div>
+      <p class="status" id="status-login-estudiante" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Ingresar</button>
+      </div>
+    </form>
+
+    <form id="form-register-estudiante" role="tabpanel" aria-labelledby="tab-register-estudiante" hidden>
+      <div class="field-group">
+        <label for="reg-estudiante-nombre">Nombre completo</label>
+        <input type="text" id="reg-estudiante-nombre" autocomplete="name" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-estudiante-correo">Correo institucional</label>
+        <input type="email" id="reg-estudiante-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-estudiante-codigo">Código de estudiante</label>
+        <input type="text" id="reg-estudiante-codigo" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-estudiante-facultad">Facultad</label>
+        <input type="text" id="reg-estudiante-facultad" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-estudiante-carrera">Carrera</label>
+        <input type="text" id="reg-estudiante-carrera" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-estudiante-clave">Contraseña</label>
+        <input type="password" id="reg-estudiante-clave" autocomplete="new-password" required>
+      </div>
+      <p class="status" id="status-register-estudiante" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Crear cuenta</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- CONFIGURACIÓN: ESTUDIANTE (supervisor predeterminado) -->
+  <section class="screen no-border" id="screen-config-estudiante" aria-labelledby="config-estudiante-heading">
+    <h1 id="config-estudiante-heading" tabindex="-1">Conéctate con tu supervisor</h1>
+    <p class="lede">Pide a tu supervisor su código de conexión y escríbelo aquí. Lo guardamos una sola vez; puedes cambiarlo cuando quieras desde tu cuenta.</p>
+    <form id="form-config-estudiante">
+      <div class="field-group">
+        <label for="config-estudiante-supervisor">Código de tu supervisor</label>
+        <input type="text" id="config-estudiante-supervisor" required>
+      </div>
+      <p class="status" id="status-config-estudiante" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="submit" class="primary">Guardar y continuar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- PASO 1: Instrucciones (estudiante) -->
+  <section class="step" id="step-1" aria-labelledby="step-1-heading">
     <span class="step-eyebrow">Paso 1 de 4</span>
-    <h1 id="step-1-heading" tabindex="-1">Bienvenido a tactiverso</h1>
-    <p class="lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
+    <h1 id="step-1-heading" tabindex="-1">Bienvenido a Puntito</h1>
+    <p class="lede" id="step-1-lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
 
     <ol class="instructions">
       <li>Sube el PDF que tiene los gráficos que quieres convertir.</li>
-      <li>tactiverso detecta los gráficos y los prepara en braille.</li>
-      <li>Revisas y confirmas qué imagen deseas imprimir.</li>
-      <li>Se envía directo a la cola de impresión en relieve.</li>
+      <li>Puntito detecta los gráficos y te muestra de qué trata cada uno.</li>
+      <li>Eliges cuáles quieres imprimir, o los mandas todos.</li>
+      <li>Se envía una solicitud a tu supervisor para su aprobación.</li>
     </ol>
 
     <div class="actions">
@@ -370,12 +558,32 @@
     </div>
 
     <div id="graphic-results" hidden>
-      <p class="lede">Encontramos estos gráficos. Los de tipo línea se pueden segmentar para generar su descripción y el CSV con los datos.</p>
-      <ul class="graphic-list" id="graphic-list"></ul>
+      <p class="lede" id="results-lede">
+        Encontramos estos gráficos. Marca los que quieras convertir en láminas táctiles en braille.
+      </p>
+
+      <div class="select-all-bar">
+        <input type="checkbox" id="select-all" checked>
+        <label for="select-all">Seleccionar todos</label>
+        <span class="count" id="select-count"></span>
+      </div>
+
+      <fieldset class="picks">
+        <legend class="sr-only">Gráficos encontrados en el documento</legend>
+        <ul class="graphic-list" id="graphic-list"></ul>
+      </fieldset>
+
       <p class="status" role="status" aria-live="polite" id="detect-status"></p>
       <div class="actions">
         <button type="button" class="secondary" data-goto="step-2">Atrás</button>
-        <button type="button" class="primary" id="to-step-4" disabled>Ver resumen final</button>
+        <button type="button" class="primary" id="to-step-4">Enviar solicitud</button>
+      </div>
+    </div>
+
+    <div id="no-results" hidden>
+      <p class="lede">No encontramos gráficos de líneas en este documento. Puedes volver atrás y probar con otro PDF.</p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="step-2">Elegir otro PDF</button>
       </div>
     </div>
   </section>
@@ -383,54 +591,512 @@
   <!-- PASO 4: Confirmación -->
   <section class="step" id="step-4" aria-labelledby="step-4-heading">
     <span class="step-eyebrow">Paso 4 de 4</span>
-    <h2 id="step-4-heading" tabindex="-1">Láminas listas</h2>
+    <h2 id="step-4-heading" tabindex="-1">Solicitud enviada</h2>
     <div class="confirm-card">
-      <span class="ticket" id="ticket-number">Orden #TV-0000</span>
-      <p id="confirm-summary">Gráficos segmentados y listos para descargar.</p>
+      <span class="ticket" id="ticket-number">Solicitud #0000</span>
+      <p id="ticket-detail"></p>
+      <ul id="ticket-list"></ul>
     </div>
-    <ul class="graphic-list" id="final-list"></ul>
     <p class="status" role="status" aria-live="polite" id="confirm-status"></p>
     <div class="actions">
-      <button type="button" class="primary" data-goto="step-1">Subir otro documento</button>
+      <button type="button" class="primary" id="ir-a-estado">Ver estado de mis solicitudes</button>
+      <button type="button" class="secondary" data-goto="step-1">Enviar otra solicitud</button>
     </div>
   </section>
 
+  <!-- ESTADO DE SOLICITUDES: ESTUDIANTE -->
+  <section class="screen" id="screen-estado-estudiante" aria-labelledby="estado-estudiante-heading">
+    <h2 id="estado-estudiante-heading" tabindex="-1">Estado de tus solicitudes</h2>
+    <p class="lede">Aquí puedes ver si tu supervisor ya aprobó tu solicitud y si la imprenta ya la dejó lista para recoger.</p>
+    <ul class="request-list" id="lista-estado-estudiante"></ul>
+    <p class="empty-note" id="estado-estudiante-vacio" hidden>Todavía no has enviado ninguna solicitud.</p>
+    <div class="actions">
+      <button type="button" class="secondary" data-goto="step-1">Volver</button>
+    </div>
+  </section>
+
+  <!-- AUTENTICACIÓN: SUPERVISOR -->
+  <section class="screen no-border" id="screen-auth-supervisor" aria-labelledby="auth-supervisor-heading">
+    <h1 id="auth-supervisor-heading" tabindex="-1">Cuenta de supervisor</h1>
+
+    <div class="tabs" role="tablist" aria-label="Iniciar sesión o registrarme como supervisor">
+      <button type="button" role="tab" id="tab-login-supervisor" aria-selected="true" aria-controls="form-login-supervisor">Iniciar sesión</button>
+      <button type="button" role="tab" id="tab-register-supervisor" aria-selected="false" aria-controls="form-register-supervisor">Registrarme</button>
+    </div>
+
+    <form id="form-login-supervisor" role="tabpanel" aria-labelledby="tab-login-supervisor">
+      <div class="field-group">
+        <label for="login-supervisor-correo">Correo institucional</label>
+        <input type="email" id="login-supervisor-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="login-supervisor-clave">Contraseña</label>
+        <input type="password" id="login-supervisor-clave" autocomplete="current-password" required>
+      </div>
+      <p class="status" id="status-login-supervisor" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Ingresar</button>
+      </div>
+    </form>
+
+    <form id="form-register-supervisor" role="tabpanel" aria-labelledby="tab-register-supervisor" hidden>
+      <div class="field-group">
+        <label for="reg-supervisor-nombre">Nombre completo</label>
+        <input type="text" id="reg-supervisor-nombre" autocomplete="name" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-supervisor-correo">Correo institucional</label>
+        <input type="email" id="reg-supervisor-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-supervisor-entidad">Entidad o área</label>
+        <input type="text" id="reg-supervisor-entidad" placeholder="Por ejemplo: SAPD - PUCP" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-supervisor-clave">Contraseña</label>
+        <input type="password" id="reg-supervisor-clave" autocomplete="new-password" required>
+      </div>
+      <p class="status" id="status-register-supervisor" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Crear cuenta</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ESPERANDO IMPRENTA (supervisor) -->
+  <section class="screen no-border" id="screen-esperando-imprenta" aria-labelledby="esperando-imprenta-heading">
+    <h1 id="esperando-imprenta-heading" tabindex="-1">Conectando con una imprenta</h1>
+    <p class="lede">Todavía no hay ninguna imprenta registrada en Puntito. En cuanto se registre una, tu cuenta se va a conectar con ella automáticamente.</p>
+    <div class="actions">
+      <button type="button" class="primary" id="reintentar-conexion-imprenta">Ya se registró, reintentar</button>
+    </div>
+  </section>
+
+  <!-- APP: SUPERVISOR -->
+  <section class="screen" id="screen-app-supervisor" aria-labelledby="app-supervisor-heading">
+    <h1 id="app-supervisor-heading" tabindex="-1">Solicitudes de estudiantes</h1>
+    <p class="lede">Revisa los datos del estudiante y las imágenes solicitadas. Autoriza para generar las láminas en braille y el modelo STL; luego envíalas a tu imprenta predeterminada.</p>
+    <p class="hint" id="supervisor-codigo-hint"></p>
+
+    <h2>Pendientes</h2>
+    <ul class="request-list" id="lista-supervisor-pendientes"></ul>
+    <p class="empty-note" id="supervisor-pendientes-vacio" hidden>No tienes solicitudes pendientes por ahora.</p>
+
+    <h2>Ya autorizadas</h2>
+    <ul class="request-list" id="lista-supervisor-autorizadas"></ul>
+    <p class="empty-note" id="supervisor-autorizadas-vacio" hidden>Todavía no has autorizado ninguna solicitud.</p>
+  </section>
+
+  <!-- AUTENTICACIÓN: IMPRENTA -->
+  <section class="screen no-border" id="screen-auth-imprenta" aria-labelledby="auth-imprenta-heading">
+    <h1 id="auth-imprenta-heading" tabindex="-1">Cuenta de imprenta</h1>
+
+    <div class="tabs" role="tablist" aria-label="Iniciar sesión o registrarme como imprenta">
+      <button type="button" role="tab" id="tab-login-imprenta" aria-selected="true" aria-controls="form-login-imprenta">Iniciar sesión</button>
+      <button type="button" role="tab" id="tab-register-imprenta" aria-selected="false" aria-controls="form-register-imprenta">Registrarme</button>
+    </div>
+
+    <form id="form-login-imprenta" role="tabpanel" aria-labelledby="tab-login-imprenta">
+      <div class="field-group">
+        <label for="login-imprenta-correo">Correo institucional</label>
+        <input type="email" id="login-imprenta-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="login-imprenta-clave">Contraseña</label>
+        <input type="password" id="login-imprenta-clave" autocomplete="current-password" required>
+      </div>
+      <p class="status" id="status-login-imprenta" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Ingresar</button>
+      </div>
+    </form>
+
+    <form id="form-register-imprenta" role="tabpanel" aria-labelledby="tab-register-imprenta" hidden>
+      <div class="field-group">
+        <label for="reg-imprenta-nombre">Nombre completo</label>
+        <input type="text" id="reg-imprenta-nombre" autocomplete="name" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-imprenta-correo">Correo institucional</label>
+        <input type="email" id="reg-imprenta-correo" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-imprenta-usuario">Nombre de usuario</label>
+        <input type="text" id="reg-imprenta-usuario" autocomplete="username" required>
+        <span class="hint">Compártelo con los supervisores para que se conecten contigo.</span>
+      </div>
+      <div class="field-group">
+        <label for="reg-imprenta-area">Área o imprenta</label>
+        <input type="text" id="reg-imprenta-area" placeholder="Por ejemplo: Imprenta central PUCP" required>
+      </div>
+      <div class="field-group">
+        <label for="reg-imprenta-clave">Contraseña</label>
+        <input type="password" id="reg-imprenta-clave" autocomplete="new-password" required>
+      </div>
+      <p class="status" id="status-register-imprenta" role="alert" aria-live="assertive"></p>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="screen-landing">Atrás</button>
+        <button type="submit" class="primary">Crear cuenta</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- APP: IMPRENTA -->
+  <section class="screen" id="screen-app-imprenta" aria-labelledby="app-imprenta-heading">
+    <h1 id="app-imprenta-heading" tabindex="-1">Trabajos para imprimir</h1>
+    <p class="lede">Estos son los modelos STL ya autorizados por un supervisor. Cuando termines de imprimir uno, márcalo como listo para que el estudiante lo sepa.</p>
+
+    <h2>Pendiente</h2>
+    <ul class="request-list" id="lista-imprenta-pendientes"></ul>
+    <p class="empty-note" id="imprenta-pendientes-vacio" hidden>No hay trabajos pendientes por ahora.</p>
+
+    <h2>Imprimiendo</h2>
+    <ul class="request-list" id="lista-imprenta-imprimiendo"></ul>
+    <p class="empty-note" id="imprenta-imprimiendo-vacio" hidden>No hay nada imprimiéndose ahora.</p>
+
+    <h2>Impreso</h2>
+    <ul class="request-list" id="lista-imprenta-impresos"></ul>
+    <p class="empty-note" id="imprenta-impresos-vacio" hidden>Todavía no hay nada listo para recoger.</p>
+  </section>
 
 </main>
 
-<script>
-  // --------------------------------------------------------------
-  // Dirección base de tu api.py (Flask). Si sirves este HTML desde
-  // el mismo Flask (p. ej. con send_from_directory), déjalo como
-  // cadena vacía ''. Si lo abres como archivo suelto o en otro
-  // puerto/dominio, apunta aquí a donde corre "python api.py".
-  // --------------------------------------------------------------
-  const API_BASE = 'http://localhost:5000';
-  function apiUrl(path) { return API_BASE + path; }
+<footer class="bottom">
+</footer>
 
-  function escapeHtml(str) {
-    return String(str ?? '').replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
+<script>
+  // ---------------------------------------------------------------
+  // API de autenticación (cuentas reales en el backend — antes vivían en
+  // localStorage, así que un supervisor en otra computadora nunca veía las
+  // solicitudes de sus estudiantes).
+  //
+  // API_BASE: dejalo vacío ('') si esta página se sirve desde el MISMO
+  // Flask que corre api.py (las rutas relativas "/api/..." alcanzan). Si la
+  // servís aparte (otro puerto, otro hosting estático), poné acá la URL
+  // completa de la API, p. ej. 'http://localhost:5000' o
+  // 'https://tactonauta.onrender.com' — si no, los fetch() apuntan al
+  // origen de ESTA página en vez de a la API y todo falla con 404/501.
+  // `credentials: 'include'` es necesario para que la cookie de sesión
+  // viaje también cuando la página está en otro origen que la API.
+  // ---------------------------------------------------------------
+  const API_BASE = '';
+
+  async function llamarApi(ruta, opciones) {
+    const resp = await fetch(API_BASE + ruta, Object.assign({ credentials: 'include' }, opciones));
+    let datos;
+    try { datos = await resp.json(); }
+    catch (e) { datos = { ok: false, error: 'Respuesta inválida del servidor.' }; }
+    return { resp, datos };
+  }
+  function postJson(ruta, cuerpo) {
+    return llamarApi(ruta, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo || {}),
+    });
   }
 
-  const steps = ['step-1', 'step-2', 'step-3', 'step-4'];
+  // Las solicitudes siguen en localStorage por ahora (fase siguiente: mover
+  // también esto al backend, junto con la generación real de las láminas).
+  function cargarSolicitudes() {
+    try { return JSON.parse(localStorage.getItem('puntito_solicitudes')) || []; }
+    catch (e) { return []; }
+  }
+  function guardarSolicitudes(s) { localStorage.setItem('puntito_solicitudes', JSON.stringify(s)); }
 
-  function goTo(stepId) {
-    steps.forEach(id => document.getElementById(id).classList.toggle('active', id === stepId));
-    const heading = document.querySelector('#' + stepId + ' h1, #' + stepId + ' h2');
+  function vacio(v) { return !v || !v.trim(); }
+
+  let usuarioActual = null; // se llena desde /api/auth/yo o tras iniciar sesión/registrarse
+
+  // ---------------------------------------------------------------
+  // Navegación entre pantallas
+  // ---------------------------------------------------------------
+  function goTo(id) {
+    document.querySelectorAll('.step, .screen').forEach(el => el.classList.toggle('active', el.id === id));
+    const heading = document.querySelector('#' + id + ' h1, #' + id + ' h2');
     if (heading) {
       heading.setAttribute('tabindex', '-1');
       heading.focus();
     }
-    if (stepId === 'step-3') runDetection();
   }
 
   document.querySelectorAll('[data-goto]').forEach(btn => {
     btn.addEventListener('click', () => goTo(btn.getAttribute('data-goto')));
   });
 
-  // Paso 2: carga de archivo
+  // ---------------------------------------------------------------
+  // Barra de usuario autenticado
+  // ---------------------------------------------------------------
+  const userBar = document.getElementById('user-bar');
+  const userBarGreeting = document.getElementById('user-bar-greeting');
+  const userBarRole = document.getElementById('user-bar-role');
+  const navVerEstado = document.getElementById('nav-ver-estado');
+  const navCambiarPredeterminado = document.getElementById('nav-cambiar-predeterminado');
+  const navCerrarSesion = document.getElementById('nav-cerrar-sesion');
+
+  function refrescarBarraUsuario() {
+    if (!usuarioActual) {
+      userBar.hidden = true;
+      return;
+    }
+    const rol = usuarioActual.rol;
+    userBar.hidden = false;
+    userBarGreeting.textContent = 'Hola, ' + usuarioActual.nombre;
+    userBarRole.textContent = rol === 'estudiante' ? 'Estudiante' : (rol === 'supervisor' ? 'Supervisor' : 'Imprenta');
+    navVerEstado.hidden = rol !== 'estudiante';
+    navCambiarPredeterminado.hidden = rol !== 'estudiante';
+    navCambiarPredeterminado.textContent = 'Cambiar código de supervisor';
+  }
+
+  navCerrarSesion.addEventListener('click', async () => {
+    await postJson('/api/auth/logout');
+    usuarioActual = null;
+    refrescarBarraUsuario();
+    goTo('screen-landing');
+  });
+
+  navVerEstado.addEventListener('click', () => {
+    pintarEstadoEstudiante();
+    goTo('screen-estado-estudiante');
+  });
+
+  navCambiarPredeterminado.addEventListener('click', () => {
+    if (!usuarioActual || usuarioActual.rol !== 'estudiante') return;
+    document.getElementById('config-estudiante-supervisor').value = usuarioActual.supervisor_codigo || '';
+    goTo('screen-config-estudiante');
+  });
+
+  document.getElementById('ir-a-estado').addEventListener('click', () => {
+    pintarEstadoEstudiante();
+    goTo('screen-estado-estudiante');
+  });
+
+  // ---------------------------------------------------------------
+  // Pantalla de inicio: elegir rol
+  // ---------------------------------------------------------------
+  document.querySelectorAll('[data-role]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rol = btn.getAttribute('data-role');
+      goTo('screen-auth-' + rol);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Pestañas de iniciar sesión / registrarme (genérico para los 3 roles)
+  // ---------------------------------------------------------------
+  ['estudiante', 'supervisor', 'imprenta'].forEach(rol => {
+    const tabLogin = document.getElementById('tab-login-' + rol);
+    const tabRegister = document.getElementById('tab-register-' + rol);
+    const formLogin = document.getElementById('form-login-' + rol);
+    const formRegister = document.getElementById('form-register-' + rol);
+
+    tabLogin.addEventListener('click', () => {
+      tabLogin.setAttribute('aria-selected', 'true');
+      tabRegister.setAttribute('aria-selected', 'false');
+      formLogin.hidden = false;
+      formRegister.hidden = true;
+    });
+    tabRegister.addEventListener('click', () => {
+      tabRegister.setAttribute('aria-selected', 'true');
+      tabLogin.setAttribute('aria-selected', 'false');
+      formRegister.hidden = false;
+      formLogin.hidden = true;
+    });
+  });
+
+  function despuesDeAutenticar(usuario) {
+    usuarioActual = usuario;
+    refrescarBarraUsuario();
+    if (usuario.rol === 'estudiante') {
+      if (usuario.supervisor_predeterminado_id) {
+        goTo('step-1');
+      } else {
+        document.getElementById('config-estudiante-supervisor').value = '';
+        goTo('screen-config-estudiante');
+      }
+    } else if (usuario.rol === 'supervisor') {
+      if (usuario.imprenta_predeterminada_id) {
+        pintarSolicitudesSupervisor();
+        goTo('screen-app-supervisor');
+      } else {
+        goTo('screen-esperando-imprenta');
+      }
+    } else if (usuario.rol === 'imprenta') {
+      pintarSolicitudesImprenta();
+      goTo('screen-app-imprenta');
+    }
+  }
+
+  // --- Estudiante: login / registro ---
+  document.getElementById('form-login-estudiante').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const correo = document.getElementById('login-estudiante-correo').value.trim();
+    const clave = document.getElementById('login-estudiante-clave').value;
+    const status = document.getElementById('status-login-estudiante');
+    status.classList.remove('error');
+    const { resp, datos } = await postJson('/api/auth/login/estudiante', { correo, clave });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'Correo o contraseña incorrectos.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  document.getElementById('form-register-estudiante').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nombre = document.getElementById('reg-estudiante-nombre').value.trim();
+    const correo = document.getElementById('reg-estudiante-correo').value.trim();
+    const codigo = document.getElementById('reg-estudiante-codigo').value.trim();
+    const facultad = document.getElementById('reg-estudiante-facultad').value.trim();
+    const carrera = document.getElementById('reg-estudiante-carrera').value.trim();
+    const clave = document.getElementById('reg-estudiante-clave').value;
+    const status = document.getElementById('status-register-estudiante');
+    status.classList.remove('error');
+
+    if (vacio(nombre) || vacio(correo) || vacio(codigo) || vacio(facultad) || vacio(carrera) || vacio(clave)) {
+      status.textContent = 'Completa todos los campos para registrarte.';
+      status.classList.add('error');
+      return;
+    }
+    const { resp, datos } = await postJson('/api/auth/registro/estudiante', {
+      nombre: nombre, correo: correo, codigo: codigo, facultad: facultad, carrera: carrera, clave: clave
+    });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudo crear la cuenta.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  document.getElementById('form-config-estudiante').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!usuarioActual) { goTo('screen-landing'); return; }
+    const codigo = document.getElementById('config-estudiante-supervisor').value.trim();
+    const status = document.getElementById('status-config-estudiante');
+    status.classList.remove('error');
+    if (vacio(codigo)) {
+      status.textContent = 'Escribe el código que te dio tu supervisor.';
+      status.classList.add('error');
+      return;
+    }
+    const { resp, datos } = await postJson('/api/auth/conectar-supervisor', { codigo: codigo });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'Ese código no corresponde a ningún supervisor registrado en Puntito.';
+      status.classList.add('error');
+      return;
+    }
+    usuarioActual = datos.usuario;
+    status.textContent = '';
+    goTo('step-1');
+  });
+
+  // --- Supervisor: login / registro ---
+  document.getElementById('form-login-supervisor').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const correo = document.getElementById('login-supervisor-correo').value.trim();
+    const clave = document.getElementById('login-supervisor-clave').value;
+    const status = document.getElementById('status-login-supervisor');
+    status.classList.remove('error');
+    const { resp, datos } = await postJson('/api/auth/login/supervisor', { correo, clave });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'Correo o contraseña incorrectos.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  document.getElementById('form-register-supervisor').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nombre = document.getElementById('reg-supervisor-nombre').value.trim();
+    const correo = document.getElementById('reg-supervisor-correo').value.trim();
+    const entidad = document.getElementById('reg-supervisor-entidad').value.trim();
+    const clave = document.getElementById('reg-supervisor-clave').value;
+    const status = document.getElementById('status-register-supervisor');
+    status.classList.remove('error');
+
+    if (vacio(nombre) || vacio(correo) || vacio(entidad) || vacio(clave)) {
+      status.textContent = 'Completa todos los campos para registrarte.';
+      status.classList.add('error');
+      return;
+    }
+    const { resp, datos } = await postJson('/api/auth/registro/supervisor', {
+      nombre: nombre, correo: correo, entidad: entidad, clave: clave
+    });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudo crear la cuenta.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  document.getElementById('reintentar-conexion-imprenta').addEventListener('click', async () => {
+    if (!usuarioActual || usuarioActual.rol !== 'supervisor') return;
+    const { resp, datos } = await postJson('/api/auth/reintentar-imprenta');
+    if (resp.ok && datos.ok && datos.usuario.imprenta_predeterminada_id) {
+      usuarioActual = datos.usuario;
+      pintarSolicitudesSupervisor();
+      goTo('screen-app-supervisor');
+    }
+  });
+
+  // --- Imprenta: login / registro ---
+  document.getElementById('form-login-imprenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const correo = document.getElementById('login-imprenta-correo').value.trim();
+    const clave = document.getElementById('login-imprenta-clave').value;
+    const status = document.getElementById('status-login-imprenta');
+    status.classList.remove('error');
+    const { resp, datos } = await postJson('/api/auth/login/imprenta', { correo, clave });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'Correo o contraseña incorrectos.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  document.getElementById('form-register-imprenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nombre = document.getElementById('reg-imprenta-nombre').value.trim();
+    const correo = document.getElementById('reg-imprenta-correo').value.trim();
+    const nombreUsuario = document.getElementById('reg-imprenta-usuario').value.trim();
+    const area = document.getElementById('reg-imprenta-area').value.trim();
+    const clave = document.getElementById('reg-imprenta-clave').value;
+    const status = document.getElementById('status-register-imprenta');
+    status.classList.remove('error');
+
+    if (vacio(nombre) || vacio(correo) || vacio(nombreUsuario) || vacio(area) || vacio(clave)) {
+      status.textContent = 'Completa todos los campos para registrarte.';
+      status.classList.add('error');
+      return;
+    }
+    const { resp, datos } = await postJson('/api/auth/registro/imprenta', {
+      nombre: nombre, correo: correo, usuario: nombreUsuario, area: area, clave: clave
+    });
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudo crear la cuenta.';
+      status.classList.add('error');
+      return;
+    }
+    status.textContent = '';
+    despuesDeAutenticar(datos.usuario);
+  });
+
+  // ---------------------------------------------------------------
+  // Paso 2: carga de archivo (estudiante)
+  // ---------------------------------------------------------------
   const dropzone = document.getElementById('dropzone');
   const input = document.getElementById('pdf-input');
   const summary = document.getElementById('file-summary');
@@ -440,15 +1106,15 @@
   const uploadStatus = document.getElementById('upload-status');
   const toStep3 = document.getElementById('to-step-3');
 
+  let archivoElegido = null;
+  let jobId = null;
+  let figuras = [];
+
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
-
-  let uploadedFile = null;
-  let ultimosGraficos = [];
-  let procesados = {}; // id -> { resumen, csv_download_url, overlay_url }
 
   function showFile(file) {
     if (!file) return;
@@ -457,8 +1123,8 @@
       uploadStatus.classList.add('error');
       return;
     }
+    archivoElegido = file;
     uploadStatus.classList.remove('error');
-    uploadedFile = file;
     fileName.textContent = file.name;
     fileMeta.textContent = formatSize(file.size);
     summary.classList.add('visible');
@@ -468,8 +1134,8 @@
   }
 
   function clearFile() {
+    archivoElegido = null;
     input.value = '';
-    uploadedFile = null;
     summary.classList.remove('visible');
     dropzone.classList.remove('has-file');
     uploadStatus.textContent = 'Archivo quitado.';
@@ -487,191 +1153,507 @@
     if (file) { input.files = e.dataTransfer.files; showFile(file); }
   });
   removeBtn.addEventListener('click', clearFile);
-  toStep3.addEventListener('click', () => goTo('step-3'));
 
-  // Paso 3: subir el PDF a /api/clasificar y mostrar los gráficos reales
-  const TIPO_LABEL = {
-    linea: 'Gráfico de líneas',
-    barra_o_torta: 'Gráfico de barras o de torta',
-    compuesta: 'Figura compuesta (varios paneles)',
-    indeterminado: 'Tipo no determinado',
-  };
+  toStep3.addEventListener('click', () => {
+    goTo('step-3');
+    procesarPDF();
+  });
 
-  async function runDetection() {
-    const progress = document.getElementById('progress-line');
-    const progressText = progress.querySelector('span:last-child');
-    const results = document.getElementById('graphic-results');
-    const detectStatus = document.getElementById('detect-status');
-    const listEl = document.getElementById('graphic-list');
+  // ---------------------------------------------------------------
+  // Paso 3: detección real contra el backend
+  // ---------------------------------------------------------------
+  const progress = document.getElementById('progress-line');
+  const results = document.getElementById('graphic-results');
+  const noResults = document.getElementById('no-results');
+  const lista = document.getElementById('graphic-list');
+  const detectStatus = document.getElementById('detect-status');
+  const selectAll = document.getElementById('select-all');
+  const selectCount = document.getElementById('select-count');
+  const toStep4 = document.getElementById('to-step-4');
 
-    detectStatus.classList.remove('error');
+  async function procesarPDF() {
+    if (!archivoElegido) return;
+
     progress.style.display = 'flex';
-    progressText.textContent = 'Buscando gráficos en el documento…';
+    progress.querySelector('span:last-child').textContent = 'Buscando gráficos en el documento…';
     results.hidden = true;
-    listEl.innerHTML = '';
-    procesados = {};
-    document.getElementById('to-step-4').disabled = true;
+    noResults.hidden = true;
+    detectStatus.textContent = '';
+    detectStatus.classList.remove('error');
 
-    if (!uploadedFile) {
-      progress.style.display = 'none';
-      detectStatus.textContent = 'No hay ningún PDF cargado. Vuelve al paso anterior.';
-      detectStatus.classList.add('error');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('pdf', uploadedFile);
+    const datos = new FormData();
+    datos.append('pdf', archivoElegido);
 
     try {
-      const resp = await fetch(apiUrl('/api/clasificar'), { method: 'POST', body: formData });
-      const data = await resp.json();
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'No se pudo analizar el PDF.');
+      const resp = await fetch('/api/procesar', { method: 'POST', body: datos });
+      const json = await resp.json();
 
-      ultimosGraficos = data.graficos || [];
+      if (!resp.ok) throw new Error(json.error || 'Error al procesar el documento.');
+
+      jobId = json.job_id;
+      figuras = json.figuras;
       progress.style.display = 'none';
-      results.hidden = false;
 
-      if (ultimosGraficos.length === 0) {
-        detectStatus.textContent = 'No se encontraron gráficos en este PDF.';
-      } else {
-        const nLineales = ultimosGraficos.filter(g => g.es_lineal).length;
-        detectStatus.textContent =
-          `Se detectaron ${ultimosGraficos.length} gráfico(s); ${nLineales} de tipo línea se pueden segmentar.`;
-        ultimosGraficos.forEach(renderGraphicItem);
+      if (figuras.length === 0) {
+        noResults.hidden = false;
+        detectStatus.textContent = 'No se encontraron gráficos de líneas en el documento.';
+        return;
       }
+
+      pintarFiguras();
+      results.hidden = false;
+      detectStatus.textContent = 'Se encontraron ' + figuras.length +
+        (figuras.length === 1 ? ' gráfico.' : ' gráficos.') +
+        ' Todos están marcados. Puedes desmarcar los que no necesites.';
+
     } catch (err) {
       progress.style.display = 'none';
-      results.hidden = false;
-      detectStatus.textContent = 'No se pudo analizar el PDF: ' + err.message;
+      detectStatus.textContent = 'No se pudo procesar el documento: ' + err.message;
       detectStatus.classList.add('error');
+      results.hidden = false;
     }
   }
 
-  function renderGraphicItem(grafico) {
-    const listEl = document.getElementById('graphic-list');
-    const li = document.createElement('li');
-    li.className = 'graphic-item';
-    li.dataset.id = grafico.id;
+  function pintarFiguras() {
+    lista.innerHTML = '';
 
-    const tipoLabel = TIPO_LABEL[grafico.tipo] || grafico.tipo;
-    const accionHtml = grafico.es_lineal
-      ? `<button type="button" class="primary small" data-action="segmentar">Segmentar y generar CSV</button>`
-      : `<span class="not-compatible">Este tipo aún no se convierte automáticamente</span>`;
-
-    li.innerHTML = `
-      <div class="graphic-item-main">
-        <img class="thumb" src="${escapeHtml(apiUrl(grafico.preview_url))}" alt="" loading="lazy">
-        <span class="info">
-          <strong>${escapeHtml(tipoLabel)} — página ${escapeHtml(grafico.pagina)}</strong>
-          <span>${escapeHtml(grafico.ancho)}×${escapeHtml(grafico.alto)} px · confianza ${escapeHtml(grafico.confianza)}</span>
-        </span>
-        ${accionHtml}
-      </div>
-      <p class="item-status status" role="status" aria-live="polite"></p>
-      <div class="item-result" hidden></div>
-    `;
-
-    const btn = li.querySelector('[data-action="segmentar"]');
-    if (btn) {
-      btn.addEventListener('click', () => segmentarGrafico(grafico.id, li));
-    }
-    listEl.appendChild(li);
-  }
-
-  function describirResumen(resumen) {
-    const partes = [];
-    partes.push(resumen.titulo
-      ? `Título detectado: "${resumen.titulo}".`
-      : 'No se detectó un título en la gráfica.');
-    partes.push(resumen.eje_x_detectado ? 'Eje X detectado.' : 'Eje X no detectado.');
-    partes.push(resumen.eje_y_detectado ? 'Eje Y detectado.' : 'Eje Y no detectado.');
-    partes.push(`${resumen.n_series} serie(s) de datos con ${resumen.n_puntos_curva} puntos en total.`);
-    if (resumen.titulo_eje_x) partes.push(`Eje X: "${resumen.titulo_eje_x}".`);
-    if (resumen.titulo_eje_y) partes.push(`Eje Y: "${resumen.titulo_eje_y}".`);
-    if (resumen.leyenda) partes.push(`Leyenda: "${resumen.leyenda}".`);
-    partes.push(resumen.listo_para_stl
-      ? 'La gráfica quedó lista para preparar la lámina táctil.'
-      : 'Todavía falta calibración de ejes para preparar la lámina.');
-    return partes.join(' ');
-  }
-
-  async function segmentarGrafico(id, li) {
-    const btn = li.querySelector('[data-action="segmentar"]');
-    const itemStatus = li.querySelector('.item-status');
-    const itemResult = li.querySelector('.item-result');
-
-    btn.disabled = true;
-    itemStatus.classList.remove('error');
-    itemStatus.innerHTML = '<span class="spinner" aria-hidden="true"></span> Segmentando esta gráfica (ejes, curva y textos)…';
-    itemResult.hidden = true;
-    itemResult.innerHTML = '';
-
-    try {
-      const resp = await fetch(apiUrl('/api/segmentar/' + encodeURIComponent(id)), { method: 'POST' });
-      const data = await resp.json();
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'Error al segmentar la imagen.');
-
-      itemStatus.textContent = 'Segmentación completa.';
-      btn.textContent = 'Segmentar de nuevo';
-      btn.disabled = false;
-
-      const resumen = data.resumen;
-      const advertencias = data.advertencias || [];
-      const warningsHtml = advertencias.length
-        ? `<ul class="warnings">${advertencias.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>`
-        : '';
-
-      itemResult.innerHTML = `
-        <p class="desc">${escapeHtml(describirResumen(resumen))}</p>
-        ${warningsHtml}
-        <img class="overlay-preview" src="${escapeHtml(apiUrl(data.overlay_url))}" alt="Overlay de verificación con ejes, curva y textos detectados">
-        <div class="result-actions">
-          <a class="primary small" href="${escapeHtml(apiUrl(data.csv_download_url))}">Descargar CSV</a>
-          <a class="secondary small" href="${escapeHtml(apiUrl(data.overlay_url))}" target="_blank" rel="noopener">Ver overlay en grande</a>
-        </div>
-      `;
-      itemResult.hidden = false;
-
-      procesados[id] = { resumen, csv_download_url: data.csv_download_url, overlay_url: data.overlay_url };
-      document.getElementById('to-step-4').disabled = Object.keys(procesados).length === 0;
-    } catch (err) {
-      itemStatus.textContent = 'Error: ' + err.message;
-      itemStatus.classList.add('error');
-      btn.disabled = false;
-    }
-  }
-
-  // Paso 4: resumen final con todo lo ya segmentado
-  document.getElementById('to-step-4').addEventListener('click', () => {
-    const ids = Object.keys(procesados);
-    const ticket = 'Orden #TV-' + Math.floor(1000 + Math.random() * 9000);
-    document.getElementById('ticket-number').textContent = ticket;
-    document.getElementById('confirm-summary').textContent =
-      `${ids.length} lámina(s) táctil(es) con su CSV de datos listas para descargar.`;
-
-    const finalList = document.getElementById('final-list');
-    finalList.innerHTML = '';
-    ids.forEach(id => {
-      const info = procesados[id];
-      const grafico = ultimosGraficos.find(g => g.id === id);
-      const etiqueta = grafico ? `${TIPO_LABEL[grafico.tipo] || grafico.tipo} — página ${grafico.pagina}` : id;
+    figuras.forEach((f, i) => {
       const li = document.createElement('li');
-      li.className = 'graphic-item';
-      li.innerHTML = `
-        <div class="graphic-item-main">
-          <span class="info">
-            <strong>${escapeHtml(etiqueta)}</strong>
-            <span>${escapeHtml(describirResumen(info.resumen))}</span>
-          </span>
-          <a class="primary small" href="${escapeHtml(apiUrl(info.csv_download_url))}">Descargar CSV</a>
-        </div>
-      `;
-      finalList.appendChild(li);
+      li.className = 'graphic-item chosen';
+
+      const label = document.createElement('label');
+      label.className = 'pick';
+      label.setAttribute('for', 'fig-' + f.id);
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.id = 'fig-' + f.id;
+      check.value = f.id;
+      check.checked = true;
+      check.addEventListener('change', () => {
+        li.classList.toggle('chosen', check.checked);
+        actualizarConteo();
+      });
+
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.setAttribute('aria-hidden', 'true');
+      swatch.textContent = (i + 1);
+
+      const info = document.createElement('span');
+      info.className = 'info';
+
+      const titulo = document.createElement('strong');
+      titulo.textContent = f.titulo + ' — página ' + f.pagina;
+
+      const caption = document.createElement('span');
+      caption.className = 'caption' + (f.tiene_caption ? '' : ' missing');
+      caption.textContent = f.caption;
+
+      info.appendChild(titulo);
+      info.appendChild(caption);
+
+      label.appendChild(check);
+      label.appendChild(swatch);
+      label.appendChild(info);
+      li.appendChild(label);
+
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'thumb-wrap';
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.src = f.imagen_url;
+      img.alt = 'Vista previa del gráfico ' + (i + 1) + '. ' + f.caption;
+      img.loading = 'lazy';
+      thumbWrap.appendChild(img);
+      li.appendChild(thumbWrap);
+
+      lista.appendChild(li);
     });
 
-    document.getElementById('confirm-status').textContent = ticket + ': CSV listos para descargar.';
+    selectAll.checked = true;
+    actualizarConteo();
+  }
+
+  function casillas() {
+    return Array.from(lista.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  function seleccionadas() {
+    return casillas().filter(c => c.checked).map(c => parseInt(c.value, 10));
+  }
+
+  function figurasSeleccionadasDetalle(ids) {
+    return figuras.filter(f => ids.includes(f.id)).map(f => ({
+      id: f.id, titulo: f.titulo, caption: f.caption, pagina: f.pagina, imagen_url: f.imagen_url
+    }));
+  }
+
+  function actualizarConteo() {
+    const total = casillas().length;
+    const elegidas = seleccionadas().length;
+    selectCount.textContent = elegidas + ' de ' + total + ' marcados';
+    selectAll.checked = elegidas === total && total > 0;
+    selectAll.indeterminate = elegidas > 0 && elegidas < total;
+    toStep4.disabled = elegidas === 0;
+    toStep4.textContent = elegidas === total
+      ? 'Enviar solicitud: todos (' + elegidas + ')'
+      : 'Enviar solicitud: seleccionados (' + elegidas + ')';
+  }
+
+  selectAll.addEventListener('change', () => {
+    casillas().forEach(c => {
+      c.checked = selectAll.checked;
+      c.closest('.graphic-item').classList.toggle('chosen', c.checked);
+    });
+    actualizarConteo();
+  });
+
+  // ---------------------------------------------------------------
+  // Paso 4: crear la solicitud (queda en espera de tu supervisor)
+  // ---------------------------------------------------------------
+  toStep4.addEventListener('click', () => {
+    const elegidas = seleccionadas();
+    if (elegidas.length === 0) return;
+
+    if (!usuarioActual || usuarioActual.rol !== 'estudiante') { goTo('screen-landing'); return; }
+    const usuario = usuarioActual;
+
+    const solicitudes = cargarSolicitudes();
+    const nuevaSolicitud = {
+      id: 'SOL-' + Date.now(),
+      fecha: new Date().toISOString(),
+      estudiante: {
+        id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, codigo: usuario.codigo,
+        facultad: usuario.facultad, carrera: usuario.carrera
+      },
+      supervisorId: usuario.supervisor_predeterminado_id,
+      archivoNombre: archivoElegido ? archivoElegido.name : '',
+      jobId: jobId,
+      seleccionados: elegidas,
+      figuras: figurasSeleccionadasDetalle(elegidas),
+      estadoSupervisor: 'en_espera',
+      estadoImprenta: 'no_enviada',
+      stlGenerado: false,
+      imprentaId: null,
+      orden: null,
+      laminas: null
+    };
+    solicitudes.push(nuevaSolicitud);
+    guardarSolicitudes(solicitudes);
+
+    document.getElementById('ticket-number').textContent = 'Solicitud #' + nuevaSolicitud.id.slice(-6);
+    document.getElementById('ticket-detail').textContent =
+      elegidas.length + (elegidas.length === 1 ? ' lámina táctil enviada' : ' láminas táctiles enviadas') +
+      ' a tu supervisor (' + (usuario.supervisor_codigo || 'sin definir') + ') para su aprobación.';
+    document.getElementById('ticket-list').innerHTML = '';
+    document.getElementById('confirm-status').textContent =
+      'Puedes revisar el avance en cualquier momento desde "Ver estado de mis solicitudes".';
+
     goTo('step-4');
   });
+
+  // ---------------------------------------------------------------
+  // Estado de solicitudes: ESTUDIANTE
+  // ---------------------------------------------------------------
+  function etiquetaSupervisor(estado) {
+    if (estado === 'aprobada') return { texto: 'Solicitud aprobada', clase: 'ok' };
+    return { texto: 'Solicitud en espera', clase: 'wait' };
+  }
+  function etiquetaImprenta(estado) {
+    if (estado === 'impreso') return { texto: 'Ya está impreso, puedes recogerlo', clase: 'ok' };
+    if (estado === 'imprimiendo') return { texto: 'Se está imprimiendo tu lámina', clase: 'wait' };
+    if (estado === 'pendiente') return { texto: 'En cola de impresión', clase: 'wait' };
+    return { texto: 'Aún no enviada a imprenta', clase: 'neutral' };
+  }
+
+  function pintarEstadoEstudiante() {
+    const contenedor = document.getElementById('lista-estado-estudiante');
+    const vacio = document.getElementById('estado-estudiante-vacio');
+    contenedor.innerHTML = '';
+    if (!usuarioActual) return;
+
+    const propias = cargarSolicitudes().filter(s => s.estudiante.id === usuarioActual.id)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    vacio.hidden = propias.length > 0;
+
+    propias.forEach(s => {
+      const li = document.createElement('li');
+      li.className = 'request-card';
+      const sup = etiquetaSupervisor(s.estadoSupervisor);
+      const imp = etiquetaImprenta(s.estadoImprenta);
+      const cantidad = s.seleccionados.length;
+      li.innerHTML =
+        '<div class="request-summary">' +
+          '<strong>Solicitud #' + s.id.slice(-6) + '</strong>' +
+          '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + ' · ' + new Date(s.fecha).toLocaleDateString('es-PE') + '</span>' +
+          '<span class="badges">' +
+            '<span class="badge ' + sup.clase + '">Supervisor: ' + sup.texto + '</span>' +
+            '<span class="badge ' + imp.clase + '">Imprenta: ' + imp.texto + '</span>' +
+          '</span>' +
+        '</div>';
+      contenedor.appendChild(li);
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // APP: SUPERVISOR
+  // ---------------------------------------------------------------
+  function crearDetalleSolicitud(s) {
+    const dl = document.createElement('dl');
+    const campos = [
+      ['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
+      ['Código', s.estudiante.codigo], ['Facultad', s.estudiante.facultad], ['Carrera', s.estudiante.carrera],
+      ['Documento', s.archivoNombre || '—']
+    ];
+    campos.forEach(([dt, dd]) => {
+      const dtEl = document.createElement('dt'); dtEl.textContent = dt;
+      const ddEl = document.createElement('dd'); ddEl.textContent = dd;
+      dl.appendChild(dtEl); dl.appendChild(ddEl);
+    });
+
+    const ul = document.createElement('ul');
+    ul.className = 'fig-thumbs';
+    s.figuras.forEach((f, i) => {
+      const li = document.createElement('li');
+      const strong = document.createElement('strong');
+      strong.textContent = (i + 1) + '. ' + f.titulo + ' — página ' + f.pagina;
+      const p = document.createElement('p');
+      p.textContent = f.caption;
+      const img = document.createElement('img');
+      img.src = f.imagen_url;
+      img.alt = 'Vista previa: ' + f.caption;
+      img.loading = 'lazy';
+      li.appendChild(strong); li.appendChild(p); li.appendChild(img);
+      ul.appendChild(li);
+    });
+
+    const wrap = document.createElement('div');
+    wrap.appendChild(dl);
+    wrap.appendChild(ul);
+    return wrap;
+  }
+
+  function pintarSolicitudesSupervisor() {
+    if (!usuarioActual) return;
+    const hintCodigo = document.getElementById('supervisor-codigo-hint');
+    if (hintCodigo) {
+      hintCodigo.textContent = 'Tu código de conexión para estudiantes: ' + usuarioActual.usuario;
+    }
+    const solicitudes = cargarSolicitudes();
+    const propias = solicitudes.filter(s => s.supervisorId === usuarioActual.id);
+
+    const pendientes = propias.filter(s => s.estadoSupervisor === 'en_espera');
+    const autorizadas = propias.filter(s => s.estadoSupervisor === 'aprobada');
+
+    const listaPendientes = document.getElementById('lista-supervisor-pendientes');
+    const listaAutorizadas = document.getElementById('lista-supervisor-autorizadas');
+    listaPendientes.innerHTML = '';
+    listaAutorizadas.innerHTML = '';
+    document.getElementById('supervisor-pendientes-vacio').hidden = pendientes.length > 0;
+    document.getElementById('supervisor-autorizadas-vacio').hidden = autorizadas.length > 0;
+
+    pendientes.forEach(s => listaPendientes.appendChild(construirTarjetaSupervisor(s)));
+    autorizadas.forEach(s => listaAutorizadas.appendChild(construirTarjetaSupervisor(s)));
+  }
+
+  function construirTarjetaSupervisor(s) {
+    const li = document.createElement('li');
+    li.className = 'request-card';
+
+    const btnResumen = document.createElement('button');
+    btnResumen.type = 'button';
+    btnResumen.className = 'request-summary';
+    const detailId = 'detalle-' + s.id;
+    btnResumen.setAttribute('aria-expanded', 'false');
+    btnResumen.setAttribute('aria-controls', detailId);
+    const imp = etiquetaImprenta(s.estadoImprenta);
+    btnResumen.innerHTML =
+      '<strong>' + s.estudiante.nombre + '</strong>' +
+      '<span class="meta">' + s.seleccionados.length + (s.seleccionados.length === 1 ? ' lámina' : ' láminas') + '</span>' +
+      '<span class="badges">' +
+        (s.estadoSupervisor === 'aprobada' ? '<span class="badge ok">Autorizada</span>' : '<span class="badge wait">En espera</span>') +
+        (s.estadoSupervisor === 'aprobada' ? '<span class="badge ' + imp.clase + '">' + imp.texto + '</span>' : '') +
+      '</span>';
+
+    const detalle = document.createElement('div');
+    detalle.className = 'request-detail';
+    detalle.id = detailId;
+    detalle.hidden = true;
+    detalle.appendChild(crearDetalleSolicitud(s));
+
+    const status = document.createElement('p');
+    status.className = 'status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    detalle.appendChild(status);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'actions';
+
+    if (s.estadoSupervisor === 'en_espera') {
+      const btnAutorizar = document.createElement('button');
+      btnAutorizar.type = 'button';
+      btnAutorizar.className = 'primary';
+      btnAutorizar.textContent = 'Autorizar';
+      btnAutorizar.addEventListener('click', () => autorizarSolicitud(s.id, btnAutorizar, status));
+      acciones.appendChild(btnAutorizar);
+    } else if (s.estadoSupervisor === 'aprobada' && !s.stlGenerado) {
+      status.textContent = 'Generando láminas en braille y modelo STL…';
+    } else if (s.stlGenerado && s.estadoImprenta === 'no_enviada') {
+      const btnEnviar = document.createElement('button');
+      btnEnviar.type = 'button';
+      btnEnviar.className = 'primary';
+      btnEnviar.textContent = 'Enviar a imprenta';
+      btnEnviar.addEventListener('click', () => enviarAImprenta(s.id, btnEnviar, status));
+      acciones.appendChild(btnEnviar);
+    } else {
+      status.textContent = imp.texto + '.';
+    }
+
+    detalle.appendChild(acciones);
+
+    btnResumen.addEventListener('click', () => {
+      const abierto = detalle.hidden;
+      detalle.hidden = !abierto;
+      btnResumen.setAttribute('aria-expanded', String(abierto));
+    });
+
+    li.appendChild(btnResumen);
+    li.appendChild(detalle);
+    return li;
+  }
+
+  async function autorizarSolicitud(id, boton, status) {
+    const solicitudes = cargarSolicitudes();
+    const idx = solicitudes.findIndex(s => s.id === id);
+    if (idx === -1) return;
+
+    solicitudes[idx].estadoSupervisor = 'aprobada';
+    guardarSolicitudes(solicitudes);
+
+    boton.disabled = true;
+    status.classList.remove('error');
+    status.textContent = 'Generando láminas en braille y modelo STL…';
+
+    try {
+      const resp = await fetch('/api/imprimir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: solicitudes[idx].jobId, seleccionados: solicitudes[idx].seleccionados })
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || 'Error al generar el braille y el STL.');
+
+      const solicitudesActualizadas = cargarSolicitudes();
+      const idx2 = solicitudesActualizadas.findIndex(s => s.id === id);
+      if (idx2 > -1) {
+        solicitudesActualizadas[idx2].stlGenerado = true;
+        solicitudesActualizadas[idx2].orden = json.orden;
+        solicitudesActualizadas[idx2].laminas = json.laminas;
+        guardarSolicitudes(solicitudesActualizadas);
+      }
+      pintarSolicitudesSupervisor();
+    } catch (err) {
+      status.textContent = 'No se pudo generar el braille y el STL: ' + err.message;
+      status.classList.add('error');
+      boton.disabled = false;
+    }
+  }
+
+  function enviarAImprenta(id, boton, status) {
+    if (!usuarioActual) return;
+    const solicitudes = cargarSolicitudes();
+    const idx = solicitudes.findIndex(s => s.id === id);
+    if (idx === -1) return;
+
+    boton.disabled = true;
+    solicitudes[idx].estadoImprenta = 'pendiente';
+    solicitudes[idx].imprentaId = usuarioActual.imprenta_predeterminada_id;
+    guardarSolicitudes(solicitudes);
+    status.textContent = 'Enviado a la imprenta.';
+    pintarSolicitudesSupervisor();
+  }
+
+  // ---------------------------------------------------------------
+  // APP: IMPRENTA
+  // ---------------------------------------------------------------
+  function pintarSolicitudesImprenta() {
+    if (!usuarioActual) return;
+    const solicitudes = cargarSolicitudes();
+    const propias = solicitudes.filter(s => s.imprentaId === usuarioActual.id);
+
+    const pendientes = propias.filter(s => s.estadoImprenta === 'pendiente');
+    const imprimiendo = propias.filter(s => s.estadoImprenta === 'imprimiendo');
+    const impresos = propias.filter(s => s.estadoImprenta === 'impreso');
+
+    const listaPendientes = document.getElementById('lista-imprenta-pendientes');
+    const listaImprimiendo = document.getElementById('lista-imprenta-imprimiendo');
+    const listaImpresos = document.getElementById('lista-imprenta-impresos');
+    listaPendientes.innerHTML = '';
+    listaImprimiendo.innerHTML = '';
+    listaImpresos.innerHTML = '';
+    document.getElementById('imprenta-pendientes-vacio').hidden = pendientes.length > 0;
+    document.getElementById('imprenta-imprimiendo-vacio').hidden = imprimiendo.length > 0;
+    document.getElementById('imprenta-impresos-vacio').hidden = impresos.length > 0;
+
+    pendientes.forEach(s => listaPendientes.appendChild(construirTarjetaImprenta(s, 'pendiente')));
+    imprimiendo.forEach(s => listaImprimiendo.appendChild(construirTarjetaImprenta(s, 'imprimiendo')));
+    impresos.forEach(s => listaImpresos.appendChild(construirTarjetaImprenta(s, 'impreso')));
+  }
+
+  function construirTarjetaImprenta(s, estado) {
+    const li = document.createElement('li');
+    li.className = 'request-card';
+    const cantidad = s.laminas ? s.laminas.length : s.seleccionados.length;
+
+    const resumen = document.createElement('div');
+    resumen.className = 'request-summary';
+    resumen.innerHTML =
+      '<strong>' + s.estudiante.nombre + ' — ' + s.estudiante.carrera + '</strong>' +
+      '<span class="meta">Orden ' + (s.orden || '#' + s.id.slice(-6)) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
+
+    li.appendChild(resumen);
+
+    if (estado === 'pendiente' || estado === 'imprimiendo') {
+      const acciones = document.createElement('div');
+      acciones.className = 'actions';
+      acciones.style.padding = '0 1.1rem 1.1rem';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'primary';
+      btn.textContent = estado === 'pendiente' ? 'Empezar impresión' : 'Impresión lista';
+      btn.addEventListener('click', () => {
+        const solicitudes = cargarSolicitudes();
+        const idx = solicitudes.findIndex(x => x.id === s.id);
+        if (idx === -1) return;
+        solicitudes[idx].estadoImprenta = (estado === 'pendiente') ? 'imprimiendo' : 'impreso';
+        guardarSolicitudes(solicitudes);
+        pintarSolicitudesImprenta();
+      });
+      acciones.appendChild(btn);
+      li.appendChild(acciones);
+    }
+
+    return li;
+  }
+
+  // ---------------------------------------------------------------
+  // Arranque: si ya hay una sesión de verdad en el servidor (cookie), entrar
+  // directo a la pantalla que corresponda. Antes esto leía localStorage de
+  // forma síncrona; ahora depende de una consulta al backend.
+  // ---------------------------------------------------------------
+  (async function iniciar() {
+    const { datos } = await llamarApi('/api/auth/yo', { method: 'GET' });
+    if (!datos.ok) {
+      usuarioActual = null;
+      refrescarBarraUsuario();
+      goTo('screen-landing');
+      return;
+    }
+    despuesDeAutenticar(datos.usuario);
+  })();
 </script>
 
 </body>

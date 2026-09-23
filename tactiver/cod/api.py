@@ -117,12 +117,15 @@ GET /api/salud
 
 import os
 import json
+import secrets
 import shutil
 import uuid
 import traceback
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+import db
 from segmentador import procesar_imagen
 import pipeline_rapido
 from generador_stl import generar_modelo_bana, generar_modelo_desde_recta
@@ -142,13 +145,36 @@ os.makedirs(CLASIFICACION_DIR, exist_ok=True)
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024*1024  # 40 MB máx (PDFs pesan más que una imagen suelta)
 
+# Clave para firmar la cookie de sesión (login de Puntito). En Render se debe
+# definir la variable de entorno SECRET_KEY con un valor fijo y secreto: sin
+# eso, cada reinicio del contenedor generaría una clave nueva y cerraría la
+# sesión de todo el mundo. El valor de respaldo es solo para correr en local.
+_SECRET_KEY = os.environ.get("SECRET_KEY")
+if not _SECRET_KEY:
+    print(
+        "[AVISO] SECRET_KEY no está definida: usando una clave temporal solo "
+        "para desarrollo local. En Render, definila como variable de entorno "
+        "o las sesiones se van a cerrar solas en cada reinicio.",
+        flush=True,
+    )
+    _SECRET_KEY = secrets.token_hex(32)
+app.secret_key = _SECRET_KEY
+
 
 @app.after_request
 def habilitar_cors(response):
     # CORS abierto para que tu interfaz (en otro dominio/puerto) pueda
-    # llamar a esta API sin problemas. Restringe el origen si lo necesitas,
-    # p. ej. response.headers["Access-Control-Allow-Origin"] = "https://tu-web.com"
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    # llamar a esta API sin problemas. Con login por cookie de sesión, un
+    # Access-Control-Allow-Origin fijo en "*" no alcanza: el navegador
+    # bloquea las cookies en pedidos con credenciales salvo que el origen se
+    # devuelva reflejado (no "*") y se declare Allow-Credentials. Si no viene
+    # cabecera Origin (p. ej. curl), se deja "*" como antes.
+    origen = request.headers.get("Origin")
+    if origen:
+        response.headers["Access-Control-Allow-Origin"] = origen
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
@@ -159,11 +185,168 @@ def extension_valida(nombre_archivo):
         nombre_archivo.rsplit(".", 1)[1].lower() in EXTENSIONES_VALIDAS
 
 
+# ====================================================================
+# AUTENTICACIÓN — Fase 1 de Puntito (tactiverso (10).html)
+# ====================================================================
+# Cuentas reales (antes vivían en el localStorage del navegador, así que un
+# supervisor en otra computadora nunca veía las solicitudes de su
+# estudiante). Contraseñas con werkzeug.security (ya era dependencia del
+# proyecto), sesión con la cookie firmada de Flask. Los datos van a
+# db.py: SQLite local mientras no haya credenciales de Turso configuradas,
+# Turso cuando las haya — mismo código en los dos casos.
+
+ROLES_VALIDOS = ("estudiante", "supervisor", "imprenta")
+
+_CAMPOS_REGISTRO = {
+    "estudiante": ("nombre", "correo", "codigo", "facultad", "carrera", "clave"),
+    "supervisor": ("nombre", "correo", "entidad", "clave"),
+    "imprenta": ("nombre", "correo", "usuario", "area", "clave"),
+}
+
+
+def _vacio(v):
+    return v is None or not str(v).strip()
+
+
+def _iniciar_sesion(usuario):
+    session.clear()
+    session["usuario_id"] = usuario["id"]
+    session["rol"] = usuario["rol"]
+
+
+def _conectar_imprenta_automatica(supervisor):
+    """Igual que el prototipo: en cuanto haya una imprenta registrada, el
+    supervisor se conecta a ella sin tener que hacer nada."""
+    if supervisor.get("imprenta_predeterminada_id"):
+        return supervisor
+    imprenta = db.primera_imprenta()
+    if not imprenta:
+        return supervisor
+    return db.actualizar_usuario(supervisor["id"], {"imprenta_predeterminada_id": imprenta["id"]})
+
+
+def _enriquecer_estudiante(usuario):
+    """Si es un estudiante con supervisor conectado, agrega el código de ese
+    supervisor (para prellenar "Cambiar código de supervisor" en el
+    frontend, sin que tenga que resolverlo por su cuenta)."""
+    if usuario and usuario.get("rol") == "estudiante" and usuario.get("supervisor_predeterminado_id"):
+        supervisor = db.buscar_por_id(usuario["supervisor_predeterminado_id"])
+        usuario["supervisor_codigo"] = supervisor["usuario"] if supervisor else None
+    return usuario
+
+
+@app.route("/api/auth/registro/<rol>", methods=["POST"])
+def auth_registro(rol):
+    if rol not in ROLES_VALIDOS:
+        return jsonify({"ok": False, "error": "Rol inválido."}), 400
+
+    datos = request.get_json(silent=True) or {}
+    campos = _CAMPOS_REGISTRO[rol]
+    if any(_vacio(datos.get(c)) for c in campos):
+        return jsonify({"ok": False, "error": "Completa todos los campos para registrarte."}), 400
+
+    correo = str(datos["correo"]).strip()
+    if db.buscar_por_correo(rol, correo):
+        return jsonify({
+            "ok": False,
+            "error": f"Ya existe una cuenta de {rol} con ese correo. Inicia sesión.",
+        }), 409
+
+    if rol == "imprenta":
+        nombre_usuario = str(datos["usuario"]).strip()
+        if db.buscar_por_usuario("imprenta", nombre_usuario):
+            return jsonify({"ok": False, "error": "Ese nombre de usuario ya está en uso. Elige otro."}), 409
+
+    clave_hash = generate_password_hash(str(datos["clave"]))
+    usuario = db.crear_usuario(rol, {**datos, "correo": correo}, clave_hash)
+
+    if rol == "supervisor":
+        usuario = _conectar_imprenta_automatica(usuario)
+
+    _iniciar_sesion(usuario)
+    return jsonify({"ok": True, "usuario": _enriquecer_estudiante(usuario)}), 201
+
+
+@app.route("/api/auth/login/<rol>", methods=["POST"])
+def auth_login(rol):
+    if rol not in ROLES_VALIDOS:
+        return jsonify({"ok": False, "error": "Rol inválido."}), 400
+
+    datos = request.get_json(silent=True) or {}
+    correo = str(datos.get("correo") or "").strip()
+    clave = str(datos.get("clave") or "")
+    if _vacio(correo) or _vacio(clave):
+        return jsonify({"ok": False, "error": "Completa correo y contraseña."}), 400
+
+    usuario = db.buscar_por_correo(rol, correo, incluir_clave=True)
+    if not usuario or not check_password_hash(usuario["clave_hash"], clave):
+        return jsonify({"ok": False, "error": "Correo o contraseña incorrectos."}), 401
+
+    usuario.pop("clave_hash", None)
+    if rol == "supervisor":
+        usuario = _conectar_imprenta_automatica(usuario)
+
+    _iniciar_sesion(usuario)
+    return jsonify({"ok": True, "usuario": _enriquecer_estudiante(usuario)})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/yo", methods=["GET"])
+def auth_yo():
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        return jsonify({"ok": False})
+    usuario = db.buscar_por_id(usuario_id)
+    if not usuario:
+        # La cuenta ya no existe (borrada a mano en la base, por ejemplo):
+        # limpiamos la cookie para no quedar en un estado inconsistente.
+        session.clear()
+        return jsonify({"ok": False})
+    return jsonify({"ok": True, "usuario": _enriquecer_estudiante(usuario)})
+
+
+@app.route("/api/auth/conectar-supervisor", methods=["POST"])
+def auth_conectar_supervisor():
+    if session.get("rol") != "estudiante":
+        return jsonify({"ok": False, "error": "Iniciá sesión como estudiante primero."}), 401
+
+    datos = request.get_json(silent=True) or {}
+    codigo = str(datos.get("codigo") or "").strip()
+    if _vacio(codigo):
+        return jsonify({"ok": False, "error": "Escribe el código que te dio tu supervisor."}), 400
+
+    supervisor = db.buscar_por_usuario("supervisor", codigo)
+    if not supervisor:
+        return jsonify({"ok": False, "error": "Ese código no corresponde a ningún supervisor registrado."}), 404
+
+    usuario = db.actualizar_usuario(session["usuario_id"], {"supervisor_predeterminado_id": supervisor["id"]})
+    return jsonify({"ok": True, "usuario": _enriquecer_estudiante(usuario)})
+
+
+@app.route("/api/auth/reintentar-imprenta", methods=["POST"])
+def auth_reintentar_imprenta():
+    """El supervisor se registró antes de que existiera ninguna imprenta.
+    Vuelve a intentar la conexión automática con la que haya ahora."""
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+    usuario = db.buscar_por_id(session["usuario_id"])
+    usuario = _conectar_imprenta_automatica(usuario)
+    return jsonify({"ok": True, "usuario": usuario})
+
+
 @app.route("/", methods=["GET"])
 def index():
+    # Puntito (tactiverso 10): flujo de 3 roles (estudiante/supervisor/
+    # imprenta) con cuentas reales. Reemplaza a tactiverso (6).html, que
+    # servía acá antes (flujo más simple, sin cuentas ni aprobación).
     return send_from_directory(
         "../interfaz",
-        "tactiverso (6).html"
+        "tactiverso (10).html"
     )
 
 
