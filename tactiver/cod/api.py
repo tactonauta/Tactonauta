@@ -55,6 +55,7 @@ POST /api/clasificar
           "tipo": "linea",
           "confianza": 0.81,
           "es_lineal": true,
+          "pie_figura": "Figura 3. Evolución de ...",   ("" si no hay)
           "preview_url": "/api/resultados/a1b2c3d4_page2_img1.png"
         },
         ...
@@ -74,6 +75,13 @@ POST /api/segmentar/<id>?stl=1
     agrega "stl_url" / "stl_download_url" a la respuesta (o "stl_error"
     si la gráfica no daba para una lámina). Sin el parámetro no se
     genera nada: el STL tarda bastante más que la segmentación.
+
+    Toda respuesta que genera una lámina trae además "descripcion" (texto
+    para narrar: pie de figura, ejes, curvas y su tendencia) y
+    "narracion_url" / "narracion_download_url": el JSON que carga
+    Hand_Tracking/rastreo_gesto_pinza_grafica_autocalibrada.py (ver
+    narracion.py). La lámina lleva en Braille números y nombres de los
+    ejes, título y valores anotados junto a la curva (sin leyenda por ahora).
 
 POST /api/generar-stl/<id>
     Segmenta esa figura y devuelve directamente la lámina STL.
@@ -103,6 +111,17 @@ POST /api/procesar?formato=csv
     descarga (útil si tu interfaz solo necesita el archivo, sin JSON
     intermedio).
 
+POST /api/corregir/<correccion_id>
+    Pizarra de corrección: <correccion_id> es el campo "correccion_id" de
+    una respuesta de segmentación. Recibe en JSON lo que se corrigió a
+    mano (eje_x, eje_y, etiquetas_x, etiquetas_y, series; todo opcional,
+    ver segmentador.aplicar_correcciones) y devuelve el mismo formato que
+    /api/procesar, con un correccion_id nuevo. Solo previsualiza: no toca
+    ninguna solicitud.
+POST /api/solicitudes/<id>/figuras/<indice>/corregir
+    (Supervisor) Igual que el anterior, pero aplica la corrección a esa
+    figura de la solicitud y regenera su STL. Solo antes de enviarla a
+    la imprenta.
 GET /api/resultados/<nombre_archivo>
     Sirve un archivo ya generado (CSV, overlay PNG o figura extraída
     del PDF) para visualizarlo inline (por ejemplo, en un <img>).
@@ -126,7 +145,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 import db
-from segmentador import procesar_imagen
+from segmentador import aplicar_correcciones, procesar_imagen
+import narracion
 import pipeline_rapido
 from generador_stl import generar_modelo_bana, generar_modelo_desde_recta
 
@@ -453,17 +473,11 @@ def autorizar_solicitud(id_solicitud):
             continue
 
         try:
-            resultado, nombre_stl, advertencias = crear_stl_desde_imagen(
-                ruta_imagen, "grafica_tactil"
+            resultado, nombre_stl, advertencias, narracion_info = crear_stl_desde_imagen(
+                ruta_imagen, "grafica_tactil", pie_figura=figura.get("pie_figura")
             )
-            figura_actualizada.update({
-                "resumen": resultado["resumen"],
-                "advertencias": advertencias,
-                "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
-                "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
-                "stl_url": f"/api/resultados/stl/{nombre_stl}",
-                "stl_download_url": f"/api/resultados/stl/{nombre_stl}/descargar",
-            })
+            figura_actualizada.update(
+                _campos_figura(resultado, nombre_stl, advertencias, narracion_info))
             algun_exito = True
         except Exception as e:
             print(f"ERROR AUTORIZANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
@@ -476,6 +490,82 @@ def autorizar_solicitud(id_solicitud):
         "estado_supervisor": "aprobada",
         "stl_generado": algun_exito,
         "figuras": figuras_actualizadas,
+    })
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+def _campos_figura(resultado, nombre_stl, advertencias, narracion_info):
+    """Lo que se guarda en cada figura de una solicitud tras segmentarla y
+    generar su STL (al autorizar o al guardar una corrección de la pizarra)."""
+    return {
+        **_urls_lamina(nombre_stl, narracion_info),
+        "resumen": resultado["resumen"],
+        "advertencias": advertencias,
+        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
+        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+        # json_url + correccion_id: lo que la pizarra necesita para abrir y
+        # recalcular esta figura (ver /api/corregir y .../corregir más abajo).
+        "json_url": f"/api/resultados/{resultado['nombre_json']}",
+        "correccion_id": resultado["nombre_json"],
+    }
+
+
+# El supervisor corrige a mano la segmentación de UNA figura ya autorizada
+# (pizarra de tactiverso 12, integrada en la 10) y se regenera su STL. Solo
+# mientras la solicitud no se mandó a la imprenta: después, la imprenta ya
+# podría estar usando el STL anterior.
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/corregir", methods=["POST"])
+def corregir_figura_solicitud(id_solicitud, indice):
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+
+    solicitud = db.buscar_solicitud(id_solicitud)
+    if not solicitud or solicitud["supervisor_id"] != session["usuario_id"]:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+    if solicitud["estado_supervisor"] != "aprobada":
+        return jsonify({"ok": False, "error": "Primero hay que autorizar la solicitud."}), 400
+    if solicitud["estado_imprenta"] != "no_enviada":
+        return jsonify({"ok": False, "error": "Ya fue enviada a la imprenta: no se puede corregir."}), 400
+
+    figuras = solicitud["figuras"]
+    if not 0 <= indice < len(figuras):
+        return jsonify({"ok": False, "error": "No se encontró esa figura."}), 404
+    figura = figuras[indice]
+
+    correcciones = request.get_json(silent=True)
+    if not isinstance(correcciones, dict):
+        return jsonify({"ok": False, "error": "Se esperaba un JSON con las correcciones."}), 400
+
+    ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
+    ruta_json = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("correccion_id") or ""))
+    if not figura.get("correccion_id") or not os.path.isfile(ruta_imagen) or not os.path.isfile(ruta_json):
+        return jsonify({
+            "ok": False,
+            "error": "Los archivos de esta figura ya no están en el servidor (pudo "
+                     "reiniciarse). Hay que volver a subir el documento.",
+        }), 404
+
+    try:
+        resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
+                                         ruta_json_original=ruta_json)
+        nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
+            resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        print(f"ERROR CORRIGIENDO figura {indice} de la solicitud {id_solicitud}:", flush=True)
+        print(traceback.format_exc(), flush=True)
+        return jsonify({"ok": False, "error": f"No se pudo regenerar la lámina: {e}"}), 500
+
+    figura = dict(figura)
+    figura.pop("error", None)
+    figura.update(_campos_figura(resultado, nombre_stl, advertencias, narracion_info))
+    figuras = list(figuras)
+    figuras[indice] = figura
+
+    solicitud = db.actualizar_solicitud(id_solicitud, {
+        "figuras": figuras,
+        "stl_generado": any(f.get("stl_url") for f in figuras),
     })
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
 
@@ -595,18 +685,28 @@ def _payload_stl(resultado):
 
 
 def crear_stl_desde_resultado(
-    resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=False
+    resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=True,
+    pie_figura=None,
 ):
-    """Convierte una segmentación ya hecha en una placa táctil STL.
+    """Convierte una segmentación ya hecha en una placa táctil STL, y escribe
+    al lado su narración para Hand_Tracking (ver narracion.py).
 
-    `incluir_etiquetas=False` (el valor por defecto, por ahora): la lámina
-    sale sin números ni títulos en Braille, para revisar primero la forma de
-    ejes y curvas. Los márgenes que ya les reserva espacio no se tocan, así
-    que agregarlos más adelante (poner `incluir_etiquetas=True`) no requiere
-    volver a acomodar la placa.
+    `incluir_etiquetas=True` (por defecto): la lámina lleva en Braille los
+    números de los ejes, el nombre de cada eje, el título del gráfico y los
+    valores que el gráfico original tenía anotados junto a la curva. Con
+    False sale solo la forma (ejes, marcas y curvas), con el mismo espacio
+    reservado.
 
-    Devuelve (nombre_stl, advertencias). Lanza ValueError con un mensaje
-    entendible si la gráfica no da para una lámina.
+    Sin leyenda por ahora (en A5 le quitaba demasiado alto al gráfico): qué
+    textura es cada curva lo dice la descripción narrada.
+
+    `pie_figura`: el "Figura N. ..." que /api/clasificar encontró junto a la
+    figura en el PDF; abre la descripción narrada.
+
+    Devuelve (nombre_stl, advertencias, narracion), con narracion =
+    {"descripcion": texto, "nombre": archivo JSON para Hand_Tracking}.
+    Lanza ValueError con un mensaje entendible si la gráfica no da para una
+    lámina.
     """
     payload = _payload_stl(resultado)
     if not payload["series"] and not payload["puntos_curva"]:
@@ -625,33 +725,93 @@ def crear_stl_desde_resultado(
         )
     if not incluir_etiquetas:
         advertencias.append(
-            "Lámina sin números ni títulos en Braille todavía (pendiente de "
-            "activar): los márgenes ya quedan reservados para agregarlos."
+            "Lámina sin números ni títulos en Braille: los márgenes quedan "
+            "reservados para agregarlos."
         )
 
-    nombre = f"{prefijo}_{uuid.uuid4().hex[:8]}.stl"
+    base = f"{prefijo}_{uuid.uuid4().hex[:8]}"
+    nombre = f"{base}.stl"
+    diseno = {}
     generar_modelo_desde_recta(
         payload,
         dim_x=dim_x,
         dim_y=dim_y,
         archivo_salida=os.path.join(STL_DIR, nombre),
         incluir_etiquetas=incluir_etiquetas,
+        diseno=diseno,
     )
-    return nombre, advertencias
+    advertencias.extend(diseno.get("avisos") or [])
+
+    descripcion = narracion.describir_grafica(payload, pie_figura, diseno)
+    nombre_narracion = f"{base}_narracion.json"
+    with open(os.path.join(STL_DIR, nombre_narracion), "w", encoding="utf-8") as f:
+        json.dump(narracion.exportar_hand_tracking(payload, diseno, descripcion),
+                  f, ensure_ascii=False, indent=2)
+    return nombre, advertencias, {"descripcion": descripcion, "nombre": nombre_narracion}
+
+
+def _urls_lamina(nombre_stl, narracion_info):
+    """Campos de una lámina ya generada que se devuelven al frontend."""
+    return {
+        "stl_url": f"/api/resultados/stl/{nombre_stl}",
+        "stl_download_url": f"/api/resultados/stl/{nombre_stl}/descargar",
+        "descripcion": narracion_info["descripcion"],
+        "narracion_url": f"/api/resultados/stl/{narracion_info['nombre']}",
+        "narracion_download_url": f"/api/resultados/stl/{narracion_info['nombre']}/descargar",
+    }
+
+
+def _ruta_extraccion(ruta_imagen):
+    return ruta_imagen + ".extraccion.json"
+
+
+def _guardar_extraccion(ruta_imagen, detectado):
+    """Todo lo que /api/clasificar sacó del PDF para esta figura, al lado de
+    su imagen: página, pie de figura y el texto real del PDF dentro de la
+    figura (el segmentador lo usa en vez del OCR). Así la segmentación, al
+    autorizar, tiene la misma información sin volver a abrir el PDF."""
+    with open(_ruta_extraccion(ruta_imagen), "w", encoding="utf-8") as f:
+        json.dump({
+            "pagina": detectado.get("page"),
+            "origen": detectado.get("origen"),
+            "pie_figura": detectado.get("pie_figura", ""),
+            "palabras": detectado.get("palabras") or [],
+        }, f, ensure_ascii=False)
+
+
+def _extraccion(ruta_imagen):
+    """Lo guardado por _guardar_extraccion ({} si no hay: imagen suelta)."""
+    try:
+        with open(_ruta_extraccion(ruta_imagen), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def segmentar_figura(ruta_imagen, palabras=None):
+    """procesar_imagen() con el texto del PDF de esa figura, si se extrajo."""
+    if palabras is None:
+        palabras = _extraccion(ruta_imagen).get("palabras")
+    return procesar_imagen(ruta_imagen, RESULTADOS_DIR, palabras=palabras)
 
 
 def crear_stl_desde_imagen(
-    ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=False
+    ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=True,
+    pie_figura=None, palabras=None,
 ):
     """Segmenta una gráfica lineal y genera su placa táctil STL.
 
-    Devuelve (resultado_segmentador, nombre_stl, advertencias).
+    `pie_figura` y `palabras` se toman de lo que guardó /api/clasificar si no
+    se pasan.
+
+    Devuelve (resultado_segmentador, nombre_stl, advertencias, narracion).
     """
-    resultado = procesar_imagen(ruta_imagen, RESULTADOS_DIR)
-    nombre, advertencias = crear_stl_desde_resultado(
-        resultado, prefijo, dim_x, dim_y, incluir_etiquetas
+    pie_figura = pie_figura or _extraccion(ruta_imagen).get("pie_figura")
+    resultado = segmentar_figura(ruta_imagen, palabras)
+    nombre, advertencias, narracion_info = crear_stl_desde_resultado(
+        resultado, prefijo, dim_x, dim_y, incluir_etiquetas, pie_figura
     )
-    return resultado, nombre, advertencias
+    return resultado, nombre, advertencias, narracion_info
 
 
 def _dimensiones_placa(datos):
@@ -665,6 +825,9 @@ def _dimensiones_placa(datos):
 def _respuesta_segmentacion(resultado):
     """Campos comunes que toda respuesta del segmentador devuelve al frontend."""
     return {
+        # Descripción narrable (sin pie de figura: acá no se sabe de qué PDF
+        # vino). Con STL se reemplaza por la completa, ver _urls_lamina.
+        "descripcion": narracion.describir_grafica(_payload_stl(resultado)),
         "ok": True,
         "resumen": resultado["resumen"],
         "advertencias": resultado.get("advertencias", []),
@@ -672,6 +835,9 @@ def _respuesta_segmentacion(resultado):
         "csv_download_url": f"/api/resultados/{resultado['nombre_csv']}/descargar",
         "json_url": f"/api/resultados/{resultado['nombre_json']}",
         "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+        # La pizarra de la interfaz manda este id a /api/corregir/<id> para
+        # recalcular a partir de este resultado (el JSON guarda la imagen original).
+        "correccion_id": resultado["nombre_json"],
     }
 
 
@@ -726,7 +892,7 @@ def generar_stl_desde_grafico(id_grafico):
         return jsonify({"ok": False, "error": str(e)}), 400
 
     try:
-        resultado, nombre, advertencias = crear_stl_desde_imagen(
+        resultado, nombre, advertencias, narracion_info = crear_stl_desde_imagen(
             ruta_imagen, "grafica_tactil", dim_x, dim_y
         )
     except ValueError as e:
@@ -742,11 +908,7 @@ def generar_stl_desde_grafico(id_grafico):
         }), 500
 
     respuesta = _respuesta_segmentacion(resultado)
-    respuesta.update({
-        "advertencias": advertencias,
-        "stl_url": f"/api/resultados/stl/{nombre}",
-        "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
-    })
+    respuesta.update({"advertencias": advertencias, **_urls_lamina(nombre, narracion_info)})
     return jsonify(respuesta), 201
 
 
@@ -774,17 +936,19 @@ def pdf_a_stl():
         if not grafico.get("es_lineal"):
             continue
         try:
-            resultado, nombre, advertencias = crear_stl_desde_imagen(
-                grafico["file_path"], "grafica_tactil"
+            resultado, nombre, advertencias, narracion_info = crear_stl_desde_imagen(
+                grafico["file_path"], "grafica_tactil",
+                pie_figura=grafico.get("pie_figura"),
+                palabras=grafico.get("palabras") or [],
             )
             stls.append({
                 "pagina": grafico["page"], "tipo": grafico["tipo"],
+                "pie_figura": grafico.get("pie_figura", ""),
                 "resumen": resultado["resumen"],
                 "advertencias": advertencias,
                 "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
                 "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
-                "stl_url": f"/api/resultados/stl/{nombre}",
-                "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
+                **_urls_lamina(nombre, narracion_info),
             })
         except Exception as e:
             # Una gráfica que falla no debe tumbar el lote entero.
@@ -827,6 +991,7 @@ def clasificar():
         nombre_servido = f"{lote_id}_{nombre_original}"
         ruta_servida = os.path.join(RESULTADOS_DIR, nombre_servido)
         shutil.copy(d["file_path"], ruta_servida)
+        _guardar_extraccion(ruta_servida, d)
         graficos.append({
             "id": nombre_servido,
             "pagina": d["page"],
@@ -835,6 +1000,9 @@ def clasificar():
             "tipo": d["tipo"],
             "confianza": d["confianza"],
             "es_lineal": d["es_lineal"],
+            # "Figura N. ..." junto a la figura en el PDF ("" si no hay):
+            # el frontend lo guarda en la solicitud y abre la descripción narrada
+            "pie_figura": d.get("pie_figura", ""),
             "preview_url": f"/api/resultados/{nombre_servido}",
         })
 
@@ -854,7 +1022,7 @@ def segmentar_extraido(id_grafico):
         return jsonify({"ok": False, "error": "No se encontró esa figura clasificada. Vuelve a subir el PDF."}), 404
 
     try:
-        resultado = procesar_imagen(ruta_imagen, RESULTADOS_DIR)
+        resultado = segmentar_figura(ruta_imagen)
     except Exception as e:
         return jsonify({"ok": False, "error": f"Error al segmentar la imagen: {e}"}), 500
 
@@ -865,7 +1033,8 @@ def segmentar_extraido(id_grafico):
     # generación del STL es lenta y no todas las pantallas la necesitan.
     if request.args.get("stl") in ("1", "true", "si", "sí"):
         try:
-            nombre, advertencias = crear_stl_desde_resultado(resultado, "grafica_tactil")
+            nombre, advertencias, narracion_info = crear_stl_desde_resultado(
+                resultado, "grafica_tactil")
         except ValueError as e:
             respuesta["stl_error"] = str(e)
         except Exception as e:
@@ -873,11 +1042,7 @@ def segmentar_extraido(id_grafico):
             print(traceback.format_exc(), flush=True)
             respuesta["stl_error"] = f"No se pudo generar el STL: {e}"
         else:
-            respuesta.update({
-                "advertencias": advertencias,
-                "stl_url": f"/api/resultados/stl/{nombre}",
-                "stl_download_url": f"/api/resultados/stl/{nombre}/descargar",
-            })
+            respuesta.update({"advertencias": advertencias, **_urls_lamina(nombre, narracion_info)})
 
     return jsonify(respuesta)
 
@@ -908,6 +1073,45 @@ def procesar():
     # Si el frontend solo quiere el archivo CSV directo (sin JSON):
     if request.args.get("formato") == "csv":
         return send_from_directory(RESULTADOS_DIR, resultado["nombre_csv"], as_attachment=True)
+
+    return jsonify(_respuesta_segmentacion(resultado))
+
+
+# ------------------------------------------------------------------
+# Paso 3: la pizarra de la interfaz manda lo que el usuario corrigió a mano
+# (ejes, etiquetas, puntos de la curva) y se recalcula CSV/JSON/overlay.
+# El id es el nombre del JSON de un resultado anterior (`correccion_id`).
+# ------------------------------------------------------------------
+@app.route("/api/corregir/<path:correccion_id>", methods=["POST"])
+def corregir(correccion_id):
+    correcciones = request.get_json(silent=True)
+    if not isinstance(correcciones, dict):
+        return jsonify({"ok": False, "error": "Se esperaba un JSON con las correcciones."}), 400
+
+    ruta_json = os.path.join(RESULTADOS_DIR, secure_filename(correccion_id))
+    if not os.path.isfile(ruta_json):
+        return jsonify({"ok": False, "error": "No se encontró ese resultado. Vuelve a segmentar la gráfica."}), 404
+
+    try:
+        with open(ruta_json, encoding="utf-8") as f:
+            ruta_imagen = json.load(f).get("_ruta_imagen_original")
+    except (OSError, ValueError):
+        ruta_imagen = None
+
+    # La ruta viene de un JSON escrito por el segmentador; aun así solo se
+    # aceptan imágenes dentro de las carpetas del propio servidor.
+    carpetas = (os.path.abspath(RESULTADOS_DIR), os.path.abspath(UPLOAD_DIR))
+    if (not ruta_imagen or not os.path.isfile(ruta_imagen)
+            or os.path.dirname(os.path.abspath(ruta_imagen)) not in carpetas):
+        return jsonify({"ok": False, "error": "No se encontró la imagen original de ese resultado. Vuelve a segmentar la gráfica."}), 404
+
+    try:
+        resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
+                                         ruta_json_original=ruta_json)
+    except (KeyError, TypeError, ValueError) as e:
+        return jsonify({"ok": False, "error": f"Correcciones no válidas: {e}"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Error al recalcular: {e}"}), 500
 
     return jsonify(_respuesta_segmentacion(resultado))
 

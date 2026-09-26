@@ -1,6 +1,9 @@
 import cv2
+import json
 import mediapipe as mp
 import math
+import sys
+import unicodedata
 import threading
 import queue
 import time
@@ -35,6 +38,9 @@ def _worker_audio():
 
         detener_solicitado.clear()
         utterance_terminada.clear()
+        # ~10 caracteres por segundo a rate 200: la salvaguarda no debe
+        # cortar la descripción completa de la gráfica (tecla 'd').
+        limite = max(20, len(texto) / 10)
         try:
             engine.say(texto)
             engine.startLoop(False)
@@ -47,7 +53,7 @@ def _worker_audio():
                     engine.stop()
                 engine.iterate()
                 time.sleep(0.01)
-                if time.time() - inicio > 20:  # salvaguarda anti-cuelgue
+                if time.time() - inicio > limite:  # salvaguarda anti-cuelgue
                     break
 
             engine.endLoop()
@@ -189,6 +195,35 @@ puntos = {
 }
 
 # ============================================================
+# NARRACIÓN EXPORTADA POR TACTIVERSO (opcional)
+# ============================================================
+# En vez de los meses de arriba, se puede narrar una gráfica real:
+# tactiverso genera, junto a cada lámina STL, un "..._narracion.json"
+# (botón "Descargar narración (Hand_Tracking)" en la web). Uso:
+#
+#     python rastreo_gesto_pinza_grafica_autocalibrada.py grafica_tactil_xxxx_narracion.json
+#
+# Trae los puntos y tramos de cada curva, los ejes y la leyenda, en mm
+# sobre la placa (origen arriba a la izquierda), cada uno con el texto a
+# narrar; y una descripción completa que se escucha con la tecla 'd'.
+# Sin argumento, el script funciona igual que antes.
+narracion = None
+SEGMENTOS_ORIGINALES = None   # solo con narración: tramos ya definidos en el JSON
+
+if len(sys.argv) > 1:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        narracion = json.load(f)
+    if narracion.get("formato") != "tactiverso-narracion":
+        raise SystemExit(f"{sys.argv[1]} no es un archivo de narración de tactiverso.")
+    puntos = {
+        p["id"]: {"x": p["x"], "y": p["y"], "valor": p.get("valor_y"), "texto": p["texto"]}
+        for p in narracion["puntos"]
+    }
+    SEGMENTOS_ORIGINALES = narracion["segmentos"]
+    print(f"Narración cargada: {len(puntos)} puntos, {len(SEGMENTOS_ORIGINALES)} tramos.")
+    print("Descripción (tecla 'd' para escucharla):", narracion["descripcion"])
+
+# ============================================================
 # ESCALADO DE PUNTOS AL ESPACIO DE LA HOJA A5
 # ============================================================
 # 'puntos' está diseñado sobre un lienzo de referencia. Para que
@@ -197,6 +232,10 @@ puntos = {
 
 ANCHO_REFERENCIA = 600   # ancho del lienzo original de 'puntos'
 ALTO_REFERENCIA = 400    # alto del lienzo original de 'puntos'
+if narracion:
+    # Con narración, el "lienzo" es la placa misma, en milímetros.
+    ANCHO_REFERENCIA = narracion["placa"]["ancho_mm"]
+    ALTO_REFERENCIA = narracion["placa"]["alto_mm"]
 
 # Rectángulo (px, sobre el frame ya volteado) donde está la hoja A5.
 # Ancho y alto se miden a ojo (calibración abajo), no por fórmula:
@@ -257,7 +296,13 @@ def _clic_calibracion(evento, x, y, flags, param):
             hoja_ancho=HOJA_ANCHO,
             hoja_alto=HOJA_ALTO,
         )
-        segmentos = construir_segmentos(puntos)
+        segmentos = reconstruir_segmentos(
+            puntos,
+            hoja_x=HOJA_X,
+            hoja_y=HOJA_Y,
+            hoja_ancho=HOJA_ANCHO,
+            hoja_alto=HOJA_ALTO,
+        )
         print("[Calibración] Variables actualizadas en esta corrida.\n")
 
 
@@ -305,11 +350,34 @@ def escalar_puntos_a_hoja_a5(
     puntos_escalados = {}
     for nombre, punto in puntos_originales.items():
         puntos_escalados[nombre] = {
+            **punto,   # conserva "texto" y demás campos de la narración
             "x": int(margen_x + punto["x"] * escala),
             "y": int(margen_y + punto["y"] * escala),
-            "valor": punto["valor"],
         }
     return puntos_escalados
+
+
+def escalar_segmentos_a_hoja_a5(
+    segmentos_originales,
+    ancho_referencia=ANCHO_REFERENCIA,
+    alto_referencia=ALTO_REFERENCIA,
+    hoja_x=HOJA_X,
+    hoja_y=HOJA_Y,
+    hoja_ancho=HOJA_ANCHO,
+    hoja_alto=HOJA_ALTO,
+):
+    """Igual que 'escalar_puntos_a_hoja_a5', para los tramos que ya
+    vienen definidos en el JSON de narración (ejes, leyenda, curvas)."""
+    escala = min(hoja_ancho / ancho_referencia, hoja_alto / alto_referencia)
+    margen_x = hoja_x + (hoja_ancho - ancho_referencia * escala) / 2
+    margen_y = hoja_y + (hoja_alto - alto_referencia * escala) / 2
+    return [{
+        **seg,
+        "x1": int(margen_x + seg["x1"] * escala),
+        "y1": int(margen_y + seg["y1"] * escala),
+        "x2": int(margen_x + seg["x2"] * escala),
+        "y2": int(margen_y + seg["y2"] * escala),
+    } for seg in segmentos_originales]
 
 # Se conserva sin escalar (sobre el lienzo de referencia) para poder
 # volver a escalar en caliente cada vez que la calibración cambia.
@@ -362,7 +430,20 @@ def construir_segmentos(puntos_escalados):
 
     return segmentos
 
-segmentos = construir_segmentos(puntos)
+def reconstruir_segmentos(puntos_escalados, **hoja):
+    """Tramos a narrar: los del JSON de narración si se cargó uno (escalados
+    a la hoja), o los tramos entre meses consecutivos si no."""
+    if SEGMENTOS_ORIGINALES is not None:
+        return escalar_segmentos_a_hoja_a5(SEGMENTOS_ORIGINALES, **hoja)
+    return construir_segmentos(puntos_escalados)
+
+segmentos = reconstruir_segmentos(puntos)
+
+
+def _texto_pantalla(texto):
+    """cv2.putText no dibuja tildes ni ñ: se quitan solo para mostrar."""
+    texto = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in texto if ord(c) < 128)
 
 # ============================================================
 # DISTANCIA ENTRE DOS PUNTOS
@@ -541,8 +622,7 @@ with mp_hands.Hands(
                 segmento = elemento_actual[1]
                 identificador = (
                     "tendencia",
-                    segmento["inicio"],
-                    segmento["fin"])
+                    segmento.get("id") or (segmento["inicio"], segmento["fin"]))
         else:
             identificador = None
 
@@ -562,17 +642,20 @@ with mp_hands.Hands(
                 if tipo == "punto":
                     nombre = elemento_actual[1]
                     valor = puntos[nombre]["valor"]
-                    texto = f"{nombre}. Temperatura de {valor} grados Celsius."
-                    print(
-                        nombre,
-                        "=",
-                        valor,
-                        "°C")
+                    texto = puntos[nombre].get("texto") or (
+                        f"{nombre}. Temperatura de {valor} grados Celsius.")
+                    print(texto)
                     hablar(texto)
 
                 # --------------------------------------------
                 # TENDENCIA
                 # --------------------------------------------
+                elif tipo == "tendencia" and elemento_actual[1].get("texto"):
+                    # Tramo de una narración de tactiverso (curva, eje o
+                    # leyenda): el texto ya viene armado en el JSON.
+                    print(elemento_actual[1]["texto"])
+                    hablar(elemento_actual[1]["texto"])
+
                 elif tipo == "tendencia":
                     segmento = elemento_actual[1]
 
@@ -656,11 +739,13 @@ with mp_hands.Hands(
 
             if tipo == "punto":
                 nombre = elemento_actual[1]
-                texto = (
+                texto = puntos[nombre].get("texto") or (
                     nombre +
                     ": " +
                     str(puntos[nombre]["valor"]) +
                     " °C")
+            elif elemento_actual[1].get("texto"):
+                texto = elemento_actual[1]["texto"]
             else:
                 segmento = elemento_actual[1]
                 texto = (
@@ -672,7 +757,7 @@ with mp_hands.Hands(
 
             cv2.putText(
                 frame,
-                texto,
+                _texto_pantalla(texto),
                 (20, 40),
 
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -693,6 +778,9 @@ with mp_hands.Hands(
         tecla = cv2.waitKey(1) & 0xFF
         if tecla == 27:  # ESC
             break
+        if tecla == ord("d") and narracion:  # descripción completa de la gráfica
+            detener_audio()
+            hablar(narracion["descripcion"])
         if tecla == ord("r"):  # reiniciar clics de calibración
             _calibracion_clics.clear()
             print("[Calibración] Clics reiniciados.")

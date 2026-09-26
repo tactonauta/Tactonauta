@@ -352,6 +352,99 @@ def _mascara_por_hue(h, base, hue, tol):
     return (d <= tol) & base
 
 
+def nombres_de_leyenda(imagen_bgr, series, tokens, tolerancia_hue=12, sat_minima=60):
+    """
+    Nombre de cada serie según la leyenda de la gráfica, emparejado por COLOR:
+    una entrada de leyenda es una muestra corta del color de la curva (una
+    rayita o un cuadradito) con su texto justo a la derecha, en la misma línea.
+
+    Devuelve (nombres, muestras, usados): `nombres[i]` es el texto de la serie
+    i o None si no se encontró; `muestras[i]` es el recuadro (x0, y0, x1, y1)
+    de su muestra de color o None; `usados` son los tokens que forman esos
+    nombres. Solo series detectadas por color: una gráfica en blanco y negro
+    no tiene cómo asociar texto a curva.
+    """
+    nombres = [None] * len(series)
+    muestras = [None] * len(series)
+    usados_tokens = []
+    tokens = [tk for tk in (tokens or []) if any(c.isalnum() for c in tk["texto"])]
+    if not tokens:
+        return nombres, muestras, usados_tokens
+
+    alto, ancho = imagen_bgr.shape[:2]
+    hsv = cv2.cvtColor(imagen_bgr, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    base = (s > sat_minima) & (v > 40)
+
+    candidatos = []   # (distancia al texto, índice de serie, muestra, tokens del nombre)
+    for i, serie in enumerate(series):
+        if serie.get("modo") != "color" or serie.get("hue") is None:
+            continue
+        m = _mascara_por_hue(h, base, serie["hue"], tolerancia_hue).astype(np.uint8)
+        n, _, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+        for k in range(1, n):
+            x, y, w, hh, area = stats[k]
+            # Una muestra de leyenda es chica: la curva misma (o un trozo largo
+            # de ella) no puede serlo.
+            if area < 6 or w > 0.2 * ancho or hh > 0.1 * alto:
+                continue
+            cy = y + hh / 2.0
+            derecha = [tk for tk in tokens
+                       if abs(tk["centro_y"] - cy) <= max(hh, tk["ph"]) * 0.7
+                       and x + w - 2 <= tk["px"] <= x + w + max(2.0 * tk["ph"], 0.6 * w)]
+            if not derecha:
+                continue
+            primero = min(derecha, key=lambda tk: tk["px"])
+            # El nombre sigue hacia la derecha mientras las palabras estén a
+            # distancia de "espacio entre palabras" y en la misma línea.
+            nombre = [primero]
+            while True:
+                ult = nombre[-1]
+                sig = [tk for tk in tokens
+                       if tk not in nombre
+                       and abs(tk["centro_y"] - ult["centro_y"]) <= 0.6 * ult["ph"]
+                       and 0 <= tk["px"] - (ult["px"] + ult["pw"]) <= 1.2 * ult["ph"]]
+                if not sig:
+                    break
+                nombre.append(min(sig, key=lambda tk: tk["px"]))
+            candidatos.append((primero["px"] - (x + w), i, (int(x), int(y), int(x + w), int(y + hh)), nombre))
+
+    # Cada serie se queda con su muestra más pegada a un texto, y un mismo
+    # texto no puede ser el nombre de dos series.
+    usados = set()
+    for dist, i, muestra, nombre in sorted(candidatos, key=lambda c: c[0]):
+        clave = id(nombre[0])
+        if nombres[i] is not None or clave in usados:
+            continue
+        usados.add(clave)
+        nombres[i] = " ".join(tk["texto"] for tk in nombre).strip()
+        muestras[i] = muestra
+        usados_tokens.extend(nombre)
+    return nombres, muestras, usados_tokens
+
+
+def asignar_nombres_de_leyenda(imagen_bgr, series, tokens):
+    """Pone en cada serie su "nombre" según la leyenda (ver
+    `nombres_de_leyenda`) y borra de su máscara la muestra de color de la
+    leyenda: si la leyenda está dentro del área de dibujo, esa rayita era
+    parte de la máscara y en esas columnas la polilínea se iba hacia ella
+    (valores falsos en el CSV, la lámina y la narración).
+    Devuelve (nombres, usados): los nombres (None donde no se encontró) y
+    los tokens de texto que los forman."""
+    nombres, muestras, usados = nombres_de_leyenda(imagen_bgr, series, tokens)
+    for serie, nombre in zip(series, nombres):
+        serie["nombre"] = nombre
+    for muestra in muestras:
+        if muestra is None:
+            continue
+        x0, y0, x1, y1 = muestra
+        for serie in series:
+            m = serie.get("mascara")
+            if m is not None:
+                m[max(0, y0 - 2):y1 + 3, max(0, x0 - 2):x1 + 3] = False
+    return nombres, usados
+
+
 def _limpiar_componentes(mask_u8, area_minima):
     """
     Cierra huecos (líneas punteadas, cortes por rejilla) y se queda con todos
@@ -443,8 +536,50 @@ def _mapa_distancia_curva(mascaras):
     return cv2.distanceTransform(no_curva, cv2.DIST_L2, 5)
 
 
+def tokens_de_palabras_pdf(palabras):
+    """Palabras HORIZONTALES del PDF (ver pipeline_rapido.extraer_palabras)
+    con el mismo formato que los tokens del OCR de `detectar_textos`."""
+    tokens = []
+    for p in palabras or []:
+        if p.get("vertical"):
+            continue
+        texto = p["texto"].strip()
+        b, l, w = (list(p.get("orden") or []) + [0, 0, 0])[:3]
+        tokens.append({
+            "texto": texto, "valor": _a_float(texto) if _es_numero(texto) else None,
+            "conf": 100.0,
+            "px": int(round(p["px"])), "py": int(round(p["py"])),
+            "pw": max(1, int(round(p["pw"]))), "ph": max(1, int(round(p["ph"]))),
+            "centro_x": p["px"] + p["pw"] / 2.0, "centro_y": p["py"] + p["ph"] / 2.0,
+            "orden": (b, 0, l, w),
+        })
+    return tokens
+
+
+def titulo_vertical_de_palabras(palabras, x_limite):
+    """Título del eje Y desde las palabras ROTADAS del PDF a la izquierda de
+    `x_limite` (borde de los números del eje). Se lee de abajo hacia arriba,
+    como el texto rotado 90° habitual. Devuelve (texto, bbox) o ("", None)."""
+    lineas = {}
+    for p in palabras or []:
+        if p.get("vertical") and p["px"] + p["pw"] <= x_limite + 3:
+            lineas.setdefault(tuple((p.get("orden") or [0, 0])[:2]), []).append(p)
+    if not lineas:
+        return "", None
+    # la línea más cercana a los números del eje
+    linea = max(lineas.values(), key=lambda ps: max(q["px"] + q["pw"] for q in ps))
+    linea.sort(key=lambda q: -(q["py"] + q["ph"]))
+    texto = " ".join(q["texto"] for q in linea).strip()
+    x0 = min(q["px"] for q in linea)
+    y0 = min(q["py"] for q in linea)
+    bbox = {"px": int(x0), "py": int(y0),
+            "pw": int(max(q["px"] + q["pw"] for q in linea) - x0),
+            "ph": int(max(q["py"] + q["ph"] for q in linea) - y0)}
+    return texto, bbox
+
+
 def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
-                    tol=None, escala_ocr=2.0, lang=None, excluir=None):
+                    tol=None, escala_ocr=2.0, lang=None, excluir=None, tokens_pdf=None):
     """
     Corre OCR una sola vez y clasifica en DOS pasadas (antes era una sola
     cadena de if/elif, y eso causaba dos errores reales):
@@ -461,26 +596,34 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
     Además el título se arma respetando el orden de lectura de Tesseract
     (bloque, párrafo, línea, palabra). Antes se ordenaba solo por `cy`, así que
     las palabras de una misma línea salían barajadas.
+
+    `tokens_pdf`: si viene (texto real del PDF, ver tokens_de_palabras_pdf),
+    se clasifica eso en vez de correr el OCR: es exacto y no depende de
+    Tesseract.
     """
     t = tol or _tolerancias(gris.shape)
     margen = t["margen_texto"]
     radio_dato = t["radio_dato"]
     mapa_dist = _mapa_distancia_curva(mascaras_curva)
 
-    if escala_ocr and escala_ocr != 1:
-        gris_ocr = cv2.resize(gris, None, fx=escala_ocr, fy=escala_ocr,
-                              interpolation=cv2.INTER_CUBIC)
+    if tokens_pdf is not None:
+        datos = {"text": []}
+        tokens = list(tokens_pdf)
     else:
-        gris_ocr = gris
-        escala_ocr = 1.0
+        if escala_ocr and escala_ocr != 1:
+            gris_ocr = cv2.resize(gris, None, fx=escala_ocr, fy=escala_ocr,
+                                  interpolation=cv2.INTER_CUBIC)
+        else:
+            gris_ocr = gris
+            escala_ocr = 1.0
 
-    datos = pytesseract.image_to_data(
-        gris_ocr, output_type=Output.DICT,
-        config="--psm 11", lang=_idioma_ocr(lang),
-    )
+        datos = pytesseract.image_to_data(
+            gris_ocr, output_type=Output.DICT,
+            config="--psm 11", lang=_idioma_ocr(lang),
+        )
+        tokens = []
 
     # ---------- pasada 1: recolectar tokens ----------
-    tokens = []
     for i in range(len(datos["text"])):
         texto = datos["text"][i].strip()
         if not texto:
@@ -611,6 +754,9 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
         "titulo": titulo, "titulo_bbox": titulo_bbox,
         "titulo_x": titulo_x, "titulo_x_bbox": titulo_x_bbox,
         "leyenda": leyenda,
+        # Todas las palabras con su recuadro: `nombres_de_leyenda` las usa para
+        # saber qué nombre de la leyenda va al lado de qué muestra de color.
+        "tokens": tokens,
     }
 
 
@@ -1308,6 +1454,9 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
         } for c, f in puntos_px]
         series_salida.append({
             "id": f"serie_{i}", "hue": s.get("hue"), "modo": s.get("modo", "manual"),
+            # nombre leído de la leyenda (None si no se pudo): lo usan la
+            # leyenda del STL y la narración
+            "nombre": s.get("nombre"),
             "n_puntos": len(puntos), "puntos": puntos,
         })
 
@@ -1554,14 +1703,19 @@ def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
         for e in textos_base.get("etiquetas_dato", [])
     ]
 
+    series_base = base.get("series", [])
     if "series" in correcciones:
+        # La pizarra no manda el nombre de cada serie: se conserva el que
+        # tenía la serie en la misma posición (o el que venga, si viene).
         series = [{"puntos_px": [(float(p[0]), float(p[1])) for p in s["puntos_px"]],
-                   "hue": s.get("hue"), "modo": "manual"}
-                  for s in correcciones["series"]]
+                   "hue": s.get("hue"), "modo": "manual",
+                   "nombre": s.get("nombre") or (series_base[k].get("nombre")
+                                                 if k < len(series_base) else None)}
+                  for k, s in enumerate(correcciones["series"])]
     else:
         series = [{"puntos_px": [(p["px"], p["py"]) for p in s["puntos"]],
-                   "hue": s.get("hue"), "modo": s.get("modo")}
-                  for s in base.get("series", [])]
+                   "hue": s.get("hue"), "modo": s.get("modo"), "nombre": s.get("nombre")}
+                  for s in series_base]
 
     txt = {
         "titulo": textos_base.get("titulo", ""), "titulo_bbox": None,
@@ -1582,11 +1736,17 @@ def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
     )
 
 
-def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None):
+def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None,
+                    palabras=None):
     """
     Ejecuta el pipeline y devuelve un dict con:
       ruta_csv / nombre_csv, ruta_json / nombre_json, ruta_overlay /
       nombre_overlay, resumen, advertencias, series, puntos_curva.
+
+    `palabras`: texto real del PDF dentro de la figura, en píxeles de esta
+    imagen (pipeline_rapido.extraer_palabras). Si trae al menos 2 números,
+    se usa en lugar del OCR para ejes, títulos y leyenda: es exacto y no
+    necesita Tesseract. Sin eso (imagen escaneada o pegada), se usa el OCR.
 
     (El docstring anterior prometía un ZIP con 4 CSVs y devolvía un solo CSV;
     aquí la documentación y el retorno ya coinciden.)
@@ -1629,20 +1789,43 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         )
     mascaras = [s["mascara"] for s in series]
 
+    # --- ¿Texto real del PDF en vez de OCR? ---
+    tokens_pdf = tokens_de_palabras_pdf(palabras)
+    usa_pdf = sum(tk["valor"] is not None for tk in tokens_pdf) >= 2
+    if not usa_pdf:
+        tokens_pdf = None
+
     # --- Etiquetas numéricas de los ejes (lectura por regiones) ---
-    reg_x, reg_y = detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=rect, tol=t)
+    # Con texto del PDF no hace falta: los números ya son exactos.
+    if usa_pdf:
+        reg_x, reg_y = [], []
+    else:
+        reg_x, reg_y = detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=rect, tol=t)
     usa_reg_x, usa_reg_y = len(reg_x) >= 2, len(reg_y) >= 2
     excluir = (reg_x if usa_reg_x else []) + (reg_y if usa_reg_y else [])
 
     # --- Texto (títulos, leyenda, etiquetas de dato) ---
     txt = detectar_textos(gris, eje_x_fila, eje_y_col, rect=rect,
                           mascaras_curva=mascaras, tol=t, lang=lang,
-                          excluir=excluir)
+                          excluir=excluir, tokens_pdf=tokens_pdf)
     # Si la lectura por regiones no consiguió al menos 2 números en un eje, se
     # queda con lo mejor de las dos lecturas.
     etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
     etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
     etiquetas_dato = txt["etiquetas_dato"]
+
+    # --- Nombre de cada serie según la leyenda (emparejado por color) ---
+    if len(series) > 1:
+        nombres, usados = asignar_nombres_de_leyenda(imagen, series, txt.get("tokens"))
+        # Un número de un nombre de la leyenda ("Ventas 2023") está pegado a
+        # la muestra de color y puede parecer un valor anotado junto a la
+        # curva: no lo es, y en la lámina se escribiría como dato.
+        etiquetas_dato = [e for e in etiquetas_dato if not any(e is u for u in usados)]
+        if not all(nombres):
+            advertencias.append(
+                "No se pudo leer en la leyenda el nombre de todas las series: las que "
+                "faltan se llaman 'Serie A', 'Serie B'... en la lámina y la narración."
+            )
 
     # --- Título del eje Y (vertical) ---
     # El límite es el borde izquierdo de los NÚMEROS del eje, no el eje mismo.
@@ -1654,8 +1837,12 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
             gris, eje_y, eje_x, int(np.median(gris)), t["margen_texto"])
     titulo_eje_y, titulo_eje_y_bbox = ("", None)
     if x_limite_vertical is not None:
-        titulo_eje_y, titulo_eje_y_bbox = detectar_texto_vertical(
-            gris, x_limite_vertical, lang=lang)
+        if usa_pdf:
+            titulo_eje_y, titulo_eje_y_bbox = titulo_vertical_de_palabras(
+                palabras, x_limite_vertical)
+        else:
+            titulo_eje_y, titulo_eje_y_bbox = detectar_texto_vertical(
+                gris, x_limite_vertical, lang=lang)
 
     # --- Corrección por consistencia (punto decimal perdido, cero de más...) ---
     for nombre, etqs, clave in (("X", etiquetas_x, lambda e: e["centro_x"]),

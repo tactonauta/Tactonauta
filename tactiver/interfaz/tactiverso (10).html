@@ -208,7 +208,6 @@
     transition: border-color 0.15s ease, background 0.15s ease;
   }
   .dropzone.dragover { border-color: var(--night); background: var(--gold-soft); }
-  .dropzone.has-file { border-style: solid; border-color: var(--night); }
   .dropzone .icon {
     display: inline-flex; width: 3.2rem; height: 3.2rem; border-radius: 50%;
     background: var(--gold-soft); align-items: center; justify-content: center;
@@ -222,76 +221,8 @@
     overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
   }
 
-  .file-summary {
-    margin-top: 1.2rem;
-    display: none;
-    align-items: center; justify-content: space-between; gap: 1rem;
-    border: 1px solid var(--line);
-    background: #fffdf8;
-    border-radius: var(--radius);
-    padding: 0.9rem 1.1rem;
-  }
-  .file-summary.visible { display: flex; }
-  .file-summary .name { font-weight: 700; word-break: break-all; }
-  .file-summary .meta { font-size: 0.9rem; color: #3a362e; }
-
   .status { margin-top: 0.9rem; font-size: 0.95rem; color: var(--night); min-height: 1.4em; }
   .status.error { color: var(--error); }
-
-  /* Gráficos detectados */
-  .graphic-list { list-style: none; margin: 0 0 1.6rem; padding: 0; display: grid; gap: 0.8rem; }
-
-  .graphic-item {
-    border: 1px solid var(--line); border-radius: var(--radius);
-    background: #fffdf8;
-    padding: 0;
-  }
-  .graphic-item.chosen { border-color: var(--night); background: #fff; }
-
-  .graphic-item label.pick {
-    display: flex; align-items: flex-start; gap: 0.9rem;
-    padding: 1rem 1.1rem;
-    cursor: pointer;
-  }
-  .graphic-item input[type="checkbox"] {
-    flex-shrink: 0;
-    width: 1.4rem; height: 1.4rem;
-    margin: 0.15rem 0 0;
-    accent-color: var(--night);
-    cursor: pointer;
-  }
-  .graphic-item .swatch {
-    flex-shrink: 0; width: 2.6rem; height: 2.6rem; border-radius: 6px;
-    background: var(--gold-soft);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--night);
-    font-weight: 700; font-family: 'Fraunces', serif;
-  }
-  .graphic-item .info { flex: 1; min-width: 0; }
-  .graphic-item .info strong { display: block; font-family: 'Fraunces', serif; font-size: 1.05rem; }
-  .graphic-item .info .caption { font-size: 0.92rem; color: #3a362e; display: block; margin-top: 0.15rem; }
-  .graphic-item .info .caption.missing { font-style: italic; color: #5c564c; }
-
-  .graphic-item .thumb-wrap { padding: 0 1.1rem 1.1rem 4.3rem; }
-  .graphic-item img.thumb {
-    max-width: 100%; height: auto; display: block;
-    border: 1px solid var(--line); border-radius: 4px; background: #fff;
-  }
-
-  .select-all-bar {
-    display: flex; align-items: center; gap: 0.7rem;
-    margin-bottom: 1rem; padding: 0.7rem 1.1rem;
-    border: 1px solid var(--line); border-radius: var(--radius);
-    background: var(--gold-soft);
-  }
-  .select-all-bar input[type="checkbox"] {
-    width: 1.4rem; height: 1.4rem; margin: 0; accent-color: var(--night); cursor: pointer;
-  }
-  .select-all-bar label { font-weight: 700; cursor: pointer; }
-  .select-all-bar .count { margin-left: auto; font-size: 0.92rem; color: #24211c; }
-
-  fieldset.picks { border: none; margin: 0; padding: 0; }
-  fieldset.picks legend { padding: 0; }
 
   .progress-line {
     display: flex; align-items: center; gap: 0.7rem;
@@ -351,6 +282,9 @@
   .request-card .fig-thumbs img { max-width: 100%; height: auto; display: block; margin-top: 0.5rem; border-radius: 4px; }
   .request-card .fig-thumbs .warnings { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--error); }
   .request-card .fig-thumbs .warnings li { border: none; padding: 0; background: none; margin-bottom: 0.2rem; }
+  .request-card .fig-thumbs details.descripcion { margin: 0.6rem 0 0; font-size: 0.9rem; }
+  .request-card .fig-thumbs details.descripcion summary { cursor: pointer; font-weight: 700; }
+  .request-card .fig-thumbs details.descripcion p { margin: 0.4rem 0 0; line-height: 1.5; }
   .link-btn {
     display: inline-block; margin-top: 0.6rem; font: inherit; font-weight: 700; font-size: 0.9rem;
     text-decoration: none; border-radius: var(--radius); padding: 0.5em 1em; cursor: pointer;
@@ -359,6 +293,8 @@
   .link-btn.primary:hover { background: var(--night-deep); }
   .link-btn.secondary { background: none; border: 1px solid var(--line); color: var(--ink); }
   .link-btn.secondary:hover { border-color: var(--ink); }
+  /* "Editar segmentación" es un <button>: mismo tamaño que "Descargar STL" a su lado */
+  .request-card .fig-thumbs button.link-btn { padding: 0.5em 1em; font-size: 0.9rem; margin-right: 0.4rem; }
   .empty-note { color: #55504a; font-style: italic; }
 
   section.audience {
@@ -388,6 +324,124 @@
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
+  }
+  /* -------------------------------------------------------- */
+  /* Editor de corrección ("pizarra") — modal del supervisor   */
+  /* -------------------------------------------------------- */
+
+  .editor-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(16, 17, 20, 0.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .editor-overlay[hidden] { display: none; }
+
+  .editor-dialog {
+    background: var(--paper); color: var(--ink);
+    border-radius: 10px; border: 1px solid var(--line);
+    width: min(1080px, 100%); max-height: 92vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(13, 15, 46, 0.35);
+  }
+  .editor-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.3rem; border-bottom: 1px solid var(--line);
+    background: var(--night); color: #fff;
+  }
+  .editor-header h2 { margin: 0; font-size: 1.15rem; color: #fff; }
+  .editor-close {
+    background: none; border: none; color: #fff; font-size: 1.2rem;
+    cursor: pointer; line-height: 1; padding: 0.3em 0.5em; border-radius: var(--radius);
+  }
+  .editor-close:hover { background: rgba(255,255,255,0.15); }
+
+  .editor-body {
+    display: grid; grid-template-columns: 1fr 300px; gap: 0;
+    overflow: auto;
+  }
+  @media (max-width: 760px) { .editor-body { grid-template-columns: 1fr; } }
+
+  .editor-canvas-col { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.8rem; }
+  .editor-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .tool-btn {
+    background: #fffdf8; border: 1px solid var(--line); color: #3a362e;
+    padding: 0.45em 0.9em; border-radius: var(--radius); font: inherit; font-size: 0.85rem;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 0.4em;
+  }
+  .tool-btn .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .tool-btn.active { border-color: var(--night); background: var(--gold-soft); color: var(--ink); }
+
+  .editor-lienzo-wrap {
+    position: relative; line-height: 0; max-width: 100%;
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    background: repeating-conic-gradient(#efe9da 0% 25%, #e6dfcb 0% 50%) 50% / 16px 16px;
+  }
+  .editor-lienzo-wrap img { display: block; width: 100%; height: auto; }
+  .editor-lienzo-wrap canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair;
+  }
+  .editor-instrucciones { font-size: 0.85rem; color: #3a362e; line-height: 1.5; margin: 0; }
+
+  .editor-side {
+    padding: 1.1rem; border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 1rem; background: #fffdf8;
+  }
+  @media (max-width: 760px) { .editor-side { border-left: none; border-top: 1px solid var(--line); } }
+
+  .editor-block {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem;
+    background: var(--paper);
+  }
+  .editor-block h3 {
+    font-family: 'Fraunces', serif; font-size: 0.85rem; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #3a362e; margin: 0 0 0.5rem;
+  }
+  #editor-estado { margin: 0; font-size: 0.88rem; }
+  #editor-estado div { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+  #editor-estado .ok { color: #1b6b3a; font-weight: 700; }
+  #editor-estado .err { color: var(--error); font-weight: 700; }
+
+  ul.editor-advertencias {
+    margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--error);
+  }
+  ul.editor-advertencias li { margin-bottom: 0.3rem; }
+
+  table.editor-tabla { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.editor-tabla td { padding: 0.2rem 0; }
+  table.editor-tabla input {
+    width: 100%; border: 1px solid var(--line); border-radius: 4px;
+    padding: 0.3em 0.5em; font: inherit; font-size: 0.85rem; background: #fff;
+  }
+
+  .editor-acciones { display: flex; flex-direction: column; gap: 0.6rem; }
+  .editor-acciones button.primary,
+  .editor-acciones button.secondary { width: 100%; text-align: center; }
+  .editor-acciones .status { margin: 0; font-size: 0.85rem; min-height: 1.3em; }
+  .editor-acciones .status.error { color: var(--error); }
+  .editor-acciones .status.ok { color: #1b6b3a; }
+  .editor-block-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;
+  }
+  .editor-block-header h3 { margin: 0; }
+  button.mini-add {
+    background: var(--gold-soft); border: 1px solid var(--gold); color: #5c3d05;
+    font-size: 0.75rem; font-weight: 700; padding: 0.25em 0.6em; border-radius: 999px;
+    cursor: pointer;
+  }
+  button.mini-add:hover { background: var(--gold); color: #fff; }
+
+  table.editor-tabla tr { display: flex; align-items: center; gap: 0.4rem; }
+  table.editor-tabla td.celda-input { flex: 1; }
+  table.editor-tabla input.pendiente { border-color: var(--gold); background: #fff8e6; }
+  button.mini-del {
+    background: none; border: none; color: #a15a4a; font-size: 1rem; line-height: 1;
+    cursor: pointer; padding: 0.2em 0.3em; flex-shrink: 0;
+  }
+  button.mini-del:hover { color: var(--error); }
+
+  #editor-series-toolbar .tool-btn.nueva-serie {
+    border-style: dashed; color: #3a362e;
   }
 </style>
 </head>
@@ -507,15 +561,14 @@
 
   <!-- PASO 1: Instrucciones (estudiante) -->
   <section class="step" id="step-1" aria-labelledby="step-1-heading">
-    <span class="step-eyebrow">Paso 1 de 4</span>
+    <span class="step-eyebrow">Paso 1 de 3</span>
     <h1 id="step-1-heading" tabindex="-1">Bienvenido a Puntito</h1>
     <p class="lede" id="step-1-lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
 
     <ol class="instructions">
-      <li>Sube el PDF que tiene los gráficos que quieres convertir.</li>
-      <li>Puntito detecta los gráficos y te muestra de qué trata cada uno.</li>
-      <li>Eliges cuáles quieres imprimir, o los mandas todos.</li>
-      <li>Se envía una solicitud a tu supervisor para su aprobación.</li>
+      <li>Sube el PDF que tiene los gráficos. Es lo único que tienes que hacer.</li>
+      <li>Puntito encuentra solo los gráficos de líneas y lee su título, sus ejes y su leyenda.</li>
+      <li>Se envía una solicitud a tu supervisor, que la revisa y la manda a imprimir en relieve.</li>
     </ol>
 
     <div class="actions">
@@ -523,11 +576,13 @@
     </div>
   </section>
 
-  <!-- PASO 2: Subir PDF -->
+  <!-- PASO 2: Subir PDF. Elegir el archivo basta: el resto es automático
+       (el estudiante puede ser una persona ciega; no hay nada que revisar
+       ni elegir en pantalla). -->
   <section class="step" id="step-2" aria-labelledby="step-2-heading">
-    <span class="step-eyebrow">Paso 2 de 4</span>
+    <span class="step-eyebrow">Paso 2 de 3</span>
     <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
-    <p class="lede">Elige el PDF desde tu dispositivo. Si alguien te está ayudando, puede seleccionarlo por ti; si estás solo, tu lector de pantalla te guiará por este botón.</p>
+    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y se los envía a tu supervisor; no tienes que hacer nada más. Tu lector de pantalla te irá avisando del avance.</p>
 
     <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
       <span class="icon" aria-hidden="true">
@@ -541,67 +596,33 @@
       <input type="file" id="pdf-input" accept="application/pdf" aria-describedby="upload-status">
     </label>
 
-    <div class="file-summary" id="file-summary">
-      <div>
-        <div class="name" id="file-name"></div>
-        <div class="meta" id="file-meta"></div>
-      </div>
-      <button type="button" class="secondary" id="remove-file">Quitar archivo</button>
-    </div>
-
     <p class="status" id="upload-status" role="status" aria-live="polite"></p>
 
     <div class="actions">
       <button type="button" class="secondary" data-goto="step-1">Atrás</button>
-      <button type="button" class="primary" id="to-step-3" disabled>Procesar gráficos</button>
     </div>
   </section>
 
-  <!-- PASO 3: Gráficos detectados -->
+  <!-- PASO 3: búsqueda de gráficos y envío, automáticos -->
   <section class="step" id="step-3" aria-labelledby="step-3-heading">
-    <span class="step-eyebrow">Paso 3 de 4</span>
-    <h2 id="step-3-heading" tabindex="-1">Gráficos detectados</h2>
+    <span class="step-eyebrow">Paso 3 de 3</span>
+    <h2 id="step-3-heading" tabindex="-1">Procesando tu documento</h2>
 
     <div class="progress-line" id="progress-line">
       <span class="spinner" aria-hidden="true"></span>
-      <span>Buscando gráficos en el documento…</span>
+      <span id="progress-text">Buscando gráficos de líneas en el documento…</span>
     </div>
 
-    <div id="graphic-results" hidden>
-      <p class="lede" id="results-lede">
-        Encontramos estos gráficos. Marca los que quieras convertir en láminas táctiles en braille.
-      </p>
-
-      <div class="select-all-bar">
-        <input type="checkbox" id="select-all" checked>
-        <label for="select-all">Seleccionar todos</label>
-        <span class="count" id="select-count"></span>
-      </div>
-
-      <fieldset class="picks">
-        <legend class="sr-only">Gráficos encontrados en el documento</legend>
-        <ul class="graphic-list" id="graphic-list"></ul>
-      </fieldset>
-
-      <p class="status" role="status" aria-live="polite" id="detect-status"></p>
-      <div class="actions">
-        <button type="button" class="secondary" data-goto="step-2">Atrás</button>
-        <button type="button" class="primary" id="to-step-4">Enviar solicitud</button>
-      </div>
-    </div>
-
-    <div id="no-results" hidden>
-      <p class="lede">No encontramos gráficos de líneas en este documento. Puedes volver atrás y probar con otro PDF.</p>
-      <div class="actions">
-        <button type="button" class="secondary" data-goto="step-2">Elegir otro PDF</button>
-      </div>
+    <p class="status" role="status" aria-live="polite" id="detect-status"></p>
+    <div class="actions" id="step-3-acciones" hidden>
+      <button type="button" class="primary" data-goto="step-2">Elegir otro PDF</button>
     </div>
   </section>
 
   <!-- PASO 4: Confirmación -->
   <section class="step" id="step-4" aria-labelledby="step-4-heading">
-    <span class="step-eyebrow">Paso 4 de 4</span>
-    <h2 id="step-4-heading" tabindex="-1">Solicitud enviada</h2>
+    <span class="step-eyebrow">Listo</span>
+    <h2 id="step-4-heading" tabindex="-1" aria-describedby="ticket-detail">Solicitud enviada</h2>
     <div class="confirm-card">
       <span class="ticket" id="ticket-number">Solicitud #0000</span>
       <p id="ticket-detail"></p>
@@ -776,6 +797,80 @@
 
 <footer class="bottom">
 </footer>
+
+<!-- Editor de corrección ("pizarra"): el supervisor lo abre con "Editar
+     segmentación" sobre una figura ya autorizada, antes de mandarla a imprenta. -->
+<div class="editor-overlay" id="editor-overlay" hidden>
+  <div class="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-heading">
+    <div class="editor-header">
+      <h2 id="editor-heading">Corregir segmentación</h2>
+      <button type="button" class="editor-close" id="editor-close" aria-label="Cerrar editor">✕</button>
+    </div>
+    <div class="editor-body">
+      <div class="editor-canvas-col">
+        <div class="editor-toolbar">
+          <button type="button" class="tool-btn active" data-modo="mover">
+            <span class="dot" style="background:#6b6659"></span> Mover puntos
+          </button>
+          <button type="button" class="tool-btn" data-modo="agregar">
+            <span class="dot" style="background:#2e8b57"></span> Agregar punto a la curva
+          </button>
+          <button type="button" class="tool-btn" data-modo="etiqueta-x">
+            <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje X
+          </button>
+          <button type="button" class="tool-btn" data-modo="etiqueta-y">
+            <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje Y
+          </button>
+          <button type="button" class="tool-btn" data-modo="borrar">
+            <span class="dot" style="background:#8c2a09"></span> Borrar punto
+          </button>
+        </div>
+        <div class="editor-toolbar" id="editor-series-toolbar"></div>
+        <div class="editor-lienzo-wrap" id="editor-lienzo-wrap">
+          <img id="editor-img" alt="Overlay de la gráfica a corregir">
+          <canvas id="editor-canvas"></canvas>
+        </div>
+        <p class="editor-instrucciones">
+          <strong>Ejes:</strong> arrastra los extremos rojo (eje X) y azul (eje Y) hasta que
+          calcen con las líneas reales de la gráfica, sobre todo donde se ve que no se conectan.
+          <strong>Curva:</strong> arrastra los puntos de cada serie para que sigan su línea; si hay
+          varias series, elige cuál está activa abajo antes de usar "Agregar punto", o crea una serie
+          nueva con "+ Nueva serie" si la gráfica tiene una curva que no se detectó.
+          <strong>Etiquetas:</strong> si un número del eje no se leyó, usa "Agregar etiqueta" y haz
+          clic justo sobre ese número en la imagen — aparece un cuadrado amarillo ahí y una casilla
+          abajo para que escribas tú el valor.
+        </p>
+      </div>
+      <div class="editor-side">
+        <div class="editor-block">
+          <h3>Estado</h3>
+          <div id="editor-estado"></div>
+          <ul class="editor-advertencias" id="editor-advertencias"></ul>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Etiquetas del eje X</h3>
+            <button type="button" class="mini-add" id="editor-add-etiqueta-x" title="Agregar etiqueta al centro del eje X">+ Agregar</button>
+          </div>
+          <table class="editor-tabla"><tbody id="editor-tabla-x"></tbody></table>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Etiquetas del eje Y</h3>
+            <button type="button" class="mini-add" id="editor-add-etiqueta-y" title="Agregar etiqueta al centro del eje Y">+ Agregar</button>
+          </div>
+          <table class="editor-tabla"><tbody id="editor-tabla-y"></tbody></table>
+        </div>
+        <div class="editor-block editor-acciones">
+          <button type="button" class="primary" id="editor-recalcular">Recalcular con mis correcciones</button>
+          <button type="button" class="secondary" id="editor-deshacer">Deshacer cambios sin guardar</button>
+          <button type="button" class="primary" id="editor-confirmar" disabled>Guardar y regenerar STL</button>
+          <p class="status" id="editor-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
   // ---------------------------------------------------------------
@@ -1117,63 +1212,37 @@
   });
 
   // ---------------------------------------------------------------
-  // Paso 2: carga de archivo (estudiante)
+  // Paso 2 y 3 (estudiante): elegir el PDF basta. Se buscan los gráficos
+  // de líneas y se envía la solicitud con TODOS, sin pantallas de revisión
+  // ni casillas: el estudiante puede ser ciego, y lo que hay que revisar
+  // (la segmentación) lo revisa el supervisor. Cada avance se anuncia en
+  // una región aria-live.
   // ---------------------------------------------------------------
   const dropzone = document.getElementById('dropzone');
   const input = document.getElementById('pdf-input');
-  const summary = document.getElementById('file-summary');
-  const fileName = document.getElementById('file-name');
-  const fileMeta = document.getElementById('file-meta');
-  const removeBtn = document.getElementById('remove-file');
   const uploadStatus = document.getElementById('upload-status');
-  const toStep3 = document.getElementById('to-step-3');
+  const progress = document.getElementById('progress-line');
+  const progressText = document.getElementById('progress-text');
+  const detectStatus = document.getElementById('detect-status');
+  const accionesPaso3 = document.getElementById('step-3-acciones');
 
-  let archivoElegido = null;
-  let loteId = null;
-  let figuras = [];
+  let procesando = false;
 
-  // Nombre amigable por tipo de gráfico (hoy solo se muestran los de línea:
-  // son los únicos que el segmentador puede convertir a lámina táctil).
-  const TIPO_LABEL = {
-    linea: 'Gráfico de línea',
-    barra_o_torta: 'Gráfico de barra o torta',
-    compuesta: 'Figura compuesta (varios paneles)',
-    indeterminado: 'Tipo no identificado',
-  };
-
-  function formatSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function showFile(file) {
-    if (!file) return;
-    if (file.type !== 'application/pdf') {
+  function elegirArchivo(file) {
+    if (!file || procesando) return;
+    const esPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!esPdf) {
       uploadStatus.textContent = 'Ese archivo no es un PDF. Elige un archivo con extensión .pdf.';
       uploadStatus.classList.add('error');
+      input.value = '';
       return;
     }
-    archivoElegido = file;
     uploadStatus.classList.remove('error');
-    fileName.textContent = file.name;
-    fileMeta.textContent = formatSize(file.size);
-    summary.classList.add('visible');
-    dropzone.classList.add('has-file');
-    uploadStatus.textContent = 'Archivo cargado: ' + file.name + ', ' + formatSize(file.size) + '.';
-    toStep3.disabled = false;
+    uploadStatus.textContent = '';
+    procesarYEnviar(file);
   }
 
-  function clearFile() {
-    archivoElegido = null;
-    input.value = '';
-    summary.classList.remove('visible');
-    dropzone.classList.remove('has-file');
-    uploadStatus.textContent = 'Archivo quitado.';
-    toStep3.disabled = true;
-  }
-
-  input.addEventListener('change', () => { if (input.files && input.files[0]) showFile(input.files[0]); });
+  input.addEventListener('change', () => { if (input.files && input.files[0]) elegirArchivo(input.files[0]); });
   dropzone.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
   });
@@ -1181,217 +1250,99 @@
   ['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
   dropzone.addEventListener('drop', (e) => {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) { input.files = e.dataTransfer.files; showFile(file); }
-  });
-  removeBtn.addEventListener('click', clearFile);
-
-  toStep3.addEventListener('click', () => {
-    goTo('step-3');
-    procesarPDF();
+    if (file) elegirArchivo(file);
   });
 
-  // ---------------------------------------------------------------
-  // Paso 3: detección real contra el backend
-  // ---------------------------------------------------------------
-  const progress = document.getElementById('progress-line');
-  const results = document.getElementById('graphic-results');
-  const noResults = document.getElementById('no-results');
-  const lista = document.getElementById('graphic-list');
-  const detectStatus = document.getElementById('detect-status');
-  const selectAll = document.getElementById('select-all');
-  const selectCount = document.getElementById('select-count');
-  const toStep4 = document.getElementById('to-step-4');
-
-  async function procesarPDF() {
-    if (!archivoElegido) return;
-
-    progress.style.display = 'flex';
-    progress.querySelector('span:last-child').textContent = 'Buscando gráficos en el documento…';
-    results.hidden = true;
-    noResults.hidden = true;
-    detectStatus.textContent = '';
+  function avisar(texto) {
+    progressText.textContent = texto;
     detectStatus.classList.remove('error');
+    detectStatus.textContent = texto;
+  }
 
-    const cuerpo = new FormData();
-    cuerpo.append('pdf', archivoElegido);
+  function fallar(texto) {
+    progress.style.display = 'none';
+    detectStatus.textContent = texto;
+    detectStatus.classList.add('error');
+    accionesPaso3.hidden = false;
+  }
+
+  async function procesarYEnviar(archivo) {
+    if (!usuarioActual || usuarioActual.rol !== 'estudiante') { goTo('screen-landing'); return; }
+    procesando = true;
+    goTo('step-3');
+    progress.style.display = 'flex';
+    accionesPaso3.hidden = true;
+    avisar('Buscando gráficos de líneas en ' + archivo.name + '. Esto puede tardar un momento.');
 
     try {
+      const cuerpo = new FormData();
+      cuerpo.append('pdf', archivo);
       const { resp, datos } = await llamarApi('/api/clasificar', { method: 'POST', body: cuerpo });
       if (!resp.ok || !datos.ok) throw new Error(datos.error || 'Error al procesar el documento.');
 
-      loteId = datos.lote_id;
-      // Por ahora solo se pueden convertir gráficos de línea (es lo único
-      // que el segmentador sabe transformar en lámina táctil); el resto se
-      // detecta pero no se ofrece para elegir.
+      // Solo los gráficos de línea: es lo único que el segmentador sabe
+      // convertir en lámina táctil.
       const detectados = datos.graficos || [];
-      figuras = detectados.filter(g => g.es_lineal).map(g => ({
-        id: g.id,
-        pagina: g.pagina,
-        tipo: g.tipo,
-        confianza: g.confianza,
-        imagen_url: API_BASE + g.preview_url,
-        titulo: TIPO_LABEL[g.tipo] || g.tipo,
-        caption: g.ancho + '×' + g.alto + 'px · confianza ' + g.confianza,
-      }));
-      progress.style.display = 'none';
-
-      if (figuras.length === 0) {
-        noResults.hidden = false;
-        detectStatus.textContent = detectados.length > 0
-          ? 'Se detectaron ' + detectados.length + ' figura(s), pero ninguna es un gráfico de línea (por ahora es lo único que se puede convertir).'
-          : 'No se encontraron gráficos en el documento.';
+      const lineales = detectados.filter(g => g.es_lineal);
+      if (lineales.length === 0) {
+        fallar(detectados.length > 0
+          ? 'El documento tiene ' + detectados.length + ' figura(s), pero ninguna es un gráfico de líneas (por ahora es lo único que se puede convertir). No se envió ninguna solicitud.'
+          : 'No se encontraron gráficos en el documento. No se envió ninguna solicitud.');
         return;
       }
 
-      pintarFiguras();
-      results.hidden = false;
-      detectStatus.textContent = 'Se encontraron ' + figuras.length +
-        (figuras.length === 1 ? ' gráfico de línea.' : ' gráficos de línea.') +
-        ' Todos están marcados. Puedes desmarcar los que no necesites.';
+      avisar((lineales.length === 1 ? 'Se encontró 1 gráfico de líneas'
+        : 'Se encontraron ' + lineales.length + ' gráficos de líneas') +
+        '. Enviando la solicitud a tu supervisor…');
 
-    } catch (err) {
-      progress.style.display = 'none';
-      detectStatus.textContent = 'No se pudo procesar el documento: ' + err.message;
-      detectStatus.classList.add('error');
-      results.hidden = false;
-    }
-  }
+      const figuras = lineales.map(g => ({
+        id: g.id,
+        titulo: 'Gráfico de línea',
+        // El pie de figura del PDF ("Figura 3. ...") dice de qué trata el
+        // gráfico; lo ven el supervisor y la imprenta, y abre la narración.
+        caption: g.pie_figura || ('Gráfico de líneas sin pie de figura en la página ' + g.pagina),
+        pagina: g.pagina,
+        imagen_url: API_BASE + g.preview_url,
+        pie_figura: g.pie_figura || '',
+      }));
 
-  function pintarFiguras() {
-    lista.innerHTML = '';
-
-    figuras.forEach((f, i) => {
-      const li = document.createElement('li');
-      li.className = 'graphic-item chosen';
-
-      const label = document.createElement('label');
-      label.className = 'pick';
-      label.setAttribute('for', 'fig-' + f.id);
-
-      const check = document.createElement('input');
-      check.type = 'checkbox';
-      check.id = 'fig-' + f.id;
-      check.value = f.id;
-      check.checked = true;
-      check.addEventListener('change', () => {
-        li.classList.toggle('chosen', check.checked);
-        actualizarConteo();
+      const envio = await postJson('/api/solicitudes', {
+        lote_id: datos.lote_id,
+        archivo_nombre: archivo.name,
+        figuras: figuras,
       });
+      if (!envio.resp.ok || !envio.datos.ok) throw new Error(envio.datos.error || 'No se pudo enviar la solicitud.');
 
-      const swatch = document.createElement('span');
-      swatch.className = 'swatch';
-      swatch.setAttribute('aria-hidden', 'true');
-      swatch.textContent = (i + 1);
-
-      const info = document.createElement('span');
-      info.className = 'info';
-
-      const titulo = document.createElement('strong');
-      titulo.textContent = f.titulo + ' — página ' + f.pagina;
-
-      const caption = document.createElement('span');
-      caption.className = 'caption';
-      caption.textContent = f.caption;
-
-      info.appendChild(titulo);
-      info.appendChild(caption);
-
-      label.appendChild(check);
-      label.appendChild(swatch);
-      label.appendChild(info);
-      li.appendChild(label);
-
-      const thumbWrap = document.createElement('div');
-      thumbWrap.className = 'thumb-wrap';
-      const img = document.createElement('img');
-      img.className = 'thumb';
-      img.src = f.imagen_url;
-      img.alt = 'Vista previa del gráfico ' + (i + 1) + '. ' + f.caption;
-      img.loading = 'lazy';
-      img.onerror = () => manejarErrorImagen(img, 'No se pudo cargar la vista previa de este gráfico.');
-      thumbWrap.appendChild(img);
-      li.appendChild(thumbWrap);
-
-      lista.appendChild(li);
-    });
-
-    selectAll.checked = true;
-    actualizarConteo();
-  }
-
-  function casillas() {
-    return Array.from(lista.querySelectorAll('input[type="checkbox"]'));
-  }
-
-  function seleccionadas() {
-    // Los ids de /api/clasificar son nombres de archivo (strings), no
-    // números — antes se parseaban con parseInt() y nunca coincidían con
-    // figuras.id al filtrar, así que "Enviar solicitud" siempre mandaba una
-    // lista vacía.
-    return casillas().filter(c => c.checked).map(c => c.value);
-  }
-
-  function figurasSeleccionadasDetalle(ids) {
-    return figuras.filter(f => ids.includes(f.id)).map(f => ({
-      id: f.id, titulo: f.titulo, caption: f.caption, pagina: f.pagina, imagen_url: f.imagen_url
-    }));
-  }
-
-  function actualizarConteo() {
-    const total = casillas().length;
-    const elegidas = seleccionadas().length;
-    selectCount.textContent = elegidas + ' de ' + total + ' marcados';
-    selectAll.checked = elegidas === total && total > 0;
-    selectAll.indeterminate = elegidas > 0 && elegidas < total;
-    toStep4.disabled = elegidas === 0;
-    toStep4.textContent = elegidas === total
-      ? 'Enviar solicitud: todos (' + elegidas + ')'
-      : 'Enviar solicitud: seleccionados (' + elegidas + ')';
-  }
-
-  selectAll.addEventListener('change', () => {
-    casillas().forEach(c => {
-      c.checked = selectAll.checked;
-      c.closest('.graphic-item').classList.toggle('chosen', c.checked);
-    });
-    actualizarConteo();
-  });
-
-  // ---------------------------------------------------------------
-  // Paso 4: crear la solicitud (queda en espera de tu supervisor)
-  // ---------------------------------------------------------------
-  toStep4.addEventListener('click', async () => {
-    const elegidas = seleccionadas();
-    if (elegidas.length === 0) return;
-
-    if (!usuarioActual || usuarioActual.rol !== 'estudiante') { goTo('screen-landing'); return; }
-    const usuario = usuarioActual;
-
-    toStep4.disabled = true;
-    const { resp, datos } = await postJson('/api/solicitudes', {
-      lote_id: loteId,
-      archivo_nombre: archivoElegido ? archivoElegido.name : '',
-      figuras: figurasSeleccionadasDetalle(elegidas),
-    });
-    toStep4.disabled = false;
-
-    if (!resp.ok || !datos.ok) {
-      detectStatus.textContent = datos.error || 'No se pudo enviar la solicitud.';
-      detectStatus.classList.add('error');
-      return;
+      mostrarSolicitudEnviada(envio.datos.solicitud, figuras, detectados.length - lineales.length);
+    } catch (err) {
+      fallar('No se pudo completar: ' + err.message);
+    } finally {
+      procesando = false;
+      input.value = '';
     }
+  }
 
-    const solicitud = datos.solicitud;
+  function mostrarSolicitudEnviada(solicitud, figuras, otrasFiguras) {
+    const n = figuras.length;
     document.getElementById('ticket-number').textContent = 'Solicitud #' + String(solicitud.id).padStart(5, '0');
     document.getElementById('ticket-detail').textContent =
-      elegidas.length + (elegidas.length === 1 ? ' lámina táctil enviada' : ' láminas táctiles enviadas') +
-      ' a tu supervisor (' + (usuario.supervisor_codigo || 'sin definir') + ') para su aprobación.';
-    document.getElementById('ticket-list').innerHTML = '';
+      (n === 1 ? 'Se envió 1 gráfico de líneas' : 'Se enviaron ' + n + ' gráficos de líneas') +
+      ' a tu supervisor (' + (usuarioActual.supervisor_codigo || 'sin definir') + ')' +
+      (n === 1 ? ' para convertirlo en lámina táctil.' : ' para convertirlos en láminas táctiles.') +
+      (otrasFiguras > 0
+        ? ' El documento tenía ' + otrasFiguras + ' figura(s) más que no son gráficos de líneas; esas no se pueden convertir por ahora.'
+        : '');
+    const listaTicket = document.getElementById('ticket-list');
+    listaTicket.innerHTML = '';
+    figuras.forEach(f => {
+      const li = document.createElement('li');
+      li.textContent = 'Página ' + f.pagina + ': ' + (f.pie_figura || 'gráfico de líneas sin pie de figura');
+      listaTicket.appendChild(li);
+    });
     document.getElementById('confirm-status').textContent =
       'Puedes revisar el avance en cualquier momento desde "Ver estado de mis solicitudes".';
-
     goTo('step-4');
-  });
+  }
 
   // ---------------------------------------------------------------
   // Estado de solicitudes: ESTUDIANTE
@@ -1441,7 +1392,9 @@
   // ---------------------------------------------------------------
   // APP: SUPERVISOR
   // ---------------------------------------------------------------
-  function crearDetalleSolicitud(s) {
+  // `editable`: solo el supervisor, con la solicitud autorizada y todavía no
+  // enviada a imprenta, ve el botón para corregir la segmentación de cada figura.
+  function crearDetalleSolicitud(s, editable) {
     const dl = document.createElement('dl');
     const campos = [
       ['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
@@ -1500,13 +1453,45 @@
         li.appendChild(advs);
       }
 
+      if (f.descripcion) {
+        const desc = document.createElement('details');
+        desc.className = 'descripcion';
+        const resumenDesc = document.createElement('summary');
+        resumenDesc.textContent = 'Descripción para narrar';
+        const textoDesc = document.createElement('p');
+        textoDesc.textContent = f.descripcion;
+        desc.appendChild(resumenDesc);
+        desc.appendChild(textoDesc);
+        li.appendChild(desc);
+      }
+
       if (f.stl_download_url) {
         const link = document.createElement('a');
         link.className = 'link-btn primary';
+        link.style.marginRight = '0.4rem';
         link.href = API_BASE + f.stl_download_url;
         link.textContent = 'Descargar STL';
         link.setAttribute('download', '');
         li.appendChild(link);
+      }
+
+      if (f.narracion_download_url) {
+        const linkNarr = document.createElement('a');
+        linkNarr.className = 'link-btn secondary';
+        linkNarr.style.marginRight = '0.4rem';
+        linkNarr.href = API_BASE + f.narracion_download_url;
+        linkNarr.textContent = 'Descargar narración (Hand_Tracking)';
+        linkNarr.setAttribute('download', '');
+        li.appendChild(linkNarr);
+      }
+
+      if (editable && f.correccion_id && f.json_url && !f.error) {
+        const btnEditar = document.createElement('button');
+        btnEditar.type = 'button';
+        btnEditar.className = 'link-btn secondary';
+        btnEditar.textContent = 'Editar segmentación';
+        btnEditar.addEventListener('click', () => Editor.abrir(s.id, i, f, btnEditar));
+        li.appendChild(btnEditar);
       }
 
       ul.appendChild(li);
@@ -1566,7 +1551,8 @@
     detalle.className = 'request-detail';
     detalle.id = detailId;
     detalle.hidden = true;
-    detalle.appendChild(crearDetalleSolicitud(s));
+    detalle.appendChild(crearDetalleSolicitud(s,
+      s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada'));
 
     const status = document.createElement('p');
     status.className = 'status';
@@ -1643,6 +1629,479 @@
     status.textContent = 'Enviado a la imprenta.';
     await pintarSolicitudesSupervisor();
   }
+
+  // ------------------------------------------------------------------
+  // Editor de corrección ("pizarra", traído de tactiverso 12): el
+  // supervisor lo abre con "Editar segmentación" sobre una figura ya
+  // autorizada. Deja arrastrar los ejes y los puntos de la curva;
+  // "Recalcular" solo previsualiza (/api/corregir/<id>) y "Guardar"
+  // aplica la corrección a la solicitud y regenera su STL
+  // (/api/solicitudes/<id>/figuras/<i>/corregir).
+  // ------------------------------------------------------------------
+  const Editor = (() => {
+    const overlayEl = document.getElementById('editor-overlay');
+    const imgEl = document.getElementById('editor-img');
+    const canvas = document.getElementById('editor-canvas');
+    const closeBtn = document.getElementById('editor-close');
+    const estadoEl = document.getElementById('editor-estado');
+    const advertenciasEl = document.getElementById('editor-advertencias');
+    const tablaX = document.getElementById('editor-tabla-x');
+    const tablaY = document.getElementById('editor-tabla-y');
+    const seriesToolbar = document.getElementById('editor-series-toolbar');
+    const btnRecalcular = document.getElementById('editor-recalcular');
+    const btnDeshacer = document.getElementById('editor-deshacer');
+    const btnConfirmar = document.getElementById('editor-confirmar');
+    const statusEl = document.getElementById('editor-status');
+
+    // Misma paleta que _calibrar_y_exportar() en segmentador.py (colores BGR
+    // (0,255,0)/(0,200,255)/(255,200,0) -> aquí en RGB), así el color de cada
+    // serie en la pizarra coincide con el color ya pintado en el overlay.
+    const PALETA = ['#00ff00', '#ffc800', '#00c8ff', '#ff5588', '#aa66ff', '#ffaa00'];
+
+    let solicitudId = null; // solicitud y posición de la figura que se está corrigiendo
+    let indiceFigura = null;
+    let botonOrigen = null; // botón "Editar segmentación" (recupera el foco al cerrar)
+    let modo = 'mover';     // mover | agregar | borrar
+    let serieActiva = 0;    // a qué serie se le agregan puntos nuevos en modo "agregar"
+    let arrastrando = null;
+
+    let estado = { correccionId: null, ejeX: null, ejeY: null, series: [],
+                   etiquetasX: [], etiquetasY: [], ancho: 0, alto: 0 };
+    let estadoOriginal = null;
+    let ultimasCorrecciones = null; // lo último que se recalculó sin errores
+
+    function radioPunto() { return Math.max(5, estado.ancho * 0.008); }
+
+    async function abrir(idSolicitud, indice, figura, boton) {
+      solicitudId = idSolicitud;
+      indiceFigura = indice;
+      botonOrigen = boton;
+      ultimasCorrecciones = null;
+      serieActiva = 0;
+      overlayEl.hidden = false;
+      document.body.style.overflow = 'hidden';
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+      btnConfirmar.disabled = true;
+      closeBtn.focus();
+      try {
+        await cargarDesde(figura);
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'No se pudo abrir la segmentación de esta figura (puede que sus ' +
+          'archivos ya no estén en el servidor): ' + err.message;
+      }
+    }
+
+    function cerrar() {
+      overlayEl.hidden = true;
+      document.body.style.overflow = '';
+      if (botonOrigen && document.body.contains(botonOrigen)) botonOrigen.focus();
+    }
+
+    async function cargarDesde(info) {
+      estado.correccionId = info.correccion_id;
+      imgEl.src = API_BASE + info.overlay_url + `?t=${Date.now()}`;
+
+      const jsonRes = await fetch(API_BASE + info.json_url, { credentials: 'include' });
+      if (!jsonRes.ok) throw new Error('HTTP ' + jsonRes.status);
+      const j = await jsonRes.json();
+
+      estado.ancho = j.imagen.ancho;
+      estado.alto = j.imagen.alto;
+      estado.ejeX = j.ejes.eje_x;
+      estado.ejeY = j.ejes.eje_y;
+      estado.etiquetasX = (j.textos.etiquetas_eje_x || []).map(e => ({ centro_x: e.px, valor: e.valor }));
+      estado.etiquetasY = (j.textos.etiquetas_eje_y || []).map(e => ({ centro_y: e.py, valor: e.valor }));
+
+      const seriesJson = j.series || [];
+      estado.series = seriesJson.map((s, i) => {
+        const puntos = s.puntos || [];
+        const paso = Math.max(1, Math.floor(puntos.length / 35));
+        return {
+          color: PALETA[i % PALETA.length],
+          puntos: puntos.filter((_, k) => k % paso === 0).map(p => ({ px: p.px, py: p.py })),
+        };
+      });
+      if (estado.series.length === 0) estado.series = [{ color: PALETA[0], puntos: [] }];
+      serieActiva = Math.min(serieActiva, estado.series.length - 1);
+
+      estadoOriginal = JSON.parse(JSON.stringify(estado));
+
+      pintarEstado(info.resumen, info.advertencias || []);
+      refrescarTablaX();
+      refrescarTablaY();
+      pintarSelectorSeries();
+
+      await new Promise(r => { imgEl.onload = r; if (imgEl.complete) r(); });
+      canvas.width = estado.ancho;
+      canvas.height = estado.alto;
+      dibujar();
+    }
+
+    function pintarSelectorSeries() {
+      seriesToolbar.innerHTML = '';
+      estado.series.forEach((s, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tool-btn' + (i === serieActiva ? ' active' : '');
+        btn.dataset.serieIdx = String(i);
+        btn.innerHTML = `<span class="dot" style="background:${s.color}"></span> Serie ${i + 1} (${s.puntos.length} pts)`;
+        btn.title = 'Los puntos nuevos en modo "Agregar punto" se añaden a esta serie';
+        btn.addEventListener('click', () => {
+          serieActiva = i;
+          seleccionarModo('agregar');
+          pintarSelectorSeries();
+        });
+        seriesToolbar.appendChild(btn);
+      });
+      const nuevaBtn = document.createElement('button');
+      nuevaBtn.type = 'button';
+      nuevaBtn.className = 'tool-btn nueva-serie';
+      nuevaBtn.textContent = '+ Nueva serie (otro color, otra curva)';
+      nuevaBtn.title = 'Crea una curva nueva si la gráfica tiene una serie que no se detectó';
+      nuevaBtn.addEventListener('click', () => {
+        estado.series.push({ color: PALETA[estado.series.length % PALETA.length], puntos: [] });
+        serieActiva = estado.series.length - 1;
+        marcarPendiente();
+        seleccionarModo('agregar');
+        pintarSelectorSeries();
+      });
+      seriesToolbar.appendChild(nuevaBtn);
+    }
+
+    function pintarEstado(resumen, advertencias) {
+      const fmt = (b, txt) => `<span class="${b ? 'ok' : 'err'}">${txt}</span>`;
+      estadoEl.innerHTML = `
+        <div><span>Eje X</span>${fmt(resumen.eje_x_detectado, resumen.eje_x_detectado ? 'detectado' : 'no detectado')}</div>
+        <div><span>Eje Y</span>${fmt(resumen.eje_y_detectado, resumen.eje_y_detectado ? 'detectado' : 'no detectado')}</div>
+        <div><span>Series</span><span>${resumen.n_series}</span></div>
+        <div><span>Curva</span>${fmt(resumen.curva_detectada, resumen.n_puntos_curva + ' puntos (serie 1)')}</div>
+        <div><span>R² eje X</span><span>${resumen.r2_x != null ? resumen.r2_x.toFixed(4) : '—'}</span></div>
+        <div><span>R² eje Y</span><span>${resumen.r2_y != null ? resumen.r2_y.toFixed(4) : '—'}</span></div>
+      `;
+      advertenciasEl.innerHTML = '';
+      advertencias.forEach(a => {
+        const liAdv = document.createElement('li');
+        liAdv.textContent = a;
+        advertenciasEl.appendChild(liAdv);
+      });
+    }
+
+    function pintarTabla(tbody, lista, onBorrar) {
+      tbody.innerHTML = '';
+      lista.forEach((e, i) => {
+        const tr = document.createElement('tr');
+
+        const tdInput = document.createElement('td');
+        tdInput.className = 'celda-input';
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.step = 'any';
+        if (Number.isFinite(e.valor)) inp.value = e.valor;
+        else { inp.placeholder = 'valor?'; inp.classList.add('pendiente'); }
+        inp.addEventListener('input', () => {
+          const v = parseFloat(inp.value);
+          lista[i].valor = v;
+          inp.classList.toggle('pendiente', !Number.isFinite(v));
+          marcarPendiente();
+        });
+        tdInput.appendChild(inp);
+        tr.appendChild(tdInput);
+
+        const tdDel = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'mini-del'; del.textContent = '✕';
+        del.title = 'Quitar esta etiqueta';
+        del.addEventListener('click', () => onBorrar(e));
+        tdDel.appendChild(del);
+        tr.appendChild(tdDel);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function refrescarTablaX() {
+      pintarTabla(tablaX, estado.etiquetasX, (e) => {
+        estado.etiquetasX = estado.etiquetasX.filter(x => x !== e);
+        marcarPendiente(); dibujar(); refrescarTablaX();
+      });
+    }
+    function refrescarTablaY() {
+      pintarTabla(tablaY, estado.etiquetasY, (e) => {
+        estado.etiquetasY = estado.etiquetasY.filter(y => y !== e);
+        marcarPendiente(); dibujar(); refrescarTablaY();
+      });
+    }
+
+    function marcarPendiente() {
+      btnConfirmar.disabled = true;
+      statusEl.className = 'status';
+      statusEl.textContent = 'Hay cambios sin recalcular todavía.';
+    }
+
+    function dibujar() {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const r = radioPunto();
+
+      estado.series.forEach(s => {
+        if (s.puntos.length >= 2) {
+          ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          s.puntos.forEach((p, i) => i === 0 ? ctx.moveTo(p.px, p.py) : ctx.lineTo(p.px, p.py));
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        s.puntos.forEach(p => punto(ctx, p.px, p.py, r * 0.75, s.color));
+      });
+      if (estado.ejeX) dibujarEje(ctx, estado.ejeX, '#c0392b');
+      if (estado.ejeY) dibujarEje(ctx, estado.ejeY, '#2255cc');
+
+      estado.etiquetasX.forEach(e => {
+        const y = estado.ejeX ? estado.ejeX[1] : estado.alto - 10;
+        cuadrado(ctx, e.centro_x, y, r, Number.isFinite(e.valor) ? '#e8c400' : '#ff9900');
+      });
+      estado.etiquetasY.forEach(e => {
+        const x = estado.ejeY ? estado.ejeY[0] : 10;
+        cuadrado(ctx, x, e.centro_y, r, Number.isFinite(e.valor) ? '#e8c400' : '#ff9900');
+      });
+    }
+
+    function cuadrado(ctx, x, y, r, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#101114';
+      ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    function dibujarEje(ctx, e, color) {
+      const r = radioPunto();
+      ctx.strokeStyle = color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(e[0], e[1]); ctx.lineTo(e[2], e[3]); ctx.stroke();
+      punto(ctx, e[0], e[1], r, color); punto(ctx, e[2], e[3], r, color);
+    }
+
+    function punto(ctx, x, y, r, color) {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#101114'; ctx.stroke();
+    }
+
+    function coordsDesdeEvento(ev) {
+      const rect = canvas.getBoundingClientRect();
+      const escalaX = estado.ancho / rect.width;
+      const escalaY = estado.alto / rect.height;
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      return { x: (clientX - rect.left) * escalaX, y: (clientY - rect.top) * escalaY };
+    }
+
+    function puntosArrastrables() {
+      const lista = [];
+      if (estado.ejeX) {
+        lista.push({ x: estado.ejeX[0], y: estado.ejeX[1], set: (x, y) => { estado.ejeX[0] = x; estado.ejeX[1] = y; } });
+        lista.push({ x: estado.ejeX[2], y: estado.ejeX[3], set: (x, y) => { estado.ejeX[2] = x; estado.ejeX[3] = y; } });
+      }
+      if (estado.ejeY) {
+        lista.push({ x: estado.ejeY[0], y: estado.ejeY[1], set: (x, y) => { estado.ejeY[0] = x; estado.ejeY[1] = y; } });
+        lista.push({ x: estado.ejeY[2], y: estado.ejeY[3], set: (x, y) => { estado.ejeY[2] = x; estado.ejeY[3] = y; } });
+      }
+      estado.series.forEach(s => {
+        s.puntos.forEach(p => {
+          lista.push({ x: p.px, y: p.py, set: (x, y) => { p.px = x; p.py = y; }, esCurva: true, ref: p, serie: s });
+        });
+      });
+      estado.etiquetasX.forEach(e => {
+        const y = estado.ejeX ? estado.ejeX[1] : estado.alto - 10;
+        lista.push({ x: e.centro_x, y, set: (x) => { e.centro_x = x; }, esEtiquetaX: true, ref: e });
+      });
+      estado.etiquetasY.forEach(e => {
+        const x = estado.ejeY ? estado.ejeY[0] : 10;
+        lista.push({ x, y: e.centro_y, set: (_, y) => { e.centro_y = y; }, esEtiquetaY: true, ref: e });
+      });
+      return lista;
+    }
+
+    function puntoMasCercano(x, y) {
+      const r = radioPunto() * 1.8;
+      let mejor = null, mejorDist = r;
+      puntosArrastrables().forEach(p => {
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < mejorDist) { mejor = p; mejorDist = d; }
+      });
+      return mejor;
+    }
+
+    function iniciarArrastre(ev) {
+      ev.preventDefault();
+      const { x, y } = coordsDesdeEvento(ev);
+      if (modo === 'agregar') {
+        const s = estado.series[serieActiva];
+        const nuevo = { px: x, py: y };
+        const idx = s.puntos.findIndex(p => p.px > x);
+        if (idx === -1) s.puntos.push(nuevo); else s.puntos.splice(idx, 0, nuevo);
+        marcarPendiente(); dibujar(); pintarSelectorSeries();
+        return;
+      }
+      if (modo === 'etiqueta-x') {
+        const nueva = { centro_x: x, valor: NaN };
+        estado.etiquetasX.push(nueva);
+        marcarPendiente(); dibujar(); refrescarTablaX();
+        enfocarUltimoInput(tablaX);
+        return;
+      }
+      if (modo === 'etiqueta-y') {
+        const nueva = { centro_y: y, valor: NaN };
+        estado.etiquetasY.push(nueva);
+        marcarPendiente(); dibujar(); refrescarTablaY();
+        enfocarUltimoInput(tablaY);
+        return;
+      }
+      if (modo === 'borrar') {
+        const cercano = puntoMasCercano(x, y);
+        if (cercano) {
+          if (cercano.esCurva) {
+            cercano.serie.puntos = cercano.serie.puntos.filter(p => p !== cercano.ref);
+            pintarSelectorSeries();
+          } else if (cercano.esEtiquetaX) {
+            estado.etiquetasX = estado.etiquetasX.filter(e => e !== cercano.ref);
+            refrescarTablaX();
+          } else if (cercano.esEtiquetaY) {
+            estado.etiquetasY = estado.etiquetasY.filter(e => e !== cercano.ref);
+            refrescarTablaY();
+          }
+          marcarPendiente(); dibujar();
+        }
+        return;
+      }
+      const cercano = puntoMasCercano(x, y);
+      if (cercano) arrastrando = cercano;
+    }
+
+    function enfocarUltimoInput(tbody) {
+      const inputs = tbody.querySelectorAll('input');
+      const ultimo = inputs[inputs.length - 1];
+      if (ultimo) { ultimo.focus(); ultimo.select(); }
+    }
+
+    function moverArrastre(ev) {
+      if (!arrastrando) return;
+      ev.preventDefault();
+      const { x, y } = coordsDesdeEvento(ev);
+      arrastrando.set(Math.max(0, Math.min(estado.ancho, x)), Math.max(0, Math.min(estado.alto, y)));
+      marcarPendiente(); dibujar();
+    }
+
+    function terminarArrastre() { arrastrando = null; }
+
+    canvas.addEventListener('mousedown', iniciarArrastre);
+    canvas.addEventListener('mousemove', moverArrastre);
+    window.addEventListener('mouseup', terminarArrastre);
+    canvas.addEventListener('touchstart', iniciarArrastre, { passive: false });
+    canvas.addEventListener('touchmove', moverArrastre, { passive: false });
+    window.addEventListener('touchend', terminarArrastre);
+
+    function seleccionarModo(nombre) {
+      modo = nombre;
+      document.querySelectorAll('#editor-overlay .editor-toolbar:first-of-type .tool-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.modo === nombre);
+      });
+    }
+
+    document.querySelectorAll('#editor-overlay .editor-toolbar:first-of-type .tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => seleccionarModo(btn.dataset.modo));
+    });
+
+    document.getElementById('editor-add-etiqueta-x').addEventListener('click', () => {
+      const cx = estado.ejeX ? (estado.ejeX[0] + estado.ejeX[2]) / 2 : estado.ancho / 2;
+      estado.etiquetasX.push({ centro_x: cx, valor: NaN });
+      marcarPendiente(); dibujar(); refrescarTablaX();
+      enfocarUltimoInput(tablaX);
+      seleccionarModo('mover');
+    });
+    document.getElementById('editor-add-etiqueta-y').addEventListener('click', () => {
+      const cy = estado.ejeY ? (estado.ejeY[1] + estado.ejeY[3]) / 2 : estado.alto / 2;
+      estado.etiquetasY.push({ centro_y: cy, valor: NaN });
+      marcarPendiente(); dibujar(); refrescarTablaY();
+      enfocarUltimoInput(tablaY);
+      seleccionarModo('mover');
+    });
+
+    btnDeshacer.addEventListener('click', () => {
+      estado = JSON.parse(JSON.stringify(estadoOriginal));
+      dibujar();
+      refrescarTablaX();
+      refrescarTablaY();
+      pintarSelectorSeries();
+      statusEl.className = 'status'; statusEl.textContent = 'Cambios deshechos.';
+    });
+
+    btnRecalcular.addEventListener('click', async () => {
+      const etiquetasXValidas = estado.etiquetasX.filter(e => Number.isFinite(e.valor));
+      const etiquetasYValidas = estado.etiquetasY.filter(e => Number.isFinite(e.valor));
+      const faltantes = (estado.etiquetasX.length - etiquetasXValidas.length)
+                       + (estado.etiquetasY.length - etiquetasYValidas.length);
+
+      btnRecalcular.disabled = true;
+      const textoOriginal = btnRecalcular.textContent;
+      btnRecalcular.textContent = 'Recalculando…';
+      try {
+        const correcciones = {
+          eje_x: estado.ejeX, eje_y: estado.ejeY,
+          etiquetas_x: etiquetasXValidas, etiquetas_y: etiquetasYValidas,
+          series: estado.series.map(s => ({ puntos_px: s.puntos.map(p => [p.px, p.py]) })),
+        };
+        const { resp, datos: data } = await postJson(
+          '/api/corregir/' + encodeURIComponent(estado.correccionId), correcciones);
+        if (!resp.ok || !data.ok) throw new Error(data.error || 'Error desconocido.');
+
+        await cargarDesde(data);
+        ultimasCorrecciones = correcciones;
+        btnConfirmar.disabled = false;
+        statusEl.className = 'status ok';
+        statusEl.textContent = faltantes > 0
+          ? `Recalculado (se ignoraron ${faltantes} etiqueta(s) sin valor escrito). Revisa el overlay y guarda cuando esté bien.`
+          : 'Recalculado. Revisa el overlay y guarda cuando esté bien.';
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Error al recalcular: ' + err.message;
+      } finally {
+        btnRecalcular.disabled = false;
+        btnRecalcular.textContent = textoOriginal;
+      }
+    });
+
+    btnConfirmar.addEventListener('click', async () => {
+      if (!ultimasCorrecciones) return;
+      btnConfirmar.disabled = true;
+      btnRecalcular.disabled = true;
+      statusEl.className = 'status';
+      statusEl.textContent = 'Guardando y regenerando la lámina STL… puede tardar un rato.';
+
+      const { resp, datos } = await postJson(
+        '/api/solicitudes/' + solicitudId + '/figuras/' + indiceFigura + '/corregir',
+        ultimasCorrecciones);
+      btnRecalcular.disabled = false;
+      if (!resp.ok || !datos.ok) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'No se pudo guardar: ' + (datos.error || 'error desconocido.');
+        btnConfirmar.disabled = false;
+        return;
+      }
+      cerrar();
+      await pintarSolicitudesSupervisor();
+      // La lista se vuelve a pintar cerrada: se reabre la solicitud editada.
+      document.querySelector('[aria-controls="detalle-' + solicitudId + '"]')?.click();
+    });
+
+    closeBtn.addEventListener('click', cerrar);
+    overlayEl.addEventListener('click', (e) => { if (e.target === overlayEl) cerrar(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlayEl.hidden) cerrar();
+    });
+
+    return { abrir, cerrar };
+  })();
 
   // ---------------------------------------------------------------
   // APP: IMPRENTA

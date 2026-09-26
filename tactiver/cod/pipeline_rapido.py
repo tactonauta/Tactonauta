@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -66,6 +67,138 @@ def guardar_blacklist(hashes):
         json.dump(sorted(hashes), f, indent=2)
 
 
+# Un pie de figura empieza con su rótulo y número: "Figura 3.", "Fig. 2:",
+# "Gráfico 1 -", "Figure 4", "Ilustración IV"...
+_PATRON_PIE = re.compile(
+    r"^\s*(fig(ura|ure)?s?\.?|gr[aá]fic[oa]s?|chart|imagen|ilustraci[oó]n|diagrama)"
+    r"\s*(n[°º.]\s*)?([0-9]+[a-z]?|[IVXivx]+)\b",
+    re.IGNORECASE,
+)
+PIE_DISTANCIA_MAX = 60     # puntos PDF (~2 cm) entre la figura y su pie
+PIE_LARGO_MAX = 600        # caracteres: un pie no es un párrafo entero
+
+
+def extraer_pie_de_figura(page, bbox):
+    """Texto del pie (o título) de la figura que ocupa `bbox` en la página:
+    el bloque de texto más cercano, debajo o encima, que empiece con
+    "Figura N" / "Gráfico N" / "Fig. N"... y se solape horizontalmente con
+    la figura. Se prefiere el de abajo (convención habitual en papers); el
+    de arriba cubre el estilo "Gráfico 1: título" de informes. "" si no hay.
+    """
+    r = fitz.Rect(bbox)
+    mejor, mejor_puntaje = "", None
+    for bloque in page.get_text("blocks"):
+        x0, y0, x1, y1, texto = bloque[:5]
+        if len(bloque) > 6 and bloque[6] != 0:   # bloque de imagen, no de texto
+            continue
+        texto = " ".join(str(texto).split())
+        if not texto or not _PATRON_PIE.match(texto):
+            continue
+        solape = min(x1, r.x1) - max(x0, r.x0)
+        if solape < 0.3 * min(x1 - x0, r.width):
+            continue
+        if y0 >= r.y1 - 2:              # debajo
+            puntaje = y0 - r.y1
+        elif y1 <= r.y0 + 2:            # encima
+            puntaje = (r.y0 - y1) + 10
+        else:                           # dentro del recuadro (dibujo vectorial)
+            puntaje = 5
+        if puntaje - 10 > PIE_DISTANCIA_MAX:
+            continue
+        if mejor_puntaje is None or puntaje < mejor_puntaje:
+            mejor, mejor_puntaje = texto, puntaje
+    if len(mejor) > PIE_LARGO_MAX:
+        mejor = mejor[:PIE_LARGO_MAX].rsplit(" ", 1)[0] + "…"
+    return mejor
+
+
+# Texto alrededor de un dibujo vectorial que se considera parte del gráfico
+# (números de los ejes, títulos, leyenda) y no del cuerpo del documento.
+TEXTO_GRAFICO_DISTANCIA = 12   # pt entre un texto y lo que ya es parte del gráfico
+TEXTO_GRAFICO_MAX_PALABRAS = 12
+ESCALA_VECTORIAL = 2           # los dibujos vectoriales se rasterizan a 144 ppp
+
+
+def _lineas_de_texto(page):
+    """(recuadro, texto) de cada línea de texto de la página."""
+    lineas = []
+    for bloque in page.get_text("dict")["blocks"]:
+        if bloque.get("type") != 0:
+            continue
+        for linea in bloque["lines"]:
+            texto = " ".join(s["text"] for s in linea["spans"]).strip()
+            if texto:
+                lineas.append((fitz.Rect(linea["bbox"]), " ".join(texto.split())))
+    return lineas
+
+
+def _ampliar_con_texto(page, rect):
+    """Agranda el recuadro de un dibujo vectorial para incluir SU texto.
+
+    Los trazos de un gráfico (ejes, curvas, marco de la leyenda) son
+    dibujos, pero los números de los ejes, los títulos y los nombres de la
+    leyenda son TEXTO del PDF: si el recorte solo abarca los trazos, esos
+    textos quedan afuera de la imagen y el segmentador no tiene con qué
+    calibrar los ejes ni nombrar las curvas. Se suman las líneas de texto
+    cortas pegadas al dibujo, creciendo de a poco (los números del eje
+    están pegados a los trazos, y el título del eje pegado a los números);
+    no el pie de figura ("Figura N. ...") ni oraciones del cuerpo del
+    documento.
+    """
+    candidatas = []
+    for caja, texto in _lineas_de_texto(page):
+        palabras = texto.split()
+        if _PATRON_PIE.match(texto) or len(palabras) > TEXTO_GRAFICO_MAX_PALABRAS:
+            continue
+        if len(palabras) >= 5 and texto.endswith("."):   # una oración, no un rótulo
+            continue
+        if caja.width > 1.3 * rect.width:
+            continue
+        candidatas.append(caja)
+
+    ampliado = fitz.Rect(rect)
+    for _ in range(4):
+        d = TEXTO_GRAFICO_DISTANCIA
+        zona = fitz.Rect(ampliado.x0 - d, ampliado.y0 - d, ampliado.x1 + d, ampliado.y1 + d)
+        nuevas = [c for c in candidatas if c.intersects(zona) and not ampliado.contains(c)]
+        if not nuevas:
+            break
+        for caja in nuevas:
+            ampliado |= caja
+    return ampliado
+
+
+def extraer_palabras(page, clip, ancho_px, alto_px):
+    """Palabras del PDF dentro de `clip`, en píxeles de la imagen extraída
+    (ancho_px x alto_px). Son el texto EXACTO del documento: el segmentador
+    las usa en vez del OCR cuando existen (gráficos vectoriales, o imágenes
+    con el texto superpuesto como texto real). "vertical" marca las palabras
+    rotadas (título del eje Y)."""
+    clip = fitz.Rect(clip)
+    if clip.width <= 0 or clip.height <= 0:
+        return []
+    sx, sy = ancho_px / clip.width, alto_px / clip.height
+    palabras = []
+    for x0, y0, x1, y1, texto, bloque, linea, num in page.get_text("words", clip=clip):
+        texto = texto.strip()
+        if not texto:
+            continue
+        w, h = x1 - x0, y1 - y0
+        palabras.append({
+            "texto": texto,
+            "px": round((x0 - clip.x0) * sx, 1), "py": round((y0 - clip.y0) * sy, 1),
+            "pw": round(w * sx, 1), "ph": round(h * sy, 1),
+            "vertical": len(texto) > 1 and h > 1.5 * w,
+            "orden": [bloque, linea, num],
+        })
+    # Una palabra corta ("de") no se distingue sola: si otra de su misma
+    # línea está rotada, la línea entera es vertical.
+    lineas_verticales = {tuple(p["orden"][:2]) for p in palabras if p["vertical"]}
+    for p in palabras:
+        p["vertical"] = tuple(p["orden"][:2]) in lineas_verticales
+    return palabras
+
+
 def _agrupar_rects(rects, umbral=15):
     """Agrupa rectángulos de trazos vectoriales cercanos/superpuestos en un solo bloque."""
     grupos = [fitz.Rect(r) for r in rects]
@@ -117,12 +250,16 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial):
             continue
         contador += 1
         pad = 3
-        clip = fitz.Rect(g.x0 - pad, g.y0 - pad, g.x1 + pad, g.y1 + pad)
-        pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(2, 2))
+        g = _ampliar_con_texto(page, g)
+        clip = fitz.Rect(g.x0 - pad, g.y0 - pad, g.x1 + pad, g.y1 + pad) & page.rect
+        pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(ESCALA_VECTORIAL, ESCALA_VECTORIAL))
         nombre = f"page{page_num+1}_drawing{contador}.png"
         ruta = os.path.join(output_dir, nombre)
         pix.save(ruta)
-        extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height})
+        extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height,
+                          "origen": "vectorial",
+                          "pie_figura": extraer_pie_de_figura(page, clip),
+                          "palabras": extraer_palabras(page, clip, pix.width, pix.height)})
 
     return extraidas, contador
 
@@ -144,7 +281,10 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             nombre = f"page{page_num+1}_img{i+1}.png"
             ruta = os.path.join(output_dir, nombre)
             pix.save(ruta)
-            extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h})
+            extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
+                              "origen": "imagen",
+                              "pie_figura": extraer_pie_de_figura(page, im["bbox"]),
+                              "palabras": extraer_palabras(page, im["bbox"], pix.width, pix.height)})
 
         # 2. Dibujos vectoriales (gráficos hechos con matplotlib/R/LaTeX directo en el PDF)
         vectoriales, _ = extraer_dibujos_vectoriales(page, page_num, output_dir, 0)
@@ -164,7 +304,12 @@ def detectar_graficos(pdf_path, output_dir):
 
     Devuelve una lista de dicts (uno por figura que pasó los filtros
     baratos de tamaño/duplicado/logo), cada uno con:
-      file_path, page, width, height, tipo, confianza, es_lineal
+      file_path, page, width, height, origen, pie_figura, palabras,
+      tipo, confianza, es_lineal
+    "pie_figura" es el texto "Figura N. ..." que el PDF pone junto a la
+    figura ("" si no se encontró): es la base de la descripción narrada.
+    "palabras" es el texto real del PDF dentro de la figura, en píxeles de
+    la imagen (ver extraer_palabras): el segmentador lo prefiere al OCR.
     "tipo" es uno de: "linea", "barra_o_torta", "compuesta", "indeterminado".
     """
     os.makedirs(output_dir, exist_ok=True)
