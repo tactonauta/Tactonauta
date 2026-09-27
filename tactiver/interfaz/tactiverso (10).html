@@ -908,6 +908,16 @@
     img.replaceWith(nota);
   }
 
+  // Todo dato que escribe un usuario (nombre, carrera...) se escapa antes
+  // de meterlo en innerHTML: sin esto, un estudiante registrado con un
+  // nombre como <img src=x onerror=...> ejecutaba código en la pantalla
+  // del supervisor y de la imprenta.
+  function escapeHtml(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
   function postJson(ruta, cuerpo) {
     return llamarApi(ruta, {
       method: 'POST',
@@ -1540,7 +1550,7 @@
     const imp = etiquetaImprenta(s.estado_imprenta);
     const cantidad = s.figuras.length;
     btnResumen.innerHTML =
-      '<strong>' + s.estudiante.nombre + '</strong>' +
+      '<strong>' + escapeHtml(s.estudiante.nombre) + '</strong>' +
       '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>' +
       '<span class="badges">' +
         (s.estado_supervisor === 'aprobada' ? '<span class="badge ok">Autorizada</span>' : '<span class="badge wait">En espera</span>') +
@@ -2142,8 +2152,8 @@
     btnResumen.setAttribute('aria-expanded', 'false');
     btnResumen.setAttribute('aria-controls', detailId);
     btnResumen.innerHTML =
-      '<strong>' + s.estudiante.nombre + ' — ' + s.estudiante.carrera + '</strong>' +
-      '<span class="meta">Orden ' + (s.orden || String(s.id).padStart(5, '0')) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
+      '<strong>' + escapeHtml(s.estudiante.nombre) + ' — ' + escapeHtml(s.estudiante.carrera) + '</strong>' +
+      '<span class="meta">Orden ' + escapeHtml(s.orden || String(s.id).padStart(5, '0')) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
 
     const detalle = document.createElement('div');
     detalle.className = 'request-detail';

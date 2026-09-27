@@ -6,9 +6,10 @@ import shutil
 import sys
 
 import fitz  # PyMuPDF
+import numpy as np
 from PIL import Image
 
-from classify_charts import es_grafico_lineal, es_figura_compuesta, clasificar_geometria
+from classify_charts import es_grafico_lineal, es_figura_compuesta, clasificar_geometria, es_dispersion
 
 AREA_MINIMA = 15000
 CARPETA_RESULTADOS = "resultados_rapido"
@@ -178,17 +179,43 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
     if clip.width <= 0 or clip.height <= 0:
         return []
     sx, sy = ancho_px / clip.width, alto_px / clip.height
+    # Recuadros de las líneas de texto ROTADAS según el propio PDF (su
+    # dirección de escritura no es horizontal): así se reconoce también una
+    # palabra corta como "mm" o "%", que por su forma no se distingue.
+    rotadas = []
+    # Potencias de diez escritas con exponente elevado y más chico ("10" +
+    # "³", típico de un eje logarítmico o de un multiplicador "×10⁶"): como
+    # palabra salen pegadas, "103", que se leía como ciento tres.
+    potencias = []   # (recuadro, texto_pegado, texto_correcto)
+    for bloque in page.get_text("dict", clip=clip)["blocks"]:
+        for linea in bloque.get("lines", []):
+            dx, _ = linea.get("dir", (1, 0))
+            if abs(dx) < 0.5:
+                rotadas.append(fitz.Rect(linea["bbox"]))
+            spans = linea.get("spans", [])
+            for base, exp in zip(spans, spans[1:]):
+                b_txt, e_txt = base["text"].strip(), exp["text"].strip().replace("−", "-")
+                if (b_txt.endswith("10") and re.fullmatch(r"[-+]?\d+", e_txt)
+                        and exp["size"] < 0.85 * base["size"]
+                        and exp["origin"][1] < base["origin"][1] - 0.5):
+                    potencias.append((fitz.Rect(base["bbox"]) | fitz.Rect(exp["bbox"]),
+                                      b_txt + exp["text"].strip(), b_txt[:-2] + "1e" + e_txt))
     palabras = []
     for x0, y0, x1, y1, texto, bloque, linea, num in page.get_text("words", clip=clip):
         texto = texto.strip()
         if not texto:
             continue
+        for recuadro, pegado, correcto in potencias:
+            if texto == pegado and recuadro.intersects(fitz.Rect(x0, y0, x1, y1)):
+                texto = correcto
+                break
         w, h = x1 - x0, y1 - y0
         palabras.append({
             "texto": texto,
             "px": round((x0 - clip.x0) * sx, 1), "py": round((y0 - clip.y0) * sy, 1),
             "pw": round(w * sx, 1), "ph": round(h * sy, 1),
-            "vertical": len(texto) > 1 and h > 1.5 * w,
+            "vertical": (len(texto) > 1 and h > 1.5 * w)
+                        or any(r.contains(fitz.Point((x0 + x1) / 2, (y0 + y1) / 2)) for r in rotadas),
             "orden": [bloque, linea, num],
         })
     # Una palabra corta ("de") no se distingue sola: si otra de su misma
@@ -264,6 +291,34 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial):
     return extraidas, contador
 
 
+def _pixmap_sobre_blanco(doc, xref):
+    """La imagen `xref` en RGB y sin transparencia, sobre fondo BLANCO.
+
+    Un PNG con fondo transparente (lo habitual al exportar un gráfico desde
+    Excel o matplotlib) se guarda en el PDF como la imagen + una máscara de
+    transparencia aparte ("SMask"). Leyendo solo la imagen, el fondo sale
+    con el color que tenga debajo de la máscara —casi siempre negro— y el
+    gráfico entero queda negro: el segmentador no encuentra ni ejes ni curva.
+    """
+    pix = fitz.Pixmap(doc, xref)
+    if pix.n - pix.alpha >= 4:                      # CMYK -> RGB
+        pix = fitz.Pixmap(fitz.csRGB, pix)
+    smask = doc.extract_image(xref).get("smask") or 0
+    if smask and not pix.alpha:
+        try:
+            pix = fitz.Pixmap(pix, fitz.Pixmap(doc, smask))
+        except (RuntimeError, ValueError):
+            pass                                    # máscara ilegible: se sigue sin ella
+    if pix.alpha:
+        muestras = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        color = muestras[:, :, :pix.n - 1].astype(np.float32)
+        alfa = muestras[:, :, pix.n - 1:].astype(np.float32) / 255.0
+        mezcla = (color * alfa + 255.0 * (1.0 - alfa)).round().astype(np.uint8)
+        espacio = fitz.csRGB if pix.n - 1 == 3 else fitz.csGRAY
+        pix = fitz.Pixmap(espacio, pix.width, pix.height, np.ascontiguousarray(mezcla).tobytes(), False)
+    return pix
+
+
 def extraer_imagenes_crudas(pdf_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     doc = fitz.open(pdf_path)
@@ -275,9 +330,7 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             xref = im["xref"]
             w = im["bbox"][2] - im["bbox"][0]
             h = im["bbox"][3] - im["bbox"][1]
-            pix = fitz.Pixmap(doc, xref)
-            if pix.n - pix.alpha >= 4:
-                pix = fitz.Pixmap(fitz.csRGB, pix)
+            pix = _pixmap_sobre_blanco(doc, xref)
             nombre = f"page{page_num+1}_img{i+1}.png"
             ruta = os.path.join(output_dir, nombre)
             pix.save(ruta)
@@ -310,7 +363,8 @@ def detectar_graficos(pdf_path, output_dir):
     figura ("" si no se encontró): es la base de la descripción narrada.
     "palabras" es el texto real del PDF dentro de la figura, en píxeles de
     la imagen (ver extraer_palabras): el segmentador lo prefiere al OCR.
-    "tipo" es uno de: "linea", "barra_o_torta", "compuesta", "indeterminado".
+    "tipo" es uno de: "linea", "barra_o_torta", "compuesta", "dispersion",
+    "indeterminado".
     """
     os.makedirs(output_dir, exist_ok=True)
     blacklist = cargar_blacklist()
@@ -342,6 +396,8 @@ def detectar_graficos(pdf_path, output_dir):
             r["es_lineal"] = False
         else:
             tipo, extent, _ = clasificar_geometria(r["file_path"])
+            if tipo == "linea" and es_dispersion(r["file_path"]):
+                tipo = "dispersion"   # puntos sueltos: no hay curva que unir
             confianza = round((1 - extent) if tipo == "linea" else extent, 2)
             r["tipo"] = tipo
             r["confianza"] = confianza

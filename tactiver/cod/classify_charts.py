@@ -79,10 +79,44 @@ def clasificar_geometria(image_path, umbral_extent_relleno=0.45, area_min_relati
     return tipo, extent_principal, {"n_formas": len(formas), "area_relativa": round(area_rel, 3)}
 
 
+def es_dispersion(image_path, min_marcadores=15):
+    """Gráfico de DISPERSIÓN (puntos sueltos, sin línea que los una): tiene
+    trazos finos como uno de líneas, así que `clasificar_geometria` lo daba
+    por "linea", y el segmentador unía los puntos en una curva que no
+    existe. Se reconoce por sus marcadores de color: muchos, chicos, sin
+    ningún trazo largo, redondos (no los guiones de una línea discontinua) y
+    repartidos sin el espaciado regular de una línea punteada.
+    (Un gráfico de dispersión en negro no se distingue por este camino.)"""
+    img = cv2.imread(image_path)
+    if img is None:
+        return False
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    color = ((hsv[:, :, 1] > 60) & (hsv[:, :, 2] > 40)).astype(np.uint8)
+    n, _, stats, centros = cv2.connectedComponentsWithStats(color, connectivity=8)
+    comps = [(stats[i], centros[i]) for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= 4]
+    if len(comps) < min_marcadores:
+        return False
+    anchos = np.array([s[cv2.CC_STAT_WIDTH] for s, _ in comps], float)
+    altos = np.array([s[cv2.CC_STAT_HEIGHT] for s, _ in comps], float)
+    if anchos.max() > 0.15 * img.shape[1]:
+        return False          # hay un trazo largo: es una línea (con o sin marcadores)
+    if np.median(np.maximum(anchos, altos) / np.maximum(1.0, np.minimum(anchos, altos))) > 2.0:
+        return False          # guiones alargados: línea discontinua
+    pts = np.array([c for _, c in comps], float)
+    d = np.sqrt(((pts[:, None, :] - pts[None, :, :]) ** 2).sum(axis=2))
+    np.fill_diagonal(d, np.inf)
+    vecino = d.min(axis=1)
+    if vecino.std() < 0.3 * vecino.mean():
+        return False          # puntos equiespaciados: línea punteada
+    return True
+
+
 def es_grafico_lineal(image_path, umbral_extent_relleno=0.45):
     if es_figura_compuesta(image_path):
         return False, 0.0, "compuesta"
     tipo, extent, detalle = clasificar_geometria(image_path, umbral_extent_relleno)
+    if tipo == "linea" and es_dispersion(image_path):
+        return False, extent, "dispersion"
     confianza = 1 - extent if tipo == "linea" else extent
     return tipo == "linea", confianza, tipo
 

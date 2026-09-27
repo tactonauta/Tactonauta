@@ -20,6 +20,7 @@ requirements.txt — no hace falta tocar el resto de este archivo ni api.py.
 import json
 import os
 import sqlite3
+import threading
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -88,19 +89,25 @@ class _ConexionSQLite:
         self._con = sqlite3.connect(ruta, check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA foreign_keys = ON")
+        # Una sola conexión compartida por todos los hilos del servidor
+        # (check_same_thread=False): sin candado, dos pedidos a la vez
+        # podían mezclar sus sentencias y el commit de uno.
+        self._candado = threading.Lock()
 
     def ejecutar(self, sql, parametros=()):
         """SELECT: devuelve una lista de dicts."""
-        cur = self._con.execute(sql, parametros)
-        filas = cur.fetchall()
+        with self._candado:
+            cur = self._con.execute(sql, parametros)
+            filas = cur.fetchall()
         return [dict(f) for f in filas]
 
     def ejecutar_escritura(self, sql, parametros=()):
         """INSERT/UPDATE: hace commit y devuelve el id de la fila insertada
         (o None si no aplica)."""
-        cur = self._con.execute(sql, parametros)
-        self._con.commit()
-        return cur.lastrowid
+        with self._candado:
+            cur = self._con.execute(sql, parametros)
+            self._con.commit()
+            return cur.lastrowid
 
 
 class _ConexionTurso:

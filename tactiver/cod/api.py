@@ -228,6 +228,10 @@ def _vacio(v):
     return v is None or not str(v).strip()
 
 
+LARGO_MAX_CAMPO = 200
+MAX_FIGURAS_POR_SOLICITUD = 50
+
+
 def _iniciar_sesion(usuario):
     session.clear()
     session["usuario_id"] = usuario["id"]
@@ -265,7 +269,11 @@ def auth_registro(rol):
     if any(_vacio(datos.get(c)) for c in campos):
         return jsonify({"ok": False, "error": "Completa todos los campos para registrarte."}), 400
 
-    correo = str(datos["correo"]).strip()
+    # Solo los campos propios del rol: antes se guardaba el JSON entero, así
+    # que un supervisor podía mandar su propio "usuario" (código de
+    # conexión) y, si ya existía, el alta fallaba con error 500.
+    limpios = {c: str(datos[c]).strip()[:LARGO_MAX_CAMPO] for c in campos if c != "clave"}
+    correo = limpios["correo"]
     if db.buscar_por_correo(rol, correo):
         return jsonify({
             "ok": False,
@@ -273,12 +281,12 @@ def auth_registro(rol):
         }), 409
 
     if rol == "imprenta":
-        nombre_usuario = str(datos["usuario"]).strip()
+        nombre_usuario = limpios["usuario"]
         if db.buscar_por_usuario("imprenta", nombre_usuario):
             return jsonify({"ok": False, "error": "Ese nombre de usuario ya está en uso. Elige otro."}), 409
 
     clave_hash = generate_password_hash(str(datos["clave"]))
-    usuario = db.crear_usuario(rol, {**datos, "correo": correo}, clave_hash)
+    usuario = db.crear_usuario(rol, limpios, clave_hash)
 
     if rol == "supervisor":
         usuario = _conectar_imprenta_automatica(usuario)
@@ -385,6 +393,13 @@ def crear_solicitud():
     if not isinstance(figuras, list) or not figuras:
         return jsonify({"ok": False, "error": "Elegí al menos un gráfico para enviar."}), 400
 
+    figuras = _figuras_de_solicitud(figuras)
+    if not figuras:
+        return jsonify({
+            "ok": False,
+            "error": "Ninguno de los gráficos enviados está en el servidor. Vuelve a subir el PDF.",
+        }), 400
+
     solicitud = db.crear_solicitud(
         estudiante_id=estudiante["id"],
         supervisor_id=estudiante["supervisor_predeterminado_id"],
@@ -393,6 +408,38 @@ def crear_solicitud():
         figuras=figuras,
     )
     return jsonify({"ok": True, "solicitud": solicitud}), 201
+
+
+def _figuras_de_solicitud(figuras):
+    """Arma las figuras de una solicitud en el SERVIDOR, a partir de lo que
+    /api/clasificar realmente extrajo, en vez de guardar tal cual lo que
+    manda el navegador. Antes se podía enviar, por ejemplo, un
+    "stl_download_url" con "javascript:..." que el supervisor veía como
+    botón "Descargar STL", o apuntar "imagen_url" a cualquier lado. Solo se
+    aceptan figuras cuyo archivo existe en resultados/."""
+    limpias = []
+    for f in figuras[:MAX_FIGURAS_POR_SOLICITUD]:
+        if not isinstance(f, dict):
+            continue
+        nombre = secure_filename(str(f.get("id") or ""))
+        ruta = os.path.join(RESULTADOS_DIR, nombre)
+        if not nombre or not os.path.isfile(ruta):
+            continue
+        ext = _extraccion(ruta)
+        try:
+            pagina = int(ext.get("pagina") or f.get("pagina") or 0)
+        except (TypeError, ValueError):
+            pagina = 0
+        pie = ext.get("pie_figura") or ""
+        limpias.append({
+            "id": nombre,
+            "titulo": "Gráfico de línea",
+            "caption": pie or f"Gráfico de líneas sin pie de figura en la página {pagina}",
+            "pagina": pagina,
+            "imagen_url": f"/api/resultados/{nombre}",
+            "pie_figura": pie,
+        })
+    return limpias
 
 
 @app.route("/api/solicitudes/mias", methods=["GET"])

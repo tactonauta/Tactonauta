@@ -54,6 +54,23 @@ def _tolerancias(forma):
     }
 
 
+_OCR_DISPONIBLE = None
+
+
+def ocr_disponible():
+    """¿Está Tesseract instalado? (se consulta una sola vez). Sin él, el
+    segmentador sigue funcionando con el texto del PDF o sin texto, en vez
+    de caerse con TesseractNotFoundError."""
+    global _OCR_DISPONIBLE
+    if _OCR_DISPONIBLE is None:
+        try:
+            pytesseract.get_tesseract_version()
+            _OCR_DISPONIBLE = True
+        except Exception:
+            _OCR_DISPONIBLE = False
+    return _OCR_DISPONIBLE
+
+
 def _idioma_ocr(preferido=None):
     """
     Aquí usamos spa+eng 
@@ -77,8 +94,17 @@ _RE_NUMERO = re.compile(
 )
 
 
+# Lo que puede acompañar a un número en un eje sin cambiar su valor:
+# "20%", "$1,500", "S/ 30", "€ 12", "30 °C" no se leían como números.
+_RE_ADORNO_NUMERO = re.compile(r"^(?:S/\.?|US\$|\$|€|£|¥)\s*|\s*(?:%|‰|°C|°F|°)$")
+
+
+def _sin_adornos(texto):
+    return _RE_ADORNO_NUMERO.sub("", texto.strip()).strip()
+
+
 def _es_numero(texto):
-    return bool(_RE_NUMERO.match(texto.strip()))
+    return bool(_RE_NUMERO.match(_sin_adornos(texto)))
 
 
 def _a_float(texto):
@@ -86,7 +112,7 @@ def _a_float(texto):
     Convierte a float respetando notación española e inglesa. Devuelve None si
     no se puede (antes esto podía lanzar ValueError y tumbar el pipeline).
     """
-    t = texto.strip().replace("−", "-").replace("–", "-").replace("—", "-")
+    t = _sin_adornos(texto).replace("−", "-").replace("–", "-").replace("—", "-")
     t = t.replace(" ", "")
     tiene_punto, tiene_coma = "." in t, "," in t
     if tiene_punto and tiene_coma:
@@ -432,8 +458,9 @@ def asignar_nombres_de_leyenda(imagen_bgr, series, tokens):
     Devuelve (nombres, usados): los nombres (None donde no se encontró) y
     los tokens de texto que los forman."""
     nombres, muestras, usados = nombres_de_leyenda(imagen_bgr, series, tokens)
-    for serie, nombre in zip(series, nombres):
+    for serie, nombre, muestra in zip(series, nombres, muestras):
         serie["nombre"] = nombre
+        serie["_muestra"] = muestra
     for muestra in muestras:
         if muestra is None:
             continue
@@ -442,7 +469,14 @@ def asignar_nombres_de_leyenda(imagen_bgr, series, tokens):
             m = serie.get("mascara")
             if m is not None:
                 m[max(0, y0 - 2):y1 + 3, max(0, x0 - 2):x1 + 3] = False
-    return nombres, usados
+    # Las series quedan en el ORDEN DE LA LEYENDA (arriba->abajo,
+    # izquierda->derecha), no en el de "color más abundante": la primera
+    # de la leyenda es la serie 1, la de textura sólida en la lámina.
+    series.sort(key=lambda s: (s["_muestra"] is None,
+                               (s["_muestra"] or (0, 0))[1], (s["_muestra"] or (0, 0))[0]))
+    for s in series:
+        s.pop("_muestra", None)
+    return [s["nombre"] for s in series], usados
 
 
 def _limpiar_componentes(mask_u8, area_minima):
@@ -459,7 +493,20 @@ def _limpiar_componentes(mask_u8, area_minima):
     areas = stats[1:, cv2.CC_STAT_AREA]
     area_mayor = int(areas.max())
     if area_mayor < area_minima:
-        return None
+        # Todos los trozos son chicos: puede ser una línea DISCONTINUA o
+        # PUNTEADA de color (cada guion por separado no llega al área
+        # mínima y la curva entera se perdía). Se cierran los huecos con un
+        # radio del orden del espacio entre guiones y se vuelve a medir.
+        lado = max(5, int(round(0.025 * max(mask_u8.shape)))) | 1
+        grande = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (lado, lado))
+        cerrada = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, grande, iterations=1)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(cerrada, connectivity=8)
+        if n <= 1:
+            return None
+        areas = stats[1:, cv2.CC_STAT_AREA]
+        area_mayor = int(areas.max())
+        if area_mayor < area_minima:
+            return None
     umbral = max(area_minima, int(0.02 * area_mayor))  # descarta cuadritos de leyenda
     keep = np.isin(labels, np.where(np.concatenate([[0], areas >= umbral]))[0])
     keep &= labels > 0
@@ -534,6 +581,51 @@ def _mapa_distancia_curva(mascaras):
         union |= m
     no_curva = (~union).astype(np.uint8) * 255
     return cv2.distanceTransform(no_curva, cv2.DIST_L2, 5)
+
+
+def _categorias_en_linea(tokens, x0, x1, margen):
+    """Rótulos de categoría de un eje X: los textos de la primera línea
+    bajo el eje, agrupados en rótulos (palabras pegadas = un rótulo), si son
+    3 o más, caben en el ancho del gráfico y están aproximadamente
+    equiespaciados. Devuelve [{"texto", "centro_x", "px", "py", "pw", "ph",
+    "tokens"}] ordenados de izquierda a derecha, o []."""
+    toks = sorted(tokens, key=lambda z: z["centro_y"])
+    h_med = float(np.median([z["ph"] for z in toks])) or 1.0
+    linea = [z for z in toks if z["centro_y"] - toks[0]["centro_y"] <= 0.8 * h_med]
+    if x0 is not None and x1 is not None:
+        linea = [z for z in linea if x0 - 3 * margen <= z["centro_x"] <= x1 + 3 * margen]
+    linea.sort(key=lambda z: z["px"])
+    # Dos palabras son un mismo rótulo ("Nueva York") solo si son de la misma
+    # línea de texto y van una a continuación de la otra. Antes se juntaba
+    # todo lo cercano, y rótulos inclinados (recuadros anchos) o fechas que
+    # se pisan entre sí ("2023-01" "2023-02"...) quedaban en un único rótulo.
+    grupos = []
+    for z in linea:
+        if grupos:
+            prev = grupos[-1][-1]
+            hueco = z["px"] - (prev["px"] + prev["pw"])
+            misma_linea = tuple(z["orden"][:-1]) == tuple(prev["orden"][:-1])
+            if misma_linea and -0.1 * h_med <= hueco <= 0.6 * h_med:
+                grupos[-1].append(z)
+                continue
+        grupos.append([z])
+    if len(grupos) < 3:
+        return []
+    centros = [(g[0]["px"] + g[-1]["px"] + g[-1]["pw"]) / 2.0 for g in grupos]
+    pasos = np.diff(centros)
+    if pasos.min() <= 0 or pasos.std() > 0.25 * pasos.mean():
+        return []
+    categorias = []
+    for g, c in zip(grupos, centros):
+        px, py = min(z["px"] for z in g), min(z["py"] for z in g)
+        categorias.append({
+            "texto": " ".join(z["texto"] for z in g), "centro_x": c,
+            "px": px, "py": py,
+            "pw": max(z["px"] + z["pw"] for z in g) - px,
+            "ph": max(z["py"] + z["ph"] for z in g) - py,
+            "tokens": g,
+        })
+    return categorias
 
 
 def tokens_de_palabras_pdf(palabras):
@@ -739,6 +831,28 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
         tok_leyenda += [z for z in tok_titulo_x if z not in primera]
         tok_titulo_x = primera
 
+    # Eje X de CATEGORÍAS ("Ene Feb Mar...", "Lima Cusco Piura"): si bajo el
+    # eje no hay números pero sí una fila de 3+ textos equiespaciados dentro
+    # del ancho del gráfico, esos son los rótulos de cada marca, no el título
+    # del eje (antes quedaba "Eje horizontal: Ene Feb Mar Abr" y sin escala).
+    # El título del eje, si lo hay, es la línea siguiente.
+    categorias_x = []
+    if len(etiquetas_x) < 2 and tok_titulo_x:
+        categorias_x = _categorias_en_linea(tok_titulo_x, x0, x1, margen)
+        if categorias_x:
+            usados = {id(z) for c in categorias_x for z in c["tokens"]}
+            siguientes = [z for z in tok_leyenda if eje_x_fila is not None
+                          and z["centro_y"] > eje_x_fila + margen and z["valor"] is None]
+            tok_leyenda = [z for z in tok_leyenda if z not in siguientes]
+            tok_titulo_x = [z for z in tok_titulo_x if id(z) not in usados] + siguientes
+            if tok_titulo_x:
+                tok_titulo_x.sort(key=lambda z: z["centro_y"])
+                h_med = float(np.median([z["ph"] for z in tok_titulo_x])) or 1.0
+                y_ref = tok_titulo_x[0]["centro_y"]
+                primera = [z for z in tok_titulo_x if z["centro_y"] - y_ref <= 0.8 * h_med]
+                tok_leyenda += [z for z in tok_titulo_x if z not in primera]
+                tok_titulo_x = primera
+
     titulo, titulo_bbox = _unir(tok_titulo)
     titulo_x, titulo_x_bbox = _unir(tok_titulo_x)
     leyenda, _ = _unir(tok_leyenda)
@@ -754,6 +868,7 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
         "titulo": titulo, "titulo_bbox": titulo_bbox,
         "titulo_x": titulo_x, "titulo_x_bbox": titulo_x_bbox,
         "leyenda": leyenda,
+        "categorias_x": categorias_x,
         # Todas las palabras con su recuadro: `nombres_de_leyenda` las usa para
         # saber qué nombre de la leyenda va al lado de qué muestra de color.
         "tokens": tokens,
@@ -1202,6 +1317,45 @@ def detectar_texto_vertical(gris, x_limite, margen=6, ancho_minimo=15, lang=None
 # 4) CALIBRACIÓN LINEAL ROBUSTA
 # ============================================================
 
+def _r2(p, v):
+    p, v = np.asarray(p, float), np.asarray(v, float)
+    if len(p) < 3 or np.ptp(v) == 0:
+        return None
+    m, b = np.polyfit(p, v, 1)
+    res = v - (m * p + b)
+    return 1.0 - float((res ** 2).sum()) / float(((v - v.mean()) ** 2).sum())
+
+
+def es_escala_log(pixeles, valores):
+    """¿Los números del eje están en escala logarítmica? (1, 10, 100, 1000
+    equiespaciados): todos positivos, al menos 3 y 3 órdenes de magnitud no
+    necesarios, pero el logaritmo ajusta a una recta claramente mejor que
+    los valores tal cual."""
+    v = np.asarray(valores, float)
+    if len(v) < 3 or (v <= 0).any() or v.max() / v.min() < 20:
+        return False
+    r2_log = _r2(pixeles, np.log10(v))
+    r2_lin = _r2(pixeles, v)
+    return r2_log is not None and r2_lin is not None and r2_log > 0.999 and r2_lin < 0.98
+
+
+def calibrar_eje(pixeles, valores):
+    """ajustar_lineal_robusto(), en escala lineal o logarítmica según los
+    números del eje. En un eje logarítmico la recta se ajusta sobre
+    log10(valor) y info["escala"] = "log": valor = 10 ** (m * pixel + b).
+    Antes un eje 1-10-100-1000 se calibraba como lineal y los valores de la
+    curva salían muy mal."""
+    if es_escala_log(pixeles, valores):
+        m, b, info = ajustar_lineal_robusto(pixeles, [math.log10(v) for v in valores])
+        info["escala"] = "log"
+        if info.get("descartados"):
+            info["descartados"] = [round(10 ** d, 6) for d in info["descartados"]]
+        return m, b, info
+    m, b, info = ajustar_lineal_robusto(pixeles, valores)
+    info["escala"] = "lineal"
+    return m, b, info
+
+
 def ajustar_lineal_robusto(pixeles, valores, umbral_rel=0.04):
     """
     np.polyfit con todos los puntos (versión anterior) significa que UN número
@@ -1378,9 +1532,9 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
     alto_imagen, ancho_imagen = imagen.shape[:2]
 
     # --- Calibración ---
-    m_x, b_x, info_x = ajustar_lineal_robusto(
+    m_x, b_x, info_x = calibrar_eje(
         [e["centro_x"] for e in etiquetas_x], [e["valor"] for e in etiquetas_x])
-    m_y, b_y, info_y = ajustar_lineal_robusto(
+    m_y, b_y, info_y = calibrar_eje(
         [e["centro_y"] for e in etiquetas_y], [e["valor"] for e in etiquetas_y])
 
     # --- Respaldo: calibrar Y con las etiquetas pegadas a la curva ---
@@ -1403,7 +1557,7 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
                                       0, cols_u.size - 1))
                     pares_fila.append(float(filas_med[idx]))
                     pares_valor.append(e["valor"])
-                m_y, b_y, info_y = ajustar_lineal_robusto(pares_fila, pares_valor)
+                m_y, b_y, info_y = calibrar_eje(pares_fila, pares_valor)
                 calibrado_y_por_datos = m_y is not None
                 if calibrado_y_por_datos:
                     advertencias.append(
@@ -1421,6 +1575,8 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
             "en los números del eje."
         )
     for nombre, info in (("X", info_x), ("Y", info_y)):
+        if info.get("escala") == "log":
+            advertencias.append(f"Eje {nombre} en escala logarítmica (cada marca multiplica el valor).")
         if info["r2"] is not None and info["r2"] < 0.995:
             advertencias.append(
                 f"El eje {nombre} no ajusta bien a una recta (R²={info['r2']:.3f}); "
@@ -1431,11 +1587,19 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
                 f"Eje {nombre}: se descartaron como erróneos los valores {info['descartados']}."
             )
 
+    log_x, log_y = info_x.get("escala") == "log", info_y.get("escala") == "log"
+
     def pixel_a_x(x_px):
-        return None if m_x is None else float(m_x * x_px + b_x)
+        if m_x is None:
+            return None
+        v = float(m_x * x_px + b_x)
+        return 10.0 ** v if log_x else v
 
     def pixel_a_y(y_px):
-        return None if m_y is None else float(m_y * y_px + b_y)
+        if m_y is None:
+            return None
+        v = float(m_y * y_px + b_y)
+        return 10.0 ** v if log_y else v
 
     # --- Polilíneas por serie ---
     series_salida = []
@@ -1545,6 +1709,10 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
                 "etiquetas_eje_y": [{"valor": e["valor"], "py": e["centro_y"]} for e in etiquetas_y],
                 "etiquetas_dato": [{"valor": e["valor"], "px": e["centro_x"],
                                     "py": e["centro_y"]} for e in etiquetas_dato],
+                # nombres de las categorías del eje X (el valor i del eje es
+                # la categoría i); [] si el eje X es numérico
+                "categorias_x": [c["texto"] if isinstance(c, dict) else c
+                                 for c in txt.get("categorias_x") or []],
             },
             "series": series_salida,
             "resumen": resumen,
@@ -1721,6 +1889,7 @@ def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
         "titulo": textos_base.get("titulo", ""), "titulo_bbox": None,
         "titulo_x": textos_base.get("titulo_eje_x", ""), "titulo_x_bbox": None,
         "leyenda": textos_base.get("leyenda", ""),
+        "categorias_x": textos_base.get("categorias_x") or [],
     }
     titulo_eje_y = textos_base.get("titulo_eje_y", "")
 
@@ -1794,6 +1963,15 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     usa_pdf = sum(tk["valor"] is not None for tk in tokens_pdf) >= 2
     if not usa_pdf:
         tokens_pdf = None
+        if not ocr_disponible():
+            # Sin Tesseract ni texto en el PDF: se sigue sin texto (ejes y
+            # curva igual se detectan) en vez de abortar toda la segmentación.
+            usa_pdf = True
+            tokens_pdf = tokens_de_palabras_pdf(palabras)
+            advertencias.append(
+                "No hay OCR (Tesseract) en el servidor y la imagen no trae texto: "
+                "no se leyeron números ni títulos. Revisar o corregir en la pizarra."
+            )
 
     # --- Etiquetas numéricas de los ejes (lectura por regiones) ---
     # Con texto del PDF no hace falta: los números ya son exactos.
@@ -1813,6 +1991,58 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
     etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
     etiquetas_dato = txt["etiquetas_dato"]
+
+    # Multiplicador del eje ("1e7" arriba del eje Y, "×1e6" al final del eje
+    # X, como pone matplotlib cuando los números son muy grandes o chicos):
+    # los números del eje están en esa unidad. Antes se ignoraba y los
+    # valores salían, por ejemplo, diez millones de veces más chicos.
+    todos = txt.get("tokens") or []
+    if rect is not None:
+        rx0, ry0, rx1, ry1 = rect
+        ancho_r = rx1 - rx0
+        patron_mult = re.compile(r"(?:[x×]\s*)?1e([+-]?\d+)")
+
+        def _con_potencias(etqs, salvo):
+            # un eje logarítmico escribe sus propios números como 1e0, 1e1...:
+            # ahí un "1eN" es una marca más, no un multiplicador
+            return any(patron_mult.fullmatch(str(e.get("texto", "")).replace("−", "-"))
+                       for e in etqs if e is not salvo)
+
+        for tk in todos:
+            m_mult = patron_mult.fullmatch(tk["texto"].replace("−", "-"))
+            if not m_mult:
+                continue
+            factor = 10.0 ** int(m_mult.group(1))
+            if (tk["py"] + tk["ph"] <= ry0 + 0.25 * tk["ph"] and tk["centro_x"] < rx0 + 0.35 * ancho_r
+                    and not _con_potencias(etiquetas_y, tk)):
+                etiquetas_y = [{**e, "valor": e["valor"] * factor} for e in etiquetas_y if e is not tk]
+                advertencias.append(f"Eje Y multiplicado por 10^{m_mult.group(1)} (indicado sobre el eje).")
+            elif (eje_x_fila is not None and tk["centro_y"] > eje_x_fila
+                  and tk["centro_x"] > rx1 - 0.35 * ancho_r
+                  and not _con_potencias(etiquetas_x, tk)):
+                etiquetas_x = [{**e, "valor": e["valor"] * factor} for e in etiquetas_x if e is not tk]
+                advertencias.append(f"Eje X multiplicado por 10^{m_mult.group(1)} (indicado al final del eje).")
+            etiquetas_dato = [e for e in etiquetas_dato if e is not tk]
+
+        # Números a la DERECHA del gráfico, alineados en columna: un segundo
+        # eje Y. Hoy se usa solo la escala de la izquierda: las curvas que
+        # usan la derecha salen con valores incorrectos, y hay que avisar.
+        derecha = [tk for tk in todos if tk["valor"] is not None
+                   and tk["centro_x"] > rx1 + t["margen_texto"] and ry0 <= tk["centro_y"] <= ry1]
+        if len(derecha) >= 2:
+            advertencias.append(
+                "El gráfico tiene un segundo eje vertical a la derecha: solo se usó la escala "
+                "de la izquierda, así que las curvas que se leen con el eje derecho quedan "
+                "con valores incorrectos. Revisar antes de imprimir."
+            )
+
+    # Eje X de categorías: cada rótulo es la posición 0, 1, 2... Así el eje
+    # se calibra igual que uno numérico, y la lámina y la narración usan el
+    # nombre de la categoría en vez del número.
+    if len(etiquetas_x) < 2 and txt.get("categorias_x"):
+        etiquetas_x = [{"centro_x": c["centro_x"], "valor": float(i), "px": int(c["px"]),
+                        "py": int(c["py"]), "pw": int(c["pw"]), "ph": int(c["ph"])}
+                       for i, c in enumerate(txt["categorias_x"])]
 
     # --- Nombre de cada serie según la leyenda (emparejado por color) ---
     if len(series) > 1:

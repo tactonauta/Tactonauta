@@ -594,6 +594,16 @@ def _dibujar_celdas(piezas, celdas, x_primera, y):
         agregar_caracter_braille(piezas, celda, x_primera + k * CELDA_PITCH, y)
 
 
+def _celdas_numero(valor, decimales=0):
+    """Celdas Braille de un número, igual que agregar_numero_braille():
+    [menos] numeral dígitos [punto dígitos]."""
+    es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
+    celdas = (["menos"] if es_negativo else []) + ["numeral"] + list(entero)
+    if frac:
+        celdas += ["punto"] + list(frac)
+    return celdas
+
+
 def _ancho_celdas(n):
     """Ancho real (mm) de n celdas Braille, de borde a borde de los puntos."""
     return max(0, n - 1) * CELDA_PITCH + ESPACIADO_BRAILLE + DIAM_PUNTO_BRAILLE if n else 0.0
@@ -1117,6 +1127,14 @@ def generar_modelo_desde_recta(
     m_y = calibracion_y.get("m")
     b_y = calibracion_y.get("b")
 
+    # Eje logarítmico (ver segmentador.calibrar_eje): m y b convierten el
+    # píxel en log10(valor). Todo el armado de la placa trabaja en ese
+    # "espacio del eje" (así una curva exponencial queda recta, como en el
+    # original) y solo los números que se escriben en Braille son el valor
+    # real.
+    log_x = calibracion_x.get("escala") == "log"
+    log_y = calibracion_y.get("escala") == "log"
+
     # Si no viene dentro de "ejes", intentar buscarlo en resumen
     # o reconstruirlo desde los puntos calibrados.
 
@@ -1232,10 +1250,20 @@ def generar_modelo_desde_recta(
     NUM_TICKS_SINTETICOS = 5
     MAX_TICKS_POR_EJE = 12  # límite defensivo: no cubrir la placa de números
 
-    valores_x, valores_y = [], []
+    def _al_eje(etiquetas, log):
+        """Etiquetas con su valor pasado al espacio del eje (log10 si es log)."""
+        salida = []
+        for e in etiquetas or []:
+            v = e.get("valor")
+            if v is None or not math.isfinite(v) or (log and v <= 0):
+                continue
+            salida.append({**e, "valor": math.log10(v) if log else v})
+        return salida
+
+    valores_x, valores_y = [], []   # en el espacio del eje (posición de cada marca)
     if calibrados:
-        etiquetas_x_json = textos.get("etiquetas_eje_x") or []
-        etiquetas_y_json = textos.get("etiquetas_eje_y") or []
+        etiquetas_x_json = _al_eje(textos.get("etiquetas_eje_x"), log_x)
+        etiquetas_y_json = _al_eje(textos.get("etiquetas_eje_y"), log_y)
 
         valores_x = _valores_reales_eje(etiquetas_x_json, 2, x_min, x_max)
         if not valores_x:
@@ -1250,33 +1278,48 @@ def generar_modelo_desde_recta(
         valores_x = valores_x[:MAX_TICKS_POR_EJE]
         valores_y = valores_y[:MAX_TICKS_POR_EJE]
 
-    decimales_x = _decimales_necesarios(valores_x) if valores_x else 0
-    decimales_y = _decimales_necesarios(valores_y) if valores_y else 0
+    # Lo que se ESCRIBE en cada marca: el valor real (10 ** v en un eje log).
+    reales_x = [10.0 ** v if log_x else v for v in valores_x]
+    reales_y = [10.0 ** v if log_y else v for v in valores_y]
+    decimales_x = _decimales_necesarios(reales_x) if reales_x else 0
+    decimales_y = _decimales_necesarios(reales_y) if reales_y else 0
 
     # ================================================================
-    # 6b. DISTRIBUCIÓN EN LA PLACA (centrada)
+    # 6b. DISTRIBUCIÓN EN LA PLACA: el gráfico centrado
     # ================================================================
-    # Antes los márgenes eran fijos (55 mm a la izquierda, 15 a la
-    # derecha), así que el gráfico quedaba corrido a la derecha y con
-    # espacio sin usar. Ahora se mide lo que realmente hay que escribir:
+    # El recuadro del gráfico (lo que encierran los ejes) queda en el CENTRO
+    # de la placa: mismo espacio a izquierda y derecha, y arriba y abajo.
+    # Ese espacio es el mayor de lo que hay que escribir de cada lado:
     #   izquierda: números del eje Y + separación BANA hasta el eje;
-    #   derecha:   la mitad del último número del eje X (va centrado en su
+    #   derecha:   la mitad del último rótulo del eje X (va centrado en su
     #              marca y sobresale del gráfico);
-    #   abajo:     fila de números del eje X + fila del título del eje X;
+    #   abajo:     fila de rótulos del eje X + fila del título del eje X;
     #   arriba:    una fila por título (eje Y y gráfico) y por fila de leyenda;
-    # y todo eso se reparte con MARGEN_PLACA en cada borde, así el conjunto
-    # queda centrado en la placa.
+    # más MARGEN_PLACA hasta el borde. (Antes se centraba el conjunto con
+    # los números incluidos, y como los del eje Y están solo a la izquierda,
+    # el gráfico quedaba corrido hacia la derecha.)
+    #
+    # Eje X de categorías ("Ene", "Feb"...): el valor i del eje es la
+    # categoría i, y en la placa se escribe su nombre en vez del número.
 
     fila_reservada = ALTURA_FILA_BRAILLE + CLEARANCE_BRAILLE
+    categorias_x = [str(c) for c in (textos.get("categorias_x") or [])]
 
-    ancho_numeros_y = max((_ancho_numero(v, decimales_y) for v in valores_y), default=0.0)
+    def _celdas_rotulo_x(valor):
+        i = int(round(valor))
+        if categorias_x and abs(valor - i) <= 0.25 and 0 <= i < len(categorias_x):
+            return _celdas_braille_mixto(categorias_x[i])
+        return _celdas_numero(valor, decimales_x)
+
+    celdas_x = [_celdas_rotulo_x(v) for v in reales_x]
+    celdas_y = [_celdas_numero(v, decimales_y) for v in reales_y]
+    anchos_x = [_ancho_celdas(len(c)) for c in celdas_x]
+    anchos_y = [_ancho_celdas(len(c)) for c in celdas_y]
+
+    ancho_numeros_y = max(anchos_y, default=0.0)
     bloque_izquierdo = (ancho_numeros_y + CLEARANCE_BRAILLE) if valores_y else 6.0
-    sobresale_derecha = _ancho_numero(valores_x[-1], decimales_x) / 2 if valores_x else 3.0
-
-    izquierda = MARGEN_PLACA + bloque_izquierdo
-    derecha = MARGEN_PLACA + sobresale_derecha
-    abajo = MARGEN_PLACA + ALTURA_FILA_BRAILLE / 2 + CLEARANCE_BRAILLE \
-        + (fila_reservada if titulo_eje_x_txt else 0.0)
+    sobresale_derecha = anchos_x[-1] / 2 if anchos_x else 3.0
+    lateral = MARGEN_PLACA + max(bloque_izquierdo, sobresale_derecha)
 
     filas_arriba = int(bool(titulo_grafico)) + int(bool(titulo_eje_y_txt))
 
@@ -1286,10 +1329,16 @@ def generar_modelo_desde_recta(
     if incluir_leyenda and len(series_puntos) > 1:
         filas_leyenda = _distribuir_leyenda(nombres_series, dim_x - 2 * LEYENDA_MARGEN)
 
+    bloque_abajo = ALTURA_FILA_BRAILLE / 2 + CLEARANCE_BRAILLE \
+        + (fila_reservada if titulo_eje_x_txt else 0.0)
     # El número más alto del eje Y va centrado en el borde superior del
     # gráfico: sobresale media fila aunque no haya títulos.
-    arriba = MARGEN_PLACA + max(ALTURA_FILA_BRAILLE / 2,
-                                (filas_arriba + len(filas_leyenda)) * fila_reservada)
+    bloque_arriba = max(ALTURA_FILA_BRAILLE / 2,
+                        (filas_arriba + len(filas_leyenda)) * fila_reservada)
+    vertical = MARGEN_PLACA + max(bloque_abajo, bloque_arriba)
+
+    izquierda = derecha = lateral
+    abajo = arriba = vertical
 
     ancho_plot = dim_x - izquierda - derecha
     alto_plot = dim_y - abajo - arriba
@@ -1301,6 +1350,7 @@ def generar_modelo_desde_recta(
         )
 
     # ================================================================
+    # 7. CONVERSIÓN PIXEL -> VALOR -> MILÍMETROS    # ================================================================
     # 7. CONVERSIÓN PIXEL -> VALOR -> MILÍMETROS
     # ================================================================
 
@@ -1468,24 +1518,18 @@ def generar_modelo_desde_recta(
         )
 
     if incluir_etiquetas:
-        anchos_x = [_ancho_numero(v, decimales_x) for v in valores_x]
         con_numero_x = _indices_legibles(x_marcas, anchos_x, CELDA_PITCH)
         for i in con_numero_x:
             inicio_x = min(max(MARGEN_PLACA, x_marcas[i] - anchos_x[i] / 2),
                            dim_x - MARGEN_PLACA - anchos_x[i])
-            agregar_numero_braille(
-                piezas, valores_x[i], inicio_x + BORDE_A_CELDA,
-                abajo - CLEARANCE_BRAILLE, decimales_x
-            )
+            _dibujar_celdas(piezas, celdas_x[i], inicio_x + BORDE_A_CELDA,
+                            abajo - CLEARANCE_BRAILLE)
 
         con_numero_y = _indices_legibles(
             y_marcas, [ALTURA_FILA_BRAILLE] * len(y_marcas), ESPACIADO_BRAILLE)
         for i in con_numero_y:
-            ancho_y = _ancho_numero(valores_y[i], decimales_y)
-            inicio_y = max(MARGEN_PLACA, izquierda - CLEARANCE_BRAILLE - ancho_y)
-            agregar_numero_braille(
-                piezas, valores_y[i], inicio_y + BORDE_A_CELDA, y_marcas[i], decimales_y
-            )
+            inicio_y = max(MARGEN_PLACA, izquierda - CLEARANCE_BRAILLE - anchos_y[i])
+            _dibujar_celdas(piezas, celdas_y[i], inicio_y + BORDE_A_CELDA, y_marcas[i])
 
         for eje, total, escritos in (("X", len(valores_x), len(con_numero_x)),
                                      ("Y", len(valores_y), len(con_numero_y))):
@@ -1665,45 +1709,22 @@ def generar_modelo_desde_recta(
     if leyenda_diseno:
         print(f"[STL] Leyenda: {len(leyenda_diseno)} entradas en {len(filas_leyenda)} fila(s).", flush=True)
 
-    # ================================================================
-    # 12c. CENTRAR EN LA PLACA
-    # ================================================================
-    # Los márgenes de arriba son una estimación (p. ej. el último número del
-    # eje X no siempre cae en el borde del gráfico): se mide lo que de
-    # verdad quedó en relieve y se traslada todo para que tenga el mismo
-    # margen a izquierda y derecha, y arriba y abajo.
-    vertices = np.concatenate([p.reshape(-1, 3) for p in piezas if p is not None and len(p)])
-    dx = dim_x / 2 - (vertices[:, 0].min() + vertices[:, 0].max()) / 2
-    dy = dim_y / 2 - (vertices[:, 1].min() + vertices[:, 1].max()) / 2
-    piezas = [_trasladar(p, dx, dy, 0.0) for p in piezas if p is not None and len(p)]
-
-    def _mover(punto):
-        return (punto[0] + dx, punto[1] + dy)
-
-    def _mover_rect(r):
-        return [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy]
-
-    for e in leyenda_diseno:
-        e["muestra"] = [_mover(q) for q in e["muestra"]]
-        e["recuadro"] = _mover_rect(e["recuadro"])
-    for e in datos_diseno:
-        e["recuadro"] = _mover_rect(e["recuadro"])
-
     if diseno is not None:
         diseno.update({
             "placa": {"ancho_mm": dim_x, "alto_mm": dim_y},
-            "area": {"izquierda": izquierda + dx, "abajo": abajo + dy,
-                     "ancho": ancho_plot, "alto": alto_plot},
+            "area": {"izquierda": izquierda, "abajo": abajo, "ancho": ancho_plot, "alto": alto_plot},
+            # en el espacio del eje: log10(valor) si la escala es "log"
             "dominio": {"x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max,
-                        "calibrado": calibrados},
-            "ejes": {"x": [_mover(eje_x_inicio), _mover(eje_x_fin)],
-                     "y": [_mover(eje_y_inicio), _mover(eje_y_fin)]},
+                        "calibrado": calibrados,
+                        "escala_x": "log" if log_x else "lineal",
+                        "escala_y": "log" if log_y else "lineal"},
+            "ejes": {"x": [eje_x_inicio, eje_x_fin], "y": [eje_y_inicio, eje_y_fin]},
             "series": [{
                 "indice": indice,
                 "nombre": nombres_series[indice],
                 "nombre_leido": bool((nombres_leidos[indice] or "").strip()),
                 "textura": _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]["nombre"],
-                "puntos_mm": [_mover(p) for p in puntos_stl],
+                "puntos_mm": [tuple(p) for p in puntos_stl],
             } for indice, puntos_stl in zip(indices_fisicas, series_fisicas)],
             "leyenda": leyenda_diseno,
             "etiquetas_dato": datos_diseno,
