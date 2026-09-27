@@ -283,6 +283,14 @@
   .request-card .fig-thumbs .warnings { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--error); }
   .request-card .fig-thumbs .warnings li { border: none; padding: 0; background: none; margin-bottom: 0.2rem; }
   .request-card .fig-thumbs details.descripcion { margin: 0.6rem 0 0; font-size: 0.9rem; }
+  /* Original del PDF y lectura del programa, lado a lado */
+  .request-card .fig-thumbs .comparacion {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin-top: 0.5rem;
+  }
+  .request-card .fig-thumbs .comparacion figure { margin: 0; min-width: 0; }
+  .request-card .fig-thumbs .comparacion figcaption { font-size: 0.82rem; font-weight: 700; color: #3a362e; }
+  .request-card .fig-thumbs .comparacion img { margin-top: 0.3rem; border: 1px solid var(--line); background: #fff; }
+  @media (max-width: 640px) { .request-card .fig-thumbs .comparacion { grid-template-columns: 1fr; } }
   .request-card .fig-thumbs .revision-marca { margin: 0.6rem 0 0; font-weight: 700; font-size: 0.9rem; }
   .request-card .fig-thumbs .revision-marca.ok { color: var(--ok); }
   .request-card .fig-thumbs .revision-marca.pendiente { color: var(--gold); }
@@ -343,7 +351,7 @@
   .editor-dialog {
     background: var(--paper); color: var(--ink);
     border-radius: 10px; border: 1px solid var(--line);
-    width: min(1080px, 100%); max-height: 92vh;
+    width: min(1440px, 100%); max-height: 94vh;
     display: flex; flex-direction: column; overflow: hidden;
     box-shadow: 0 20px 60px rgba(13, 15, 46, 0.35);
   }
@@ -385,6 +393,12 @@
     position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair;
   }
   .editor-instrucciones { font-size: 0.85rem; color: #3a362e; line-height: 1.5; margin: 0; }
+  /* Pizarra y gráfica original, lado a lado (una debajo de otra en pantallas chicas) */
+  .editor-lado-a-lado { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: start; }
+  @media (max-width: 980px) { .editor-lado-a-lado { grid-template-columns: 1fr; } }
+  .editor-rotulo { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; color: #3a362e; }
+  .editor-original-wrap { line-height: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .editor-original-wrap img { display: block; width: 100%; height: auto; }
 
   .editor-side {
     padding: 1.1rem; border-left: 1px solid var(--line);
@@ -437,6 +451,7 @@
   table.editor-tabla tr { display: flex; align-items: center; gap: 0.4rem; }
   table.editor-tabla td.celda-input { flex: 1; }
   table.editor-tabla input.pendiente { border-color: var(--gold); background: #fff8e6; }
+  table.editor-tabla .rotulo-categoria { display: block; padding: 0.3em 0.5em; font-weight: 700; }
   button.mini-del {
     background: none; border: none; color: #a15a4a; font-size: 1rem; line-height: 1;
     cursor: pointer; padding: 0.2em 0.3em; flex-shrink: 0;
@@ -829,9 +844,20 @@
           </button>
         </div>
         <div class="editor-toolbar" id="editor-series-toolbar"></div>
-        <div class="editor-lienzo-wrap" id="editor-lienzo-wrap">
-          <img id="editor-img" alt="Overlay de la gráfica a corregir">
-          <canvas id="editor-canvas"></canvas>
+        <div class="editor-lado-a-lado">
+          <div>
+            <p class="editor-rotulo">Pizarra: arrastra los puntos sobre la gráfica</p>
+            <div class="editor-lienzo-wrap" id="editor-lienzo-wrap">
+              <img id="editor-img" alt="Gráfica original, debajo de los puntos que se corrigen">
+              <canvas id="editor-canvas"></canvas>
+            </div>
+          </div>
+          <div>
+            <p class="editor-rotulo">Gráfica original (del PDF)</p>
+            <div class="editor-original-wrap">
+              <img id="editor-original" alt="Gráfica original tal como aparece en el PDF, sin marcas">
+            </div>
+          </div>
         </div>
         <p class="editor-instrucciones">
           <strong>Ejes:</strong> arrastra los extremos rojo (eje X) y azul (eje Y) hasta que
@@ -1409,6 +1435,28 @@
   //   revision:   solicitud en revisión: cada gráfica con su visto bueno;
   //   corregible: se puede abrir la pizarra (en revisión, o ya autorizada
   //               pero todavía no enviada a imprenta).
+  // Las URL de la API vienen relativas ("/api/resultados/..."); las de
+  // solicitudes viejas podían venir ya completas.
+  function urlDeResultado(url) {
+    return url && url.startsWith('/') ? API_BASE + url : url;
+  }
+
+  function crearImagenFigura(src, titulo, alt) {
+    const fig = document.createElement('figure');
+    const cap = document.createElement('figcaption');
+    cap.textContent = titulo;
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = alt;
+    img.loading = 'lazy';
+    img.onerror = () => manejarErrorImagen(img,
+      'No se pudo cargar la imagen (puede que ya no esté disponible en el ' +
+      'servidor — pedile al estudiante que vuelva a subir el documento).');
+    fig.appendChild(cap);
+    fig.appendChild(img);
+    return fig;
+  }
+
   function crearDetalleSolicitud(s, opciones) {
     const { revision = false, corregible = false } = opciones || {};
     const dl = document.createElement('dl');
@@ -1445,18 +1493,21 @@
         li.appendChild(p);
       }
 
-      const img = document.createElement('img');
-      // El overlay (ejes/curva detectados) reemplaza la vista previa cruda
-      // en cuanto existe: es lo que hay que revisar antes de imprimir.
-      img.src = f.overlay_url ? (API_BASE + f.overlay_url) : f.imagen_url;
-      img.alt = f.overlay_url
-        ? 'Overlay de verificación: ejes en rojo/azul, curva en verde'
-        : 'Vista previa: ' + f.caption;
-      img.loading = 'lazy';
-      img.onerror = () => manejarErrorImagen(img,
-        'No se pudo cargar la imagen (puede que ya no esté disponible en el ' +
-        'servidor — pedile al estudiante que vuelva a subir el documento).');
-      li.appendChild(img);
+      // La gráfica tal como está en el PDF y, en cuanto se segmentó, al lado
+      // lo que leyó el programa (ejes, curva y textos marcados encima): para
+      // dar el visto bueno hay que poder compararlas.
+      const comparacion = document.createElement('div');
+      comparacion.className = 'comparacion';
+      comparacion.appendChild(crearImagenFigura(
+        urlDeResultado(f.imagen_url), 'Gráfica original (del PDF)',
+        'Gráfica original tal como aparece en el PDF: ' + f.caption));
+      if (f.overlay_url) {
+        comparacion.appendChild(crearImagenFigura(
+          API_BASE + f.overlay_url + '?t=' + encodeURIComponent(f.correccion_id || ''),
+          'Lo que leyó el programa',
+          'Lectura del programa sobre la gráfica: eje X en rojo, eje Y en azul, curvas en color, textos en recuadros'));
+      }
+      li.appendChild(comparacion);
 
       if (f.advertencias && f.advertencias.length) {
         const advs = document.createElement('ul');
@@ -1733,6 +1784,7 @@
   const Editor = (() => {
     const overlayEl = document.getElementById('editor-overlay');
     const imgEl = document.getElementById('editor-img');
+    const imgOriginal = document.getElementById('editor-original');
     const canvas = document.getElementById('editor-canvas');
     const closeBtn = document.getElementById('editor-close');
     const estadoEl = document.getElementById('editor-estado');
@@ -1754,6 +1806,7 @@
     let indiceFigura = null;
     let botonOrigen = null; // botón "Corregir en la pizarra" (recupera el foco al cerrar)
     let enRevision = false; // true: guardar no genera STL (todavía no se autorizó)
+    let urlOriginal = '';   // la gráfica del PDF, sin marcas: fondo de la pizarra
     let modo = 'mover';     // mover | agregar | borrar
     let serieActiva = 0;    // a qué serie se le agregan puntos nuevos en modo "agregar"
     let arrastrando = null;
@@ -1770,6 +1823,8 @@
       indiceFigura = indice;
       botonOrigen = boton;
       enRevision = Boolean(revision);
+      urlOriginal = urlDeResultado(figura.imagen_url) || '';
+      imgOriginal.src = urlOriginal;
       btnConfirmar.textContent = enRevision ? 'Guardar corrección (queda revisada)' : 'Guardar y regenerar STL';
       ultimasCorrecciones = null;
       serieActiva = 0;
@@ -1796,7 +1851,10 @@
 
     async function cargarDesde(info) {
       estado.correccionId = info.correccion_id;
-      imgEl.src = API_BASE + info.overlay_url + `?t=${Date.now()}`;
+      // Los puntos se arrastran sobre la gráfica ORIGINAL (misma imagen y
+      // mismos píxeles que el overlay, pero sin la lectura anterior pintada
+      // encima): así se alinean con la curva real y no con la lectura vieja.
+      imgEl.src = urlOriginal || (API_BASE + info.overlay_url + `?t=${Date.now()}`);
 
       const jsonRes = await fetch(API_BASE + info.json_url, { credentials: 'include' });
       if (!jsonRes.ok) throw new Error('HTTP ' + jsonRes.status);
@@ -1807,6 +1865,9 @@
       estado.ejeX = j.ejes.eje_x;
       estado.ejeY = j.ejes.eje_y;
       estado.etiquetasX = (j.textos.etiquetas_eje_x || []).map(e => ({ centro_x: e.px, valor: e.valor }));
+      // Eje X de categorías ("Ene", "Feb"...): el valor de cada marca es su
+      // posición (0, 1, 2...); en la tabla se muestra el nombre, no el número.
+      estado.categoriasX = j.textos.categorias_x || [];
       estado.etiquetasY = (j.textos.etiquetas_eje_y || []).map(e => ({ centro_y: e.py, valor: e.valor }));
 
       const seriesJson = j.series || [];
@@ -1883,13 +1944,32 @@
       });
     }
 
-    function pintarTabla(tbody, lista, onBorrar) {
+    function pintarTabla(tbody, lista, onBorrar, categorias) {
       tbody.innerHTML = '';
       lista.forEach((e, i) => {
         const tr = document.createElement('tr');
 
         const tdInput = document.createElement('td');
         tdInput.className = 'celda-input';
+        const nombre = categorias && categorias.length && Number.isFinite(e.valor)
+          ? categorias[Math.round(e.valor)] : null;
+        if (nombre != null) {
+          // Categoría: su nombre, sin casilla (el valor es la posición).
+          const rotulo = document.createElement('span');
+          rotulo.className = 'rotulo-categoria';
+          rotulo.textContent = nombre;
+          tdInput.appendChild(rotulo);
+          tr.appendChild(tdInput);
+          const tdDel = document.createElement('td');
+          const del = document.createElement('button');
+          del.type = 'button'; del.className = 'mini-del'; del.textContent = '✕';
+          del.title = 'Quitar esta etiqueta';
+          del.addEventListener('click', () => onBorrar(e));
+          tdDel.appendChild(del);
+          tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+          return;
+        }
         const inp = document.createElement('input');
         inp.type = 'number'; inp.step = 'any';
         if (Number.isFinite(e.valor)) inp.value = e.valor;
@@ -1919,7 +1999,7 @@
       pintarTabla(tablaX, estado.etiquetasX, (e) => {
         estado.etiquetasX = estado.etiquetasX.filter(x => x !== e);
         marcarPendiente(); dibujar(); refrescarTablaX();
-      });
+      }, estado.categoriasX);
     }
     function refrescarTablaY() {
       pintarTabla(tablaY, estado.etiquetasY, (e) => {
