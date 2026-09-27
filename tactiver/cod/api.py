@@ -491,38 +491,174 @@ def solicitudes_supervisor():
 # vez de romper todo silenciosamente. Subir esos archivos a un storage
 # persistente (Cloudflare R2) es el siguiente paso natural, pendiente.
 
-@app.route("/api/solicitudes/<int:id_solicitud>/autorizar", methods=["POST"])
-def autorizar_solicitud(id_solicitud):
+def _solicitud_del_supervisor(id_solicitud):
+    """(solicitud, None) si es del supervisor con sesión, o (None, respuesta de error)."""
     if session.get("rol") != "supervisor":
-        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
-
+        return None, (jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401)
     solicitud = db.buscar_solicitud(id_solicitud)
     if not solicitud or solicitud["supervisor_id"] != session["usuario_id"]:
-        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+        return None, (jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404)
+    return solicitud, None
+
+
+def _resultado_guardado(nombre_json):
+    """El resultado del segmentador de una figura, reconstruido desde su JSON
+    (grafica_<uid>.json; el CSV y el overlay comparten el uid). Así la
+    autorización genera el STL con la segmentación que el supervisor revisó
+    y corrigió, en vez de volver a segmentar la imagen y perder las
+    correcciones. None si el archivo ya no está (disco efímero)."""
+    nombre = secure_filename(nombre_json or "")
+    ruta = os.path.join(RESULTADOS_DIR, nombre)
+    if not nombre.startswith("grafica_") or not nombre.endswith(".json") or not os.path.isfile(ruta):
+        return None
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            datos = json.load(f)
+    except (OSError, ValueError):
+        return None
+    uid = nombre[len("grafica_"):-len(".json")]
+    return {
+        "series": datos.get("series") or [],
+        "puntos_curva": [],
+        "resumen": datos.get("resumen") or {},
+        "advertencias": datos.get("advertencias") or [],
+        "ruta_json": ruta,
+        "nombre_json": nombre,
+        "nombre_csv": f"descripcion_{uid}.csv",
+        "nombre_overlay": f"overlay_{uid}.png",
+    }
+
+
+def _campos_revision(resultado, pie_figura):
+    """Lo que se guarda en una figura tras segmentarla (paso "Revisar" o una
+    corrección de la pizarra), antes de generar su STL."""
+    return {
+        "resumen": resultado["resumen"],
+        "advertencias": list(resultado.get("advertencias") or []),
+        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
+        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
+        # json_url + correccion_id: lo que la pizarra necesita para abrir y
+        # recalcular esta figura (ver /api/corregir y .../corregir más abajo).
+        "json_url": f"/api/resultados/{resultado['nombre_json']}",
+        "correccion_id": resultado["nombre_json"],
+        "descripcion": narracion.describir_grafica(_payload_stl(resultado), pie_figura),
+    }
+
+
+def _campos_figura(resultado, nombre_stl, advertencias, narracion_info):
+    """Lo que se guarda en una figura al generar su STL (al autorizar, o al
+    corregir una ya autorizada)."""
+    return {
+        **_campos_revision(resultado, None),
+        **_urls_lamina(nombre_stl, narracion_info),
+        "advertencias": advertencias,
+    }
+
+
+# Flujo del supervisor (en este orden):
+#   1. "Revisar"      -> /revisar: segmenta cada gráfica (sin STL todavía) y
+#                        la muestra con su descripción; se puede corregir en
+#                        la pizarra (/figuras/<i>/corregir).
+#   2. Visto bueno    -> /figuras/<i>/visto-bueno, o guardar una corrección.
+#   3. "Autorizar"    -> /autorizar: solo con todas las gráficas revisadas;
+#                        genera el STL y la narración de cada una a partir de
+#                        la segmentación revisada.
+#   4. "Enviar a imprenta".
+# El estado "en revisión" vive en las figuras (correccion_id / "revisada"),
+# no en una columna nueva: no hace falta migrar la base (SQLite ni Turso).
+
+@app.route("/api/solicitudes/<int:id_solicitud>/revisar", methods=["POST"])
+def revisar_solicitud(id_solicitud):
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
     if solicitud["estado_supervisor"] != "en_espera":
         return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
 
+    figuras = []
+    for figura in solicitud["figuras"]:
+        figura = dict(figura)
+        # Ya segmentada (y quizá corregida): no se rehace.
+        if figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"]):
+            figuras.append(figura)
+            continue
+        ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
+        if not figura.get("id") or not os.path.isfile(ruta_imagen):
+            figura["error"] = (
+                "La imagen original ya no está disponible en el servidor (pudo "
+                "reiniciarse desde que se subió el PDF). Hay que volver a subir el documento."
+            )
+            figuras.append(figura)
+            continue
+        try:
+            resultado = segmentar_figura(ruta_imagen)
+            figura.pop("error", None)
+            figura.update(_campos_revision(resultado, figura.get("pie_figura")))
+            figura["revisada"] = False
+        except Exception as e:
+            print(f"ERROR REVISANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
+            print(traceback.format_exc(), flush=True)
+            figura["error"] = f"No se pudo segmentar esta gráfica: {e}"
+        figuras.append(figura)
+
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/visto-bueno", methods=["POST"])
+def visto_bueno_figura(id_solicitud, indice):
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
+    if solicitud["estado_supervisor"] != "en_espera":
+        return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
+    figuras = list(solicitud["figuras"])
+    if not 0 <= indice < len(figuras):
+        return jsonify({"ok": False, "error": "No se encontró esa figura."}), 404
+    if not figuras[indice].get("correccion_id") or figuras[indice].get("error"):
+        return jsonify({"ok": False, "error": "Esta gráfica todavía no se pudo revisar."}), 400
+    datos = request.get_json(silent=True) or {}
+    figuras[indice] = {**figuras[indice], "revisada": bool(datos.get("revisada", True))}
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/autorizar", methods=["POST"])
+def autorizar_solicitud(id_solicitud):
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
+    if solicitud["estado_supervisor"] != "en_espera":
+        return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
+
+    utilizables = [f for f in solicitud["figuras"] if not f.get("error")]
+    if not any(f.get("correccion_id") for f in utilizables):
+        return jsonify({"ok": False, "error": "Primero pulsa \"Revisar\" para ver las gráficas."}), 400
+    pendientes = [f for f in utilizables if not f.get("revisada")]
+    if pendientes:
+        return jsonify({
+            "ok": False,
+            "error": f"Falta dar el visto bueno a {len(pendientes)} gráfica(s) antes de autorizar.",
+        }), 400
+
     figuras_actualizadas = []
     algun_exito = False
-
     for figura in solicitud["figuras"]:
         figura_actualizada = dict(figura)
-        nombre_seguro = secure_filename(figura.get("id") or "")
-        ruta_imagen = os.path.join(RESULTADOS_DIR, nombre_seguro)
-
-        if not nombre_seguro or not os.path.isfile(ruta_imagen):
+        if figura.get("error"):
+            figuras_actualizadas.append(figura_actualizada)
+            continue
+        resultado = _resultado_guardado(figura.get("correccion_id"))
+        if resultado is None:
             figura_actualizada["error"] = (
-                "La imagen original ya no está disponible en el servidor "
-                "(pudo reiniciarse desde que se subió el PDF). Hay que volver "
-                "a subir el documento para esta gráfica."
+                "Los archivos de esta gráfica ya no están en el servidor (pudo "
+                "reiniciarse). Hay que volver a subir el documento."
             )
             figuras_actualizadas.append(figura_actualizada)
             continue
-
         try:
-            resultado, nombre_stl, advertencias, narracion_info = crear_stl_desde_imagen(
-                ruta_imagen, "grafica_tactil", pie_figura=figura.get("pie_figura")
-            )
+            nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
+                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
             figura_actualizada.update(
                 _campos_figura(resultado, nombre_stl, advertencias, narracion_info))
             algun_exito = True
@@ -530,7 +666,6 @@ def autorizar_solicitud(id_solicitud):
             print(f"ERROR AUTORIZANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
             print(traceback.format_exc(), flush=True)
             figura_actualizada["error"] = str(e)
-
         figuras_actualizadas.append(figura_actualizada)
 
     solicitud = db.actualizar_solicitud(id_solicitud, {
@@ -541,37 +676,19 @@ def autorizar_solicitud(id_solicitud):
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
 
 
-def _campos_figura(resultado, nombre_stl, advertencias, narracion_info):
-    """Lo que se guarda en cada figura de una solicitud tras segmentarla y
-    generar su STL (al autorizar o al guardar una corrección de la pizarra)."""
-    return {
-        **_urls_lamina(nombre_stl, narracion_info),
-        "resumen": resultado["resumen"],
-        "advertencias": advertencias,
-        "csv_url": f"/api/resultados/{resultado['nombre_csv']}",
-        "overlay_url": f"/api/resultados/{resultado['nombre_overlay']}",
-        # json_url + correccion_id: lo que la pizarra necesita para abrir y
-        # recalcular esta figura (ver /api/corregir y .../corregir más abajo).
-        "json_url": f"/api/resultados/{resultado['nombre_json']}",
-        "correccion_id": resultado["nombre_json"],
-    }
-
-
-# El supervisor corrige a mano la segmentación de UNA figura ya autorizada
-# (pizarra de tactiverso 12, integrada en la 10) y se regenera su STL. Solo
-# mientras la solicitud no se mandó a la imprenta: después, la imprenta ya
-# podría estar usando el STL anterior.
+# Corrección de UNA figura en la pizarra:
+#   - en revisión (sin autorizar): se recalcula la segmentación y la figura
+#     queda con visto bueno (el supervisor ya la miró y la arregló);
+#   - autorizada y todavía no enviada a imprenta: además se regenera su STL.
+# Después de enviada a la imprenta no se puede: la imprenta ya podría estar
+# usando el STL anterior.
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/corregir", methods=["POST"])
 def corregir_figura_solicitud(id_solicitud, indice):
-    if session.get("rol") != "supervisor":
-        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
-
-    solicitud = db.buscar_solicitud(id_solicitud)
-    if not solicitud or solicitud["supervisor_id"] != session["usuario_id"]:
-        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
-    if solicitud["estado_supervisor"] != "aprobada":
-        return jsonify({"ok": False, "error": "Primero hay que autorizar la solicitud."}), 400
-    if solicitud["estado_imprenta"] != "no_enviada":
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
+    en_revision = solicitud["estado_supervisor"] == "en_espera"
+    if not en_revision and solicitud["estado_imprenta"] != "no_enviada":
         return jsonify({"ok": False, "error": "Ya fue enviada a la imprenta: no se puede corregir."}), 400
 
     figuras = solicitud["figuras"]
@@ -595,25 +712,29 @@ def corregir_figura_solicitud(id_solicitud, indice):
     try:
         resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
                                          ruta_json_original=ruta_json)
-        nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
-            resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
+        if en_revision:
+            campos = {**_campos_revision(resultado, figura.get("pie_figura")), "revisada": True}
+        else:
+            nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
+                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
+            campos = _campos_figura(resultado, nombre_stl, advertencias, narracion_info)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     except Exception as e:
         print(f"ERROR CORRIGIENDO figura {indice} de la solicitud {id_solicitud}:", flush=True)
         print(traceback.format_exc(), flush=True)
-        return jsonify({"ok": False, "error": f"No se pudo regenerar la lámina: {e}"}), 500
+        return jsonify({"ok": False, "error": f"No se pudo aplicar la corrección: {e}"}), 500
 
     figura = dict(figura)
     figura.pop("error", None)
-    figura.update(_campos_figura(resultado, nombre_stl, advertencias, narracion_info))
+    figura.update(campos)
     figuras = list(figuras)
     figuras[indice] = figura
 
-    solicitud = db.actualizar_solicitud(id_solicitud, {
-        "figuras": figuras,
-        "stl_generado": any(f.get("stl_url") for f in figuras),
-    })
+    cambios = {"figuras": figuras}
+    if not en_revision:
+        cambios["stl_generado"] = any(f.get("stl_url") for f in figuras)
+    solicitud = db.actualizar_solicitud(id_solicitud, cambios)
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
 
 

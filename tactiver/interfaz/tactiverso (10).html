@@ -283,6 +283,9 @@
   .request-card .fig-thumbs .warnings { margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--error); }
   .request-card .fig-thumbs .warnings li { border: none; padding: 0; background: none; margin-bottom: 0.2rem; }
   .request-card .fig-thumbs details.descripcion { margin: 0.6rem 0 0; font-size: 0.9rem; }
+  .request-card .fig-thumbs .revision-marca { margin: 0.6rem 0 0; font-weight: 700; font-size: 0.9rem; }
+  .request-card .fig-thumbs .revision-marca.ok { color: var(--ok); }
+  .request-card .fig-thumbs .revision-marca.pendiente { color: var(--gold); }
   .request-card .fig-thumbs details.descripcion summary { cursor: pointer; font-weight: 700; }
   .request-card .fig-thumbs details.descripcion p { margin: 0.4rem 0 0; line-height: 1.5; }
   .link-btn {
@@ -708,7 +711,7 @@
   <!-- APP: SUPERVISOR -->
   <section class="screen" id="screen-app-supervisor" aria-labelledby="app-supervisor-heading">
     <h1 id="app-supervisor-heading" tabindex="-1">Solicitudes de estudiantes</h1>
-    <p class="lede">Revisa los datos del estudiante y las imágenes solicitadas. Autoriza para generar las láminas en braille y el modelo STL; luego envíalas a tu imprenta predeterminada.</p>
+    <p class="lede">Para cada solicitud: <strong>Revisar</strong> muestra cómo se leyó cada gráfica y su descripción; corrige en la pizarra lo que haga falta y da el visto bueno a cada una. Con todas revisadas, <strong>Autorizar</strong> genera las láminas en braille (STL), que puedes descargar, y por último <strong>Enviar a imprenta</strong>.</p>
     <p class="hint" id="supervisor-codigo-hint"></p>
 
     <h2>Pendientes</h2>
@@ -1402,9 +1405,12 @@
   // ---------------------------------------------------------------
   // APP: SUPERVISOR
   // ---------------------------------------------------------------
-  // `editable`: solo el supervisor, con la solicitud autorizada y todavía no
-  // enviada a imprenta, ve el botón para corregir la segmentación de cada figura.
-  function crearDetalleSolicitud(s, editable) {
+  // Opciones (solo el supervisor; la imprenta no pasa ninguna):
+  //   revision:   solicitud en revisión: cada gráfica con su visto bueno;
+  //   corregible: se puede abrir la pizarra (en revisión, o ya autorizada
+  //               pero todavía no enviada a imprenta).
+  function crearDetalleSolicitud(s, opciones) {
+    const { revision = false, corregible = false } = opciones || {};
     const dl = document.createElement('dl');
     const campos = [
       ['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
@@ -1485,23 +1491,36 @@
         li.appendChild(link);
       }
 
-      if (f.narracion_download_url) {
-        const linkNarr = document.createElement('a');
-        linkNarr.className = 'link-btn secondary';
-        linkNarr.style.marginRight = '0.4rem';
-        linkNarr.href = API_BASE + f.narracion_download_url;
-        linkNarr.textContent = 'Descargar narración (Hand_Tracking)';
-        linkNarr.setAttribute('download', '');
-        li.appendChild(linkNarr);
+      // (La narración para Hand_Tracking se sigue generando en el servidor
+      // —f.narracion_download_url—, pero su descarga queda oculta hasta
+      // terminar el flujo principal.)
+
+      const lista = f.correccion_id && f.json_url && !f.error;
+      if (revision && lista) {
+        const marca = document.createElement('p');
+        marca.className = 'revision-marca ' + (f.revisada ? 'ok' : 'pendiente');
+        marca.textContent = f.revisada ? '✓ Revisada' : 'Pendiente de revisión';
+        li.appendChild(marca);
       }
 
-      if (editable && f.correccion_id && f.json_url && !f.error) {
+      if (corregible && lista) {
         const btnEditar = document.createElement('button');
         btnEditar.type = 'button';
         btnEditar.className = 'link-btn secondary';
-        btnEditar.textContent = 'Editar segmentación';
-        btnEditar.addEventListener('click', () => Editor.abrir(s.id, i, f, btnEditar));
+        btnEditar.dataset.foco = 'editar-' + s.id + '-' + i;
+        btnEditar.textContent = 'Corregir en la pizarra';
+        btnEditar.addEventListener('click', () => Editor.abrir(s.id, i, f, btnEditar, revision));
         li.appendChild(btnEditar);
+      }
+
+      if (revision && lista) {
+        const btnVisto = document.createElement('button');
+        btnVisto.type = 'button';
+        btnVisto.className = 'link-btn ' + (f.revisada ? 'secondary' : 'primary');
+        btnVisto.dataset.foco = 'visto-' + s.id + '-' + i;
+        btnVisto.textContent = f.revisada ? 'Quitar visto bueno' : '✓ Está bien';
+        btnVisto.addEventListener('click', () => darVistoBueno(s.id, i, !f.revisada, btnVisto));
+        li.appendChild(btnVisto);
       }
 
       ul.appendChild(li);
@@ -1549,11 +1568,19 @@
     btnResumen.setAttribute('aria-controls', detailId);
     const imp = etiquetaImprenta(s.estado_imprenta);
     const cantidad = s.figuras.length;
+    const enEspera = s.estado_supervisor === 'en_espera';
+    // Revisión: gráficas ya segmentadas (las que fallaron no cuentan).
+    const utilizables = s.figuras.filter(f => !f.error);
+    const enRevision = enEspera && utilizables.some(f => f.correccion_id);
+    const revisadas = utilizables.filter(f => f.revisada).length;
+    let badge;
+    if (!enEspera) badge = '<span class="badge ok">Autorizada</span>';
+    else if (enRevision) badge = '<span class="badge wait">En revisión (' + revisadas + '/' + utilizables.length + ')</span>';
+    else badge = '<span class="badge wait">Por revisar</span>';
     btnResumen.innerHTML =
       '<strong>' + escapeHtml(s.estudiante.nombre) + '</strong>' +
       '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>' +
-      '<span class="badges">' +
-        (s.estado_supervisor === 'aprobada' ? '<span class="badge ok">Autorizada</span>' : '<span class="badge wait">En espera</span>') +
+      '<span class="badges">' + badge +
         (s.estado_supervisor === 'aprobada' ? '<span class="badge ' + imp.clase + '">' + imp.texto + '</span>' : '') +
       '</span>';
 
@@ -1561,8 +1588,10 @@
     detalle.className = 'request-detail';
     detalle.id = detailId;
     detalle.hidden = true;
-    detalle.appendChild(crearDetalleSolicitud(s,
-      s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada'));
+    detalle.appendChild(crearDetalleSolicitud(s, {
+      revision: enRevision,
+      corregible: enRevision || (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada'),
+    }));
 
     const status = document.createElement('p');
     status.className = 'status';
@@ -1573,11 +1602,27 @@
     const acciones = document.createElement('div');
     acciones.className = 'actions';
 
-    if (s.estado_supervisor === 'en_espera') {
+    if (enEspera && !enRevision) {
+      // Paso 1: segmentar las gráficas para poder revisarlas.
+      const btnRevisar = document.createElement('button');
+      btnRevisar.type = 'button';
+      btnRevisar.className = 'primary';
+      btnRevisar.textContent = 'Revisar';
+      btnRevisar.dataset.foco = 'revisar-' + s.id;
+      btnRevisar.addEventListener('click', () => revisarSolicitud(s.id, btnRevisar, status));
+      acciones.appendChild(btnRevisar);
+    } else if (enEspera) {
+      // Pasos 2 y 3: visto bueno de cada gráfica y luego autorizar.
+      const faltan = utilizables.length - revisadas;
+      status.textContent = faltan > 0
+        ? 'Revisadas ' + revisadas + ' de ' + utilizables.length + '. Corrige en la pizarra lo que haga falta y da el visto bueno a cada gráfica para poder autorizar.'
+        : 'Todas las gráficas están revisadas: ya puedes autorizar.';
       const btnAutorizar = document.createElement('button');
       btnAutorizar.type = 'button';
       btnAutorizar.className = 'primary';
-      btnAutorizar.textContent = 'Autorizar';
+      btnAutorizar.textContent = 'Autorizar y generar las láminas';
+      btnAutorizar.dataset.foco = 'autorizar-' + s.id;
+      btnAutorizar.disabled = faltan > 0 || utilizables.length === 0;
       btnAutorizar.addEventListener('click', () => autorizarSolicitud(s.id, btnAutorizar, status));
       acciones.appendChild(btnAutorizar);
     } else if (s.estado_supervisor === 'aprobada' && !s.stl_generado) {
@@ -1610,6 +1655,42 @@
     return li;
   }
 
+  // Vuelve a pintar la lista (que se arma cerrada) y reabre la solicitud en
+  // la que se estaba trabajando, devolviendo el foco al control indicado.
+  async function recargarSolicitud(id, claveFoco) {
+    await pintarSolicitudesSupervisor();
+    const resumen = document.querySelector('[aria-controls="detalle-' + id + '"]');
+    if (resumen && resumen.getAttribute('aria-expanded') !== 'true') resumen.click();
+    const foco = claveFoco && document.querySelector('[data-foco="' + claveFoco + '"]');
+    if (foco) foco.focus();
+  }
+
+  async function revisarSolicitud(id, boton, status) {
+    boton.disabled = true;
+    status.classList.remove('error');
+    status.textContent = 'Leyendo las gráficas (ejes, curvas y textos)… puede tardar un momento.';
+    const { resp, datos } = await postJson('/api/solicitudes/' + id + '/revisar');
+    if (!resp.ok || !datos.ok) {
+      status.textContent = datos.error || 'No se pudieron leer las gráficas.';
+      status.classList.add('error');
+      boton.disabled = false;
+      return;
+    }
+    await recargarSolicitud(id, 'editar-' + id + '-0');
+  }
+
+  async function darVistoBueno(id, indice, revisada, boton) {
+    boton.disabled = true;
+    const { resp, datos } = await postJson(
+      '/api/solicitudes/' + id + '/figuras/' + indice + '/visto-bueno', { revisada });
+    if (!resp.ok || !datos.ok) {
+      boton.disabled = false;
+      alert(datos.error || 'No se pudo guardar el visto bueno.');
+      return;
+    }
+    await recargarSolicitud(id, 'visto-' + id + '-' + indice);
+  }
+
   async function autorizarSolicitud(id, boton, status) {
     boton.disabled = true;
     status.classList.remove('error');
@@ -1624,7 +1705,7 @@
     }
 
     status.textContent = '';
-    await pintarSolicitudesSupervisor();
+    await recargarSolicitud(id);
   }
 
   async function enviarAImprenta(id, boton, status) {
@@ -1642,11 +1723,12 @@
 
   // ------------------------------------------------------------------
   // Editor de corrección ("pizarra", traído de tactiverso 12): el
-  // supervisor lo abre con "Editar segmentación" sobre una figura ya
-  // autorizada. Deja arrastrar los ejes y los puntos de la curva;
-  // "Recalcular" solo previsualiza (/api/corregir/<id>) y "Guardar"
-  // aplica la corrección a la solicitud y regenera su STL
-  // (/api/solicitudes/<id>/figuras/<i>/corregir).
+  // supervisor lo abre con "Corregir en la pizarra" durante la revisión (o
+  // en una solicitud autorizada que aún no fue a imprenta). Deja arrastrar
+  // los ejes y los puntos de la curva; "Recalcular" solo previsualiza
+  // (/api/corregir/<id>) y "Guardar" aplica la corrección a la solicitud
+  // (/api/solicitudes/<id>/figuras/<i>/corregir): en revisión la gráfica
+  // queda con visto bueno; si ya estaba autorizada, se regenera su STL.
   // ------------------------------------------------------------------
   const Editor = (() => {
     const overlayEl = document.getElementById('editor-overlay');
@@ -1670,7 +1752,8 @@
 
     let solicitudId = null; // solicitud y posición de la figura que se está corrigiendo
     let indiceFigura = null;
-    let botonOrigen = null; // botón "Editar segmentación" (recupera el foco al cerrar)
+    let botonOrigen = null; // botón "Corregir en la pizarra" (recupera el foco al cerrar)
+    let enRevision = false; // true: guardar no genera STL (todavía no se autorizó)
     let modo = 'mover';     // mover | agregar | borrar
     let serieActiva = 0;    // a qué serie se le agregan puntos nuevos en modo "agregar"
     let arrastrando = null;
@@ -1682,10 +1765,12 @@
 
     function radioPunto() { return Math.max(5, estado.ancho * 0.008); }
 
-    async function abrir(idSolicitud, indice, figura, boton) {
+    async function abrir(idSolicitud, indice, figura, boton, revision) {
       solicitudId = idSolicitud;
       indiceFigura = indice;
       botonOrigen = boton;
+      enRevision = Boolean(revision);
+      btnConfirmar.textContent = enRevision ? 'Guardar corrección (queda revisada)' : 'Guardar y regenerar STL';
       ultimasCorrecciones = null;
       serieActiva = 0;
       overlayEl.hidden = false;
@@ -2086,7 +2171,9 @@
       btnConfirmar.disabled = true;
       btnRecalcular.disabled = true;
       statusEl.className = 'status';
-      statusEl.textContent = 'Guardando y regenerando la lámina STL… puede tardar un rato.';
+      statusEl.textContent = enRevision
+        ? 'Guardando la corrección…'
+        : 'Guardando y regenerando la lámina STL… puede tardar un rato.';
 
       const { resp, datos } = await postJson(
         '/api/solicitudes/' + solicitudId + '/figuras/' + indiceFigura + '/corregir',
@@ -2099,9 +2186,7 @@
         return;
       }
       cerrar();
-      await pintarSolicitudesSupervisor();
-      // La lista se vuelve a pintar cerrada: se reabre la solicitud editada.
-      document.querySelector('[aria-controls="detalle-' + solicitudId + '"]')?.click();
+      await recargarSolicitud(solicitudId, 'editar-' + solicitudId + '-' + indiceFigura);
     });
 
     closeBtn.addEventListener('click', cerrar);
