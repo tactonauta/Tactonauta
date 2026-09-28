@@ -33,7 +33,7 @@ from stl import mesh
 # =============================================================================
 # CONSTANTES
 # =============================================================================
-BASE_THICKNESS = 2.0
+BASE_THICKNESS = 0.2
 ESPACIADO_BRAILLE = 2.4
 DIAM_PUNTO_BRAILLE = 1.4
 CELDA_PITCH = 6.2
