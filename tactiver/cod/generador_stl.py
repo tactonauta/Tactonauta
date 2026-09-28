@@ -33,9 +33,9 @@ from stl import mesh
 # =============================================================================
 # CONSTANTES
 # =============================================================================
-BASE_THICKNESS = 0.2
+BASE_THICKNESS = 1.5
 ESPACIADO_BRAILLE = 2.4
-DIAM_PUNTO_BRAILLE = 1.4
+DIAM_PUNTO_BRAILLE = 1.5
 CELDA_PITCH = 6.2
 CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
