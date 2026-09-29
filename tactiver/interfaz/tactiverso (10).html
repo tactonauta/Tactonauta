@@ -82,7 +82,6 @@
     font-weight: 700;
     letter-spacing: -0.01em;
   }
-  .wordmark .dot { color: var(--gold); }
   .tagline { color: #3a362e; font-size: 1rem; }
 
   /* Barra de usuario autenticado */
@@ -107,6 +106,18 @@
     max-width: 720px;
     margin: 0 auto;
     padding: 0.5rem 1.5rem 3.5rem;
+  }
+
+  /* Supervisor e imprenta (que ven la pantalla) usan todo el ancho: las
+     gráficas y su lectura se comparan mejor en grande. El estudiante sigue
+     con una columna angosta, más cómoda con lector de pantalla y lupa. */
+  body.ancho-completo header.top,
+  body.ancho-completo .user-bar,
+  body.ancho-completo main,
+  body.ancho-completo footer.bottom {
+    max-width: none;
+    padding-left: clamp(1.5rem, 3vw, 3rem);
+    padding-right: clamp(1.5rem, 3vw, 3rem);
   }
 
   .step, .screen {
@@ -223,6 +234,24 @@
 
   .status { margin-top: 0.9rem; font-size: 0.95rem; color: var(--night); min-height: 1.4em; }
   .status.error { color: var(--error); }
+
+  /* Paso 3 del estudiante: elegir qué gráficos enviar */
+  fieldset.picks { border: none; margin: 0; padding: 0; }
+  fieldset.picks legend { padding: 0; margin-bottom: 0.8rem; font-weight: 700; }
+  .eleccion-lista { list-style: none; margin: 0 0 1.4rem; padding: 0; display: grid; gap: 0.7rem; }
+  .eleccion-lista li { border: 1px solid var(--line); border-radius: var(--radius); background: #fffdf8; }
+  .eleccion-lista li.marcada { border-color: var(--night); background: #fff; }
+  .eleccion-lista label { display: flex; gap: 0.9rem; align-items: flex-start; padding: 1rem 1.1rem; cursor: pointer; }
+  .eleccion-lista input[type="checkbox"] {
+    flex-shrink: 0; width: 1.4rem; height: 1.4rem; margin: 0.15rem 0 0;
+    accent-color: var(--night); cursor: pointer;
+  }
+  .eleccion-lista .texto strong { display: block; font-family: 'Fraunces', serif; font-size: 1.05rem; }
+  .eleccion-lista .texto span { display: block; margin-top: 0.2rem; color: #3a362e; }
+  .eleccion-lista img {
+    display: block; max-width: 100%; height: auto; margin: 0 1.1rem 1rem 3.4rem;
+    max-height: 260px; border: 1px solid var(--line); border-radius: 4px; background: #fff;
+  }
 
   .progress-line {
     display: flex; align-items: center; gap: 0.7rem;
@@ -461,6 +490,238 @@
   #editor-series-toolbar .tool-btn.nueva-serie {
     border-style: dashed; color: #3a362e;
   }
+  /* ===== Supervisor e imprenta: componentes traídos de tactiverso 12 ===== */
+  button.btn-icon { display: inline-flex; align-items: center; gap: 0.45rem; }
+  button.btn-icon svg { width: 1.05em; height: 1.05em; flex-shrink: 0; }
+  button.small { padding: 0.5em 0.95em; font-size: 0.93rem; }
+  button.danger {
+    background: none; border: 1px solid var(--error); color: var(--error);
+    border-radius: var(--radius); font: inherit; font-size: 0.93rem;
+    padding: 0.5em 0.95em; cursor: pointer;
+  }
+  button.danger:hover { background: var(--error); color: #fff; }
+  button.danger.solid { background: var(--error); color: #fff; }
+  button.danger.solid:hover { background: #6e2007; }
+  button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+  /* Tarjeta de solicitud del supervisor: datos a la izquierda, imágenes a la derecha */
+  .sup-layout {
+    display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr);
+    gap: 1.4rem 2rem; padding-top: 1.2rem; align-items: start;
+  }
+  @media (max-width: 900px) { .sup-layout { grid-template-columns: minmax(0, 1fr); } }
+
+  .sup-info {
+    background: #f8f1df; border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.1rem 1.1rem;
+  }
+  .sup-info h3, .sup-main h3 { margin-bottom: 0.5rem; }
+  .request-card .request-detail .sup-info dl { display: block; margin: 0; }
+  .sup-info dt { font-weight: 700; font-size: 0.88rem; color: #55504a; margin-top: 0.75rem; }
+  .sup-info dt:first-child { margin-top: 0; }
+  .sup-info dd { margin: 0.05rem 0 0; overflow-wrap: anywhere; }
+
+  .doc-link {
+    display: inline-flex; align-items: center; gap: 0.6rem; max-width: 100%;
+    margin-top: 0.15rem; padding: 0.55em 0.8em;
+    border: 1px solid var(--night); border-radius: var(--radius);
+    background: #fff; color: var(--night); text-decoration: none;
+  }
+  .doc-link:hover { background: var(--night); color: #fff; }
+  .doc-link svg { width: 1.3rem; height: 1.3rem; flex-shrink: 0; }
+  .doc-link .doc-name { display: block; font-weight: 700; overflow-wrap: anywhere; line-height: 1.3; }
+  .doc-link .doc-action { display: block; font-size: 0.85rem; }
+
+  .sup-main .hint { margin: 0 0 0.9rem; font-size: 0.93rem; color: #3a362e; max-width: 68ch; }
+  .sup-main .status { margin-top: 1rem; }
+  .sup-main .actions { margin-top: 0.8rem; }
+
+  .fig-grid {
+    list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  }
+  .fig-card {
+    border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    padding: 0.8rem; display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  .fig-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+  .fig-head strong { font-family: 'Fraunces', serif; font-size: 1rem; }
+  .fig-num {
+    width: 1.8rem; height: 1.8rem; border-radius: 6px; flex-shrink: 0;
+    background: var(--gold-soft); color: var(--night);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Fraunces', serif; font-weight: 700;
+  }
+  .fig-zoom {
+    position: relative; display: block; width: 100%; padding: 0; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: zoom-in;
+  }
+  .fig-zoom:hover { border-color: var(--night); }
+  .fig-zoom img { display: block; width: 100%; height: 190px; object-fit: contain; }
+  .fig-zoom .zoom-hint {
+    position: absolute; right: 0.5rem; bottom: 0.5rem; font-size: 0.78rem;
+    background: rgba(13, 15, 46, 0.82); color: #fff; padding: 0.1em 0.6em; border-radius: 999px;
+  }
+  .fig-card .caption { margin: 0; font-size: 0.9rem; color: #3a362e; }
+  .fig-card .caption.missing { font-style: italic; color: #5c564c; }
+  .fig-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: auto; }
+  .fig-confirm { flex-basis: 100%; font-weight: 700; color: var(--error); }
+  .fig-status { margin: 0; font-size: 0.88rem; color: var(--night); }
+  .fig-status:empty { display: none; }
+  .fig-status.error { color: var(--error); }
+  .img-error {
+    margin: 0; padding: 1rem; border: 1px dashed var(--error); border-radius: 6px;
+    background: #fff6f2; color: var(--error); font-size: 0.92rem;
+  }
+
+  /* Imprenta: tablero de tres columnas */
+  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.3rem; align-items: start; }
+  @media (max-width: 960px) { .board { grid-template-columns: minmax(0, 1fr); } }
+  .board-col {
+    background: rgba(232, 223, 198, 0.28); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1rem 1rem 0.3rem;
+  }
+  .board-col h2 { display: flex; align-items: center; gap: 0.6rem; font-size: 1.25rem; margin-bottom: 0.8rem; }
+  .col-count {
+    font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 0.85rem; font-weight: 700;
+    background: var(--night); color: #fff; border-radius: 999px; padding: 0.05em 0.7em;
+  }
+  .board-col .request-list { margin-bottom: 0.9rem; }
+  .board-col .empty-note { margin: 0 0 1rem; }
+
+  .print-card { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
+  .print-card strong { font-family: 'Fraunces', serif; font-size: 1.05rem; }
+  .print-card .print-meta { font-size: 0.9rem; color: #3a362e; margin: 0; }
+  .print-card .actions { margin-top: 0.3rem; }
+  .print-thumbs {
+    list-style: none; margin: 0.2rem 0 0; padding: 0; display: grid; gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  }
+  .thumb-btn {
+    display: block; width: 100%; padding: 0; overflow: hidden; cursor: zoom-in;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit;
+  }
+  .thumb-btn:hover { border-color: var(--night); }
+  .thumb-btn img { display: block; width: 100%; height: 62px; object-fit: contain; }
+  .thumb-btn .thumb-cap {
+    display: block; padding: 0.15rem 0.35rem; font-size: 0.76rem; text-align: left;
+    background: var(--gold-soft); color: #24211c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Visor de imagen ampliada */
+  dialog#visor {
+    width: min(94vw, 1100px); padding: 1rem 1.2rem 1.2rem;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink);
+  }
+  dialog#visor::backdrop { background: rgba(13, 15, 46, 0.62); }
+  .visor-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.8rem; }
+  .visor-bar strong { font-family: 'Fraunces', serif; font-size: 1.15rem; }
+  #visor-img {
+    display: block; max-width: 100%; max-height: 70vh; margin: 0 auto;
+    background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  }
+  #visor-caption { margin: 0.8rem 0 0; font-size: 0.95rem; color: #3a362e; }
+
+  /* Rechazo de solicitudes */
+  .badge.error { background: #f6dcd3; color: var(--error); }
+  .rechazo-panel {
+    flex-basis: 100%; border: 1px solid var(--error); border-radius: 8px;
+    background: #fff6f2; padding: 0.9rem 1rem 1rem;
+  }
+  .rechazo-panel .rechazo-pregunta { margin: 0 0 0.7rem; font-weight: 700; color: var(--error); }
+  .rechazo-panel label { display: block; font-weight: 700; font-size: 0.93rem; margin-bottom: 0.3rem; }
+  .rechazo-panel textarea {
+    width: 100%; font: inherit; font-size: 0.95rem; padding: 0.6em 0.7em; resize: vertical;
+    border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink);
+  }
+  .rechazo-panel .botones { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.7rem; }
+  .rechazo-info {
+    margin: 0 0 0.9rem; padding: 0.7rem 0.9rem; background: #fff6f2;
+    border-left: 4px solid var(--error); border-radius: 0 6px 6px 0;
+  }
+  .request-card .rechazo { margin: 0; padding: 0 1.1rem 1rem; color: #24211c; }
+
+  /* Encabezado del supervisor: texto a la izquierda, su código bien visible a la derecha */
+  .sup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.2rem 2.5rem; align-items: start; margin-bottom: 0.4rem; }
+  @media (max-width: 900px) { .sup-head { grid-template-columns: minmax(0, 1fr); } }
+  .codigo-card {
+    background: var(--gold-soft); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1rem 1.5rem 1.1rem; min-width: 260px; max-width: 330px;
+  }
+  .codigo-etiqueta { display: block; font-weight: 700; font-size: 0.95rem; }
+  .codigo-valor {
+    display: block; margin: 0.1rem 0 0.35rem; font-size: 2.2rem; font-weight: 700; line-height: 1.2;
+    letter-spacing: 0.14em; color: var(--night); overflow-wrap: anywhere; user-select: all;
+  }
+  .codigo-ayuda { display: block; margin-bottom: 0.7rem; font-size: 0.88rem; color: #3a362e; }
+  .codigo-copiado { display: block; margin: 0.5rem 0 0; min-height: 1.3em; font-size: 0.9rem; font-weight: 700; color: var(--ok); }
+  .aviso-supervisor:empty { display: none; }
+  .seccion-encabezado {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem 1rem;
+    flex-wrap: wrap; margin-top: 1.6rem; margin-bottom: 0.9rem;
+  }
+  .seccion-encabezado h2 { margin: 0; }
+
+  /* Historial */
+  .historial-controles { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 0 1.2rem; max-width: 760px; }
+  @media (max-width: 640px) { .historial-controles { grid-template-columns: minmax(0, 1fr); } }
+    margin: 0 0 1rem; padding: 0.75rem 1rem; background: #eceefa;
+    border-left: 4px solid var(--night); border-radius: 0 6px 6px 0;
+  }
+
+  /* Supervisor: agregar imágenes y restaurar las quitadas */
+  .fig-agregar { margin-top: 1rem; }
+  .agregar-panel {
+    margin-top: 0.7rem; max-width: 640px; padding: 0.9rem 1rem 1rem;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  .agregar-panel .agregar-titulo { margin: 0 0 0.7rem; font-weight: 700; }
+  .agregar-panel .campo-mini { margin-bottom: 0.8rem; }
+  .agregar-panel label { display: block; font-weight: 700; font-size: 0.93rem; margin-bottom: 0.3rem; }
+  .agregar-panel input[type="text"] {
+    width: 100%; font: inherit; font-size: 0.95rem; padding: 0.55em 0.7em;
+    border: 1px solid var(--line); border-radius: var(--radius); background: #fffdf8; color: var(--ink);
+  }
+  .agregar-panel input[type="file"] { font: inherit; font-size: 0.95rem; max-width: 100%; }
+  .agregar-panel .botones { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .fig-quitadas { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px dashed var(--line); }
+  .fig-quitadas h4 { margin: 0 0 0.2rem; font-size: 1rem; }
+  .fig-quitadas .hint { margin-bottom: 0.7rem; }
+  .quitadas-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+  .quitada-item {
+    display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;
+    padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  .quitada-item .thumb-btn { width: 88px; flex-shrink: 0; }
+  .quitada-item .quitada-texto { flex: 1; min-width: 180px; }
+  .quitada-item .quitada-texto strong { display: block; font-family: 'Fraunces', serif; font-size: 0.98rem; }
+  .quitada-item .quitada-texto span { display: block; font-size: 0.88rem; color: #3a362e; }
+  .historial-controles input, .historial-controles select { height: 3rem; }
+  .request-list.historial-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
+  .board-col .btn-historial { margin: 0 0 1rem; }
+  .mes-grupo { list-style: none; }
+  .mes-titulo { margin: 0; font-size: 1.15rem; }
+  .mes-toggle {
+    width: 100%; display: flex; align-items: center; gap: 0.3rem 0.9rem; flex-wrap: wrap; text-align: left;
+    padding: 0.85rem 1.1rem; cursor: pointer; color: var(--ink);
+    background: var(--gold-soft); border: 1px solid var(--line); border-radius: 10px;
+    font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1rem;
+  }
+  .mes-toggle:hover { border-color: var(--night); }
+  .mes-toggle .mes-nombre { font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.2rem; }
+  .mes-toggle .mes-cuenta { font-size: 0.92rem; color: #3a362e; }
+  .mes-toggle .chevron { margin-left: auto; width: 1.15rem; height: 1.15rem; flex-shrink: 0; transition: transform 0.15s ease; }
+  .mes-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+  .mes-lista { margin: 0.9rem 0 0.4rem; }
+  .mes-lista[hidden] { display: none; }
+  #lista-historial { gap: 0.8rem; }
+
+
+  /* Detalle de la solicitud: panel del estudiante a la izquierda */
+  .request-card .sup-layout .fig-thumbs { margin-top: 0; }
+  .fig-acciones-edicion { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+  .fig-marcas { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: 0.3rem; }
+  .comparacion img { cursor: zoom-in; }
 </style>
 </head>
 <body>
@@ -468,7 +729,7 @@
 <a class="skip-link" href="#main-heading-target">Saltar al contenido principal</a>
 
 <header class="top">
-  <span class="wordmark">punti<span class="dot">·</span>to</span>
+  <span class="wordmark">puntito</span>
   <span class="tagline">Gráficos táctiles en braille, de tu PDF a la imprenta</span>
 </header>
 
@@ -584,8 +845,9 @@
     <p class="lede" id="step-1-lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
 
     <ol class="instructions">
-      <li>Sube el PDF que tiene los gráficos. Es lo único que tienes que hacer.</li>
-      <li>Puntito encuentra solo los gráficos de líneas y lee su título, sus ejes y su leyenda.</li>
+      <li>Sube el PDF que tiene los gráficos.</li>
+      <li>Puntito encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
+      <li>Eliges cuáles enviar: vienen todos marcados, desmarca los que no necesites.</li>
       <li>Se envía una solicitud a tu supervisor, que la revisa y la manda a imprimir en relieve.</li>
     </ol>
 
@@ -600,7 +862,7 @@
   <section class="step" id="step-2" aria-labelledby="step-2-heading">
     <span class="step-eyebrow">Paso 2 de 3</span>
     <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
-    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y se los envía a tu supervisor; no tienes que hacer nada más. Tu lector de pantalla te irá avisando del avance.</p>
+    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
 
     <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
       <span class="icon" aria-hidden="true">
@@ -621,10 +883,12 @@
     </div>
   </section>
 
-  <!-- PASO 3: búsqueda de gráficos y envío, automáticos -->
+  <!-- PASO 3: gráficos encontrados; el estudiante elige cuáles enviar
+       (todos marcados de entrada). Casillas nativas con el pie de figura
+       como texto: se recorren con Tab y se marcan con Espacio. -->
   <section class="step" id="step-3" aria-labelledby="step-3-heading">
     <span class="step-eyebrow">Paso 3 de 3</span>
-    <h2 id="step-3-heading" tabindex="-1">Procesando tu documento</h2>
+    <h2 id="step-3-heading" tabindex="-1">Gráficos de tu documento</h2>
 
     <div class="progress-line" id="progress-line">
       <span class="spinner" aria-hidden="true"></span>
@@ -632,6 +896,18 @@
     </div>
 
     <p class="status" role="status" aria-live="polite" id="detect-status"></p>
+
+    <form id="form-eleccion" hidden>
+      <fieldset class="picks">
+        <legend>Gráficos de líneas encontrados. Marca los que quieres enviar a tu supervisor.</legend>
+        <ul class="eleccion-lista" id="eleccion-lista"></ul>
+      </fieldset>
+      <div class="actions">
+        <button type="button" class="secondary" data-goto="step-2">Elegir otro PDF</button>
+        <button type="submit" class="primary" id="enviar-eleccion">Enviar a mi supervisor</button>
+      </div>
+    </form>
+
     <div class="actions" id="step-3-acciones" hidden>
       <button type="button" class="primary" data-goto="step-2">Elegir otro PDF</button>
     </div>
@@ -725,17 +1001,32 @@
 
   <!-- APP: SUPERVISOR -->
   <section class="screen" id="screen-app-supervisor" aria-labelledby="app-supervisor-heading">
-    <h1 id="app-supervisor-heading" tabindex="-1">Solicitudes de estudiantes</h1>
-    <p class="lede">Para cada solicitud: <strong>Revisar</strong> muestra cómo se leyó cada gráfica y su descripción; corrige en la pizarra lo que haga falta y da el visto bueno a cada una. Con todas revisadas, <strong>Autorizar</strong> genera las láminas en braille (STL), que puedes descargar, y por último <strong>Enviar a imprenta</strong>.</p>
-    <p class="hint" id="supervisor-codigo-hint"></p>
+    <div class="sup-head">
+      <div>
+        <h1 id="app-supervisor-heading" tabindex="-1">Solicitudes de estudiantes</h1>
+        <p class="lede">Abre una solicitud: a la izquierda están los datos del estudiante y su PDF original. <strong>Revisar</strong> lee cada gráfica y la muestra al lado de la original; corrige en la pizarra lo que haga falta y da el visto bueno a cada una. Si una imagen quedó mal, quítala o reemplázala; si falta una figura, agrégala; si la solicitud no tiene arreglo, recházala. Con todo revisado, <strong>Autorizar</strong> genera las láminas (STL) y por último <strong>Enviar a imprenta</strong>.</p>
+      </div>
+      <div class="codigo-card" role="group" aria-labelledby="codigo-etiqueta">
+        <span class="codigo-etiqueta" id="codigo-etiqueta">Tu código de supervisor</span>
+        <strong class="codigo-valor" id="supervisor-codigo-valor"></strong>
+        <span class="codigo-ayuda">Compártelo con tus estudiantes para que se conecten contigo.</span>
+        <button type="button" class="secondary small" id="copiar-codigo">Copiar código</button>
+        <span class="codigo-copiado" id="copiar-codigo-estado" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <p class="status aviso-supervisor" id="supervisor-aviso" tabindex="-1"></p>
 
     <h2>Pendientes</h2>
     <ul class="request-list" id="lista-supervisor-pendientes"></ul>
     <p class="empty-note" id="supervisor-pendientes-vacio" hidden>No tienes solicitudes pendientes por ahora.</p>
 
-    <h2>Ya autorizadas</h2>
+    <div class="seccion-encabezado">
+      <h2>Autorizadas y rechazadas</h2>
+      <button type="button" class="secondary small" id="btn-historial-supervisor" hidden></button>
+    </div>
     <ul class="request-list" id="lista-supervisor-autorizadas"></ul>
-    <p class="empty-note" id="supervisor-autorizadas-vacio" hidden>Todavía no has autorizado ninguna solicitud.</p>
+    <p class="empty-note" id="supervisor-autorizadas-vacio" hidden>Todavía no has autorizado ni rechazado ninguna solicitud.</p>
   </section>
 
   <!-- AUTENTICACIÓN: IMPRENTA -->
@@ -796,25 +1087,71 @@
   <!-- APP: IMPRENTA -->
   <section class="screen" id="screen-app-imprenta" aria-labelledby="app-imprenta-heading">
     <h1 id="app-imprenta-heading" tabindex="-1">Trabajos para imprimir</h1>
-    <p class="lede">Estos son los modelos STL ya autorizados por un supervisor. Cuando termines de imprimir uno, márcalo como listo para que el estudiante lo sepa.</p>
+    <p class="lede">Estos son los modelos STL ya autorizados por un supervisor. Descárgalos, imprímelos y marca cada trabajo cuando esté listo para que el estudiante lo sepa.</p>
 
-    <h2>Pendiente</h2>
-    <ul class="request-list" id="lista-imprenta-pendientes"></ul>
-    <p class="empty-note" id="imprenta-pendientes-vacio" hidden>No hay trabajos pendientes por ahora.</p>
+    <div class="board">
+      <section class="board-col" aria-labelledby="col-imprenta-pendientes">
+        <h2 id="col-imprenta-pendientes">Pendiente <span class="col-count" id="count-imprenta-pendientes"></span></h2>
+        <ul class="request-list" id="lista-imprenta-pendientes"></ul>
+        <p class="empty-note" id="imprenta-pendientes-vacio" hidden>No hay trabajos pendientes por ahora.</p>
+      </section>
 
-    <h2>Imprimiendo</h2>
-    <ul class="request-list" id="lista-imprenta-imprimiendo"></ul>
-    <p class="empty-note" id="imprenta-imprimiendo-vacio" hidden>No hay nada imprimiéndose ahora.</p>
+      <section class="board-col" aria-labelledby="col-imprenta-imprimiendo">
+        <h2 id="col-imprenta-imprimiendo">Imprimiendo <span class="col-count" id="count-imprenta-imprimiendo"></span></h2>
+        <ul class="request-list" id="lista-imprenta-imprimiendo"></ul>
+        <p class="empty-note" id="imprenta-imprimiendo-vacio" hidden>No hay nada imprimiéndose ahora.</p>
+      </section>
 
-    <h2>Impreso</h2>
-    <ul class="request-list" id="lista-imprenta-impresos"></ul>
-    <p class="empty-note" id="imprenta-impresos-vacio" hidden>Todavía no hay nada listo para recoger.</p>
+      <section class="board-col" aria-labelledby="col-imprenta-impresos">
+        <h2 id="col-imprenta-impresos">Impreso <span class="col-count" id="count-imprenta-impresos"></span></h2>
+        <ul class="request-list" id="lista-imprenta-impresos"></ul>
+        <p class="empty-note" id="imprenta-impresos-vacio" hidden>Todavía no hay nada listo para recoger.</p>
+        <button type="button" class="secondary small btn-historial" id="btn-historial-imprenta" hidden></button>
+      </section>
+    </div>
   </section>
 
-</main>
+  <!-- HISTORIAL (supervisor e imprenta) -->
+  <section class="screen" id="screen-historial" aria-labelledby="historial-heading">
+    <h1 id="historial-heading" tabindex="-1">Historial</h1>
+    <p class="lede" id="historial-lede"></p>
+
+    <div class="historial-controles">
+      <div class="field-group">
+        <label for="historial-buscar">Buscar por nombre, código o carrera</label>
+        <input type="search" id="historial-buscar" autocomplete="off">
+      </div>
+      <div class="field-group" id="historial-filtro-grupo">
+        <label for="historial-filtro">Mostrar</label>
+        <select id="historial-filtro">
+          <option value="todas">Todas</option>
+          <option value="aprobada">Autorizadas</option>
+          <option value="rechazada">Rechazadas</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="status" id="historial-conteo" role="status" aria-live="polite"></p>
+    <ul class="request-list" id="lista-historial"></ul>
+    <div class="actions">
+      <button type="button" class="secondary" id="historial-volver">Volver a las solicitudes</button>
+    </div>
+  </section>
+
+</main></main>
 
 <footer class="bottom">
 </footer>
+
+<!-- Visor de imagen ampliada (supervisor e imprenta) -->
+<dialog id="visor" aria-labelledby="visor-titulo">
+  <div class="visor-bar">
+    <strong id="visor-titulo"></strong>
+    <button type="button" class="secondary small" id="visor-cerrar">Cerrar</button>
+  </div>
+  <img id="visor-img" alt="">
+  <p id="visor-caption"></p>
+</dialog>
 
 <!-- Editor de corrección ("pizarra"): el supervisor lo abre con "Editar
      segmentación" sobre una figura ya autorizada, antes de mandarla a imprenta. -->
@@ -970,8 +1307,11 @@
   // ---------------------------------------------------------------
   // Navegación entre pantallas
   // ---------------------------------------------------------------
+  const PANTALLAS_ANCHAS = ['screen-app-supervisor', 'screen-app-imprenta', 'screen-historial'];
+
   function goTo(id) {
     document.querySelectorAll('.step, .screen').forEach(el => el.classList.toggle('active', el.id === id));
+    document.body.classList.toggle('ancho-completo', PANTALLAS_ANCHAS.includes(id));
     const heading = document.querySelector('#' + id + ' h1, #' + id + ' h2');
     if (heading) {
       heading.setAttribute('tabindex', '-1');
@@ -1305,12 +1645,18 @@
     accionesPaso3.hidden = false;
   }
 
+  const formEleccion = document.getElementById('form-eleccion');
+  const listaEleccion = document.getElementById('eleccion-lista');
+  const btnEnviarEleccion = document.getElementById('enviar-eleccion');
+  let encontrados = null;   // { lote_id, archivo, figuras, otras } del último PDF
+
   async function procesarYEnviar(archivo) {
     if (!usuarioActual || usuarioActual.rol !== 'estudiante') { goTo('screen-landing'); return; }
     procesando = true;
     goTo('step-3');
     progress.style.display = 'flex';
     accionesPaso3.hidden = true;
+    formEleccion.hidden = true;
     avisar('Buscando gráficos de líneas en ' + archivo.name + '. Esto puede tardar un momento.');
 
     try {
@@ -1325,34 +1671,36 @@
       const lineales = detectados.filter(g => g.es_lineal);
       if (lineales.length === 0) {
         fallar(detectados.length > 0
-          ? 'El documento tiene ' + detectados.length + ' figura(s), pero ninguna es un gráfico de líneas (por ahora es lo único que se puede convertir). No se envió ninguna solicitud.'
-          : 'No se encontraron gráficos en el documento. No se envió ninguna solicitud.');
+          ? 'El documento tiene ' + detectados.length + ' figura(s), pero ninguna es un gráfico de líneas (por ahora es lo único que se puede convertir).'
+          : 'No se encontraron gráficos en el documento.');
         return;
       }
 
-      avisar((lineales.length === 1 ? 'Se encontró 1 gráfico de líneas'
-        : 'Se encontraron ' + lineales.length + ' gráficos de líneas') +
-        '. Enviando la solicitud a tu supervisor…');
-
-      const figuras = lineales.map(g => ({
-        id: g.id,
-        titulo: 'Gráfico de línea',
-        // El pie de figura del PDF ("Figura 3. ...") dice de qué trata el
-        // gráfico; lo ven el supervisor y la imprenta, y abre la narración.
-        caption: g.pie_figura || ('Gráfico de líneas sin pie de figura en la página ' + g.pagina),
-        pagina: g.pagina,
-        imagen_url: API_BASE + g.preview_url,
-        pie_figura: g.pie_figura || '',
-      }));
-
-      const envio = await postJson('/api/solicitudes', {
+      encontrados = {
         lote_id: datos.lote_id,
-        archivo_nombre: archivo.name,
-        figuras: figuras,
-      });
-      if (!envio.resp.ok || !envio.datos.ok) throw new Error(envio.datos.error || 'No se pudo enviar la solicitud.');
-
-      mostrarSolicitudEnviada(envio.datos.solicitud, figuras, detectados.length - lineales.length);
+        archivo: archivo.name,
+        otras: detectados.length - lineales.length,
+        figuras: lineales.map(g => ({
+          id: g.id,
+          titulo: 'Gráfico de línea',
+          // El pie de figura del PDF ("Figura 3. ...") dice de qué trata el
+          // gráfico: es lo que el estudiante escucha para decidir.
+          caption: g.pie_figura || ('Gráfico de líneas sin pie de figura en la página ' + g.pagina),
+          pagina: g.pagina,
+          imagen_url: API_BASE + g.preview_url,
+          pie_figura: g.pie_figura || '',
+        })),
+      };
+      pintarEleccion();
+      progress.style.display = 'none';
+      formEleccion.hidden = false;
+      const n = encontrados.figuras.length;
+      avisar((n === 1 ? 'Se encontró 1 gráfico de líneas. Está marcado.'
+        : 'Se encontraron ' + n + ' gráficos de líneas. Todos están marcados.') +
+        ' Desmarca los que no quieras enviar y pulsa "Enviar a mi supervisor".' +
+        (encontrados.otras > 0 ? ' El documento tiene además ' + encontrados.otras +
+          ' figura(s) que no son gráficos de líneas; esas no se pueden convertir por ahora.' : ''));
+      listaEleccion.querySelector('input')?.focus();
     } catch (err) {
       fallar('No se pudo completar: ' + err.message);
     } finally {
@@ -1361,13 +1709,88 @@
     }
   }
 
-  function mostrarSolicitudEnviada(solicitud, figuras, otrasFiguras) {
+  function pintarEleccion() {
+    listaEleccion.innerHTML = '';
+    encontrados.figuras.forEach((f, i) => {
+      const li = document.createElement('li');
+      li.className = 'marcada';
+      const label = document.createElement('label');
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = true;
+      check.value = f.id;
+      check.addEventListener('change', () => {
+        li.classList.toggle('marcada', check.checked);
+        actualizarEleccion();
+      });
+      const texto = document.createElement('span');
+      texto.className = 'texto';
+      const titulo = document.createElement('strong');
+      titulo.textContent = 'Gráfico ' + (i + 1) + ', página ' + f.pagina;
+      const pie = document.createElement('span');
+      pie.textContent = f.pie_figura || 'Sin pie de figura en el documento.';
+      texto.appendChild(titulo);
+      texto.appendChild(pie);
+      label.appendChild(check);
+      label.appendChild(texto);
+      li.appendChild(label);
+      // Miniatura para quien acompañe al estudiante; el lector de pantalla
+      // ya tiene el texto de la casilla, así que la imagen es decorativa.
+      const img = document.createElement('img');
+      img.src = f.imagen_url;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onerror = () => img.remove();
+      li.appendChild(img);
+      listaEleccion.appendChild(li);
+    });
+    actualizarEleccion();
+  }
+
+  function elegidas() {
+    const ids = Array.from(listaEleccion.querySelectorAll('input:checked')).map(c => c.value);
+    return encontrados.figuras.filter(f => ids.includes(f.id));
+  }
+
+  function actualizarEleccion() {
+    const n = elegidas().length;
+    btnEnviarEleccion.disabled = n === 0;
+    btnEnviarEleccion.textContent = n === 0 ? 'Marca al menos un gráfico'
+      : (n === 1 ? 'Enviar 1 gráfico a mi supervisor' : 'Enviar ' + n + ' gráficos a mi supervisor');
+  }
+
+  formEleccion.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const figuras = elegidas();
+    if (!figuras.length || !encontrados) return;
+    btnEnviarEleccion.disabled = true;
+    avisar('Enviando la solicitud a tu supervisor…');
+    try {
+      const envio = await postJson('/api/solicitudes', {
+        lote_id: encontrados.lote_id,
+        archivo_nombre: encontrados.archivo,
+        figuras: figuras,
+      });
+      if (!envio.resp.ok || !envio.datos.ok) throw new Error(envio.datos.error || 'No se pudo enviar la solicitud.');
+      mostrarSolicitudEnviada(envio.datos.solicitud, figuras,
+        encontrados.otras, encontrados.figuras.length - figuras.length);
+    } catch (err) {
+      detectStatus.textContent = 'No se pudo enviar: ' + err.message;
+      detectStatus.classList.add('error');
+      btnEnviarEleccion.disabled = false;
+    }
+  });
+
+  function mostrarSolicitudEnviada(solicitud, figuras, otrasFiguras, noElegidas = 0) {
     const n = figuras.length;
     document.getElementById('ticket-number').textContent = 'Solicitud #' + String(solicitud.id).padStart(5, '0');
     document.getElementById('ticket-detail').textContent =
       (n === 1 ? 'Se envió 1 gráfico de líneas' : 'Se enviaron ' + n + ' gráficos de líneas') +
       ' a tu supervisor (' + (usuarioActual.supervisor_codigo || 'sin definir') + ')' +
       (n === 1 ? ' para convertirlo en lámina táctil.' : ' para convertirlos en láminas táctiles.') +
+      (noElegidas > 0
+        ? (noElegidas === 1 ? ' No se envió 1 gráfico que desmarcaste.' : ' No se enviaron ' + noElegidas + ' gráficos que desmarcaste.')
+        : '') +
       (otrasFiguras > 0
         ? ' El documento tenía ' + otrasFiguras + ' figura(s) más que no son gráficos de líneas; esas no se pueden convertir por ahora.'
         : '');
@@ -1388,6 +1811,7 @@
   // ---------------------------------------------------------------
   function etiquetaSupervisor(estado) {
     if (estado === 'aprobada') return { texto: 'Solicitud aprobada', clase: 'ok' };
+    if (estado === 'rechazada') return { texto: 'Solicitud rechazada', clase: 'error' };
     return { texto: 'Solicitud en espera', clase: 'wait' };
   }
   function etiquetaImprenta(estado) {
@@ -1421,9 +1845,16 @@
           '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + ' · ' + new Date(s.creado_en).toLocaleDateString('es-PE') + '</span>' +
           '<span class="badges">' +
             '<span class="badge ' + sup.clase + '">Supervisor: ' + sup.texto + '</span>' +
-            '<span class="badge ' + imp.clase + '">Imprenta: ' + imp.texto + '</span>' +
+            (s.estado_supervisor === 'rechazada' ? '' : '<span class="badge ' + imp.clase + '">Imprenta: ' + imp.texto + '</span>') +
           '</span>' +
         '</div>';
+      if (s.estado_supervisor === 'rechazada') {
+        const motivo = document.createElement('p');
+        motivo.className = 'rechazo';
+        motivo.textContent = 'Motivo del supervisor: ' + (s.motivo_rechazo ? s.motivo_rechazo : 'no indicó un motivo.') +
+          ' Puedes enviar una nueva solicitud.';
+        li.appendChild(motivo);
+      }
       contenedor.appendChild(li);
     });
   }
@@ -1431,289 +1862,614 @@
   // ---------------------------------------------------------------
   // APP: SUPERVISOR
   // ---------------------------------------------------------------
-  // Opciones (solo el supervisor; la imprenta no pasa ninguna):
-  //   revision:   solicitud en revisión: cada gráfica con su visto bueno;
-  //   corregible: se puede abrir la pizarra (en revisión, o ya autorizada
-  //               pero todavía no enviada a imprenta).
+  // Diseño de tactiverso 12 (datos del estudiante y su PDF en un panel a la
+  // izquierda, gráficas a la derecha; quitar, reemplazar o agregar
+  // gráficas; rechazar; historial), con los datos en el servidor y el flujo
+  // Revisar -> pizarra / visto bueno -> Autorizar -> Enviar a imprenta.
+  const MAX_RECIENTES = 5;          // terminadas que se ven sin abrir el historial
+  let solicitudesSupervisor = [];   // último listado (lo usa el historial)
+
   // Las URL de la API vienen relativas ("/api/resultados/..."); las de
   // solicitudes viejas podían venir ya completas.
   function urlDeResultado(url) {
     return url && url.startsWith('/') ? API_BASE + url : url;
   }
 
+  function crearEl(tag, clase, texto) {
+    const el = document.createElement(tag);
+    if (clase) el.className = clase;
+    if (texto != null) el.textContent = texto;
+    return el;
+  }
+
+  function crearBtn(clase, texto, etiqueta) {
+    const b = crearEl('button', clase, texto);
+    b.type = 'button';
+    if (etiqueta) b.setAttribute('aria-label', etiqueta);
+    return b;
+  }
+
+  function fechaCorta(iso) {
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  }
+
+  function tituloFigura(f, n) {
+    return 'Gráfica ' + n + (f.pagina ? ', página ' + f.pagina : '');
+  }
+
+  // ---- visor de imagen ampliada ----
+  function abrirVisor(src, titulo, texto) {
+    const visor = document.getElementById('visor');
+    const img = document.getElementById('visor-img');
+    img.src = src;
+    img.alt = titulo;
+    document.getElementById('visor-titulo').textContent = titulo;
+    document.getElementById('visor-caption').textContent = texto || '';
+    if (visor.showModal) visor.showModal(); else visor.setAttribute('open', '');
+  }
+  document.getElementById('visor-cerrar').addEventListener('click', () => document.getElementById('visor').close());
+
+  // Imagen con título; al hacer clic se abre ampliada.
   function crearImagenFigura(src, titulo, alt) {
-    const fig = document.createElement('figure');
-    const cap = document.createElement('figcaption');
-    cap.textContent = titulo;
+    const fig = crearEl('figure');
+    fig.appendChild(crearEl('figcaption', null, titulo));
+    const boton = crearBtn('thumb-btn', null, 'Ampliar: ' + titulo);
     const img = document.createElement('img');
     img.src = src;
     img.alt = alt;
     img.loading = 'lazy';
-    img.onerror = () => manejarErrorImagen(img,
+    img.style.height = 'auto';
+    img.onerror = () => manejarErrorImagen(boton,
       'No se pudo cargar la imagen (puede que ya no esté disponible en el ' +
       'servidor — pedile al estudiante que vuelva a subir el documento).');
-    fig.appendChild(cap);
-    fig.appendChild(img);
+    boton.appendChild(img);
+    boton.addEventListener('click', () => abrirVisor(src, titulo, alt));
+    fig.appendChild(boton);
     return fig;
   }
 
-  function crearDetalleSolicitud(s, opciones) {
-    const { revision = false, corregible = false } = opciones || {};
-    const dl = document.createElement('dl');
-    const campos = [
-      ['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
-      ['Código', s.estudiante.codigo], ['Facultad', s.estudiante.facultad], ['Carrera', s.estudiante.carrera],
-      ['Documento', s.archivo_nombre || '—']
-    ];
-    campos.forEach(([dt, dd]) => {
-      const dtEl = document.createElement('dt'); dtEl.textContent = dt;
-      const ddEl = document.createElement('dd'); ddEl.textContent = dd;
-      dl.appendChild(dtEl); dl.appendChild(ddEl);
+  // ---- panel izquierdo: estudiante y PDF original ----
+  function crearEnlacePdf(s) {
+    const nombre = s.archivo_nombre || 'documento.pdf';
+    const envoltorio = crearEl('div');
+    const a = crearEl('a', 'doc-link');
+    a.href = API_BASE + '/api/solicitudes/' + s.id + '/pdf';
+    const texto = crearEl('span', 'doc-text');
+    texto.appendChild(crearEl('span', 'doc-name', nombre));
+    texto.appendChild(crearEl('span', 'doc-action', 'Descargar PDF'));
+    a.appendChild(texto);
+    const estado = crearEl('p', 'fig-status');
+    estado.setAttribute('role', 'status');
+    estado.setAttribute('aria-live', 'polite');
+    // Antes de descargar se comprueba que el servidor todavía tiene el PDF
+    // (su disco es efímero): si no, un enlace directo bajaría el mensaje de
+    // error con extensión .pdf.
+    a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      estado.classList.remove('error');
+      estado.textContent = 'Preparando la descarga…';
+      try {
+        const resp = await fetch(a.href, { method: 'HEAD', credentials: 'include' });
+        if (!resp.ok || !(resp.headers.get('content-type') || '').includes('pdf')) {
+          const detalle = await fetch(a.href, { credentials: 'include' }).then(r => r.json()).catch(() => ({}));
+          throw new Error(detalle.error || 'El servidor no devolvió el PDF.');
+        }
+        window.location.assign(a.href);
+        estado.textContent = 'Descargando el PDF…';
+      } catch (err) {
+        estado.textContent = 'No se pudo descargar: ' + err.message;
+        estado.classList.add('error');
+      }
     });
-
-    const ul = document.createElement('ul');
-    ul.className = 'fig-thumbs';
-    s.figuras.forEach((f, i) => {
-      const li = document.createElement('li');
-      const strong = document.createElement('strong');
-      strong.textContent = (i + 1) + '. ' + f.titulo + ' — página ' + f.pagina;
-      li.appendChild(strong);
-
-      if (f.error) {
-        // Esta figura en particular falló al autorizar (imagen perdida,
-        // error del segmentador, etc.) — no tiró abajo el resto de la
-        // solicitud, pero acá no hay nada para descargar.
-        const err = document.createElement('p');
-        err.className = 'status error';
-        err.textContent = f.error;
-        li.appendChild(err);
-      } else {
-        const p = document.createElement('p');
-        p.textContent = f.caption;
-        li.appendChild(p);
-      }
-
-      // La gráfica tal como está en el PDF y, en cuanto se segmentó, al lado
-      // lo que leyó el programa (ejes, curva y textos marcados encima): para
-      // dar el visto bueno hay que poder compararlas.
-      const comparacion = document.createElement('div');
-      comparacion.className = 'comparacion';
-      comparacion.appendChild(crearImagenFigura(
-        urlDeResultado(f.imagen_url), 'Gráfica original (del PDF)',
-        'Gráfica original tal como aparece en el PDF: ' + f.caption));
-      if (f.overlay_url) {
-        comparacion.appendChild(crearImagenFigura(
-          API_BASE + f.overlay_url + '?t=' + encodeURIComponent(f.correccion_id || ''),
-          'Lo que leyó el programa',
-          'Lectura del programa sobre la gráfica: eje X en rojo, eje Y en azul, curvas en color, textos en recuadros'));
-      }
-      li.appendChild(comparacion);
-
-      if (f.advertencias && f.advertencias.length) {
-        const advs = document.createElement('ul');
-        advs.className = 'warnings';
-        f.advertencias.forEach(a => {
-          const item = document.createElement('li');
-          item.textContent = a;
-          advs.appendChild(item);
-        });
-        li.appendChild(advs);
-      }
-
-      if (f.descripcion) {
-        const desc = document.createElement('details');
-        desc.className = 'descripcion';
-        const resumenDesc = document.createElement('summary');
-        resumenDesc.textContent = 'Descripción para narrar';
-        const textoDesc = document.createElement('p');
-        textoDesc.textContent = f.descripcion;
-        desc.appendChild(resumenDesc);
-        desc.appendChild(textoDesc);
-        li.appendChild(desc);
-      }
-
-      if (f.stl_download_url) {
-        const link = document.createElement('a');
-        link.className = 'link-btn primary';
-        link.style.marginRight = '0.4rem';
-        link.href = API_BASE + f.stl_download_url;
-        link.textContent = 'Descargar STL';
-        link.setAttribute('download', '');
-        li.appendChild(link);
-      }
-
-      // (La narración para Hand_Tracking se sigue generando en el servidor
-      // —f.narracion_download_url—, pero su descarga queda oculta hasta
-      // terminar el flujo principal.)
-
-      const lista = f.correccion_id && f.json_url && !f.error;
-      if (revision && lista) {
-        const marca = document.createElement('p');
-        marca.className = 'revision-marca ' + (f.revisada ? 'ok' : 'pendiente');
-        marca.textContent = f.revisada ? '✓ Revisada' : 'Pendiente de revisión';
-        li.appendChild(marca);
-      }
-
-      if (corregible && lista) {
-        const btnEditar = document.createElement('button');
-        btnEditar.type = 'button';
-        btnEditar.className = 'link-btn secondary';
-        btnEditar.dataset.foco = 'editar-' + s.id + '-' + i;
-        btnEditar.textContent = 'Corregir en la pizarra';
-        btnEditar.addEventListener('click', () => Editor.abrir(s.id, i, f, btnEditar, revision));
-        li.appendChild(btnEditar);
-      }
-
-      if (revision && lista) {
-        const btnVisto = document.createElement('button');
-        btnVisto.type = 'button';
-        btnVisto.className = 'link-btn ' + (f.revisada ? 'secondary' : 'primary');
-        btnVisto.dataset.foco = 'visto-' + s.id + '-' + i;
-        btnVisto.textContent = f.revisada ? 'Quitar visto bueno' : '✓ Está bien';
-        btnVisto.addEventListener('click', () => darVistoBueno(s.id, i, !f.revisada, btnVisto));
-        li.appendChild(btnVisto);
-      }
-
-      ul.appendChild(li);
-    });
-
-    const wrap = document.createElement('div');
-    wrap.appendChild(dl);
-    wrap.appendChild(ul);
-    return wrap;
+    envoltorio.appendChild(a);
+    envoltorio.appendChild(estado);
+    return envoltorio;
   }
 
-  async function pintarSolicitudesSupervisor() {
-    if (!usuarioActual) return;
-    const hintCodigo = document.getElementById('supervisor-codigo-hint');
-    if (hintCodigo) {
-      hintCodigo.textContent = 'Tu código de conexión para estudiantes: ' + usuarioActual.usuario;
+  function crearPanelEstudiante(s) {
+    const panel = crearEl('div', 'sup-info');
+    panel.appendChild(crearEl('h3', null, 'Estudiante'));
+    const dl = document.createElement('dl');
+    [['Nombre', s.estudiante.nombre], ['Correo', s.estudiante.correo],
+     ['Código', s.estudiante.codigo], ['Facultad', s.estudiante.facultad],
+     ['Carrera', s.estudiante.carrera]].forEach(([dt, dd]) => {
+      dl.appendChild(crearEl('dt', null, dt));
+      dl.appendChild(crearEl('dd', null, dd || '—'));
+    });
+    dl.appendChild(crearEl('dt', null, 'Documento'));
+    const ddDoc = crearEl('dd');
+    ddDoc.appendChild(crearEnlacePdf(s));
+    dl.appendChild(ddDoc);
+    dl.appendChild(crearEl('dt', null, 'Enviada'));
+    dl.appendChild(crearEl('dd', null, fechaCorta(s.creado_en)));
+    if (s.estado_supervisor === 'rechazada') {
+      dl.appendChild(crearEl('dt', null, 'Rechazada'));
+      dl.appendChild(crearEl('dd', null, fechaCorta(s.rechazado_en)));
+    }
+    panel.appendChild(dl);
+    return panel;
+  }
+
+  // ---- estado de la revisión de una solicitud ----
+  function estadoRevision(s) {
+    const enEspera = s.estado_supervisor === 'en_espera';
+    const utilizables = s.figuras.filter(f => !f.error && !f.quitada);
+    const enRevision = enEspera && utilizables.some(f => f.correccion_id);
+    const revisadas = utilizables.filter(f => f.revisada).length;
+    // Sin leer todavía: las que había al llegar, si nunca se pulsó "Revisar"
+    // (aunque ya se haya agregado o reemplazado otra, que se lee al subirla).
+    const sinLeer = enEspera ? utilizables.filter(f => !f.correccion_id).length : 0;
+    return { enEspera, utilizables, enRevision, revisadas, sinLeer };
+  }
+
+  // ---- una gráfica de la solicitud ----
+  // `i` es su posición en s.figuras (la que usan las rutas de la API); `n`,
+  // su número entre las que se muestran.
+  function crearTarjetaFigura(s, f, i, n, modo) {
+    const li = crearEl('li');
+    const cabecera = crearEl('strong', null, tituloFigura(f, n));
+    li.appendChild(cabecera);
+    if (f.reemplazada || f.agregada) {
+      const marcas = crearEl('span', 'fig-marcas');
+      if (f.reemplazada) marcas.appendChild(crearEl('span', 'badge neutral', 'Reemplazada'));
+      if (f.agregada) marcas.appendChild(crearEl('span', 'badge neutral', 'Agregada'));
+      li.appendChild(marcas);
     }
 
-    const { resp, datos } = await llamarApi('/api/solicitudes/supervisor', { method: 'GET' });
-    const propias = (resp.ok && datos.ok) ? datos.solicitudes : [];
+    if (f.error) {
+      li.appendChild(crearEl('p', 'status error', f.error));
+    } else {
+      li.appendChild(crearEl('p', null, f.caption));
+    }
 
-    const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera');
-    const autorizadas = propias.filter(s => s.estado_supervisor === 'aprobada');
+    // La gráfica tal como está en el PDF y, en cuanto se leyó, al lado lo que
+    // leyó el programa: para dar el visto bueno hay que poder compararlas.
+    const comparacion = crearEl('div', 'comparacion');
+    comparacion.appendChild(crearImagenFigura(
+      urlDeResultado(f.imagen_url), 'Gráfica original (del PDF)',
+      'Gráfica original tal como aparece en el PDF: ' + f.caption));
+    if (f.overlay_url) {
+      comparacion.appendChild(crearImagenFigura(
+        API_BASE + f.overlay_url + '?t=' + encodeURIComponent(f.correccion_id || ''),
+        'Lo que leyó el programa',
+        'Lectura del programa sobre la gráfica: eje X en rojo, eje Y en azul, curvas en color, textos en recuadros'));
+    }
+    li.appendChild(comparacion);
 
-    const listaPendientes = document.getElementById('lista-supervisor-pendientes');
-    const listaAutorizadas = document.getElementById('lista-supervisor-autorizadas');
-    listaPendientes.innerHTML = '';
-    listaAutorizadas.innerHTML = '';
-    document.getElementById('supervisor-pendientes-vacio').hidden = pendientes.length > 0;
-    document.getElementById('supervisor-autorizadas-vacio').hidden = autorizadas.length > 0;
+    if (f.advertencias && f.advertencias.length) {
+      const advs = crearEl('ul', 'warnings');
+      f.advertencias.forEach(a => advs.appendChild(crearEl('li', null, a)));
+      li.appendChild(advs);
+    }
 
-    pendientes.forEach(s => listaPendientes.appendChild(construirTarjetaSupervisor(s)));
-    autorizadas.forEach(s => listaAutorizadas.appendChild(construirTarjetaSupervisor(s)));
+    if (f.descripcion) {
+      const desc = crearEl('details', 'descripcion');
+      desc.appendChild(crearEl('summary', null, 'Descripción para narrar'));
+      desc.appendChild(crearEl('p', null, f.descripcion));
+      li.appendChild(desc);
+    }
+
+    if (f.stl_download_url) {
+      const link = crearEl('a', 'link-btn primary', 'Descargar STL');
+      link.style.marginRight = '0.4rem';
+      link.href = API_BASE + f.stl_download_url;
+      link.setAttribute('download', '');
+      li.appendChild(link);
+    }
+    // CSV para Hand_Tracking: coordenadas de todo lo que hay en la placa
+    // y el texto a narrar de cada elemento (ver narracion.py).
+    if (f.handtracking_csv_download_url) {
+      const linkCsv = crearEl('a', 'link-btn secondary', 'Descargar CSV (Hand_Tracking)');
+      linkCsv.style.marginRight = '0.4rem';
+      linkCsv.href = API_BASE + f.handtracking_csv_download_url;
+      linkCsv.setAttribute('download', '');
+      li.appendChild(linkCsv);
+    }
+
+    const leida = f.correccion_id && f.json_url && !f.error;
+    if (modo.revision && leida) {
+      li.appendChild(crearEl('p', 'revision-marca ' + (f.revisada ? 'ok' : 'pendiente'),
+        f.revisada ? '✓ Revisada' : 'Pendiente de revisión'));
+    }
+    if (modo.corregible && leida) {
+      const btnEditar = crearBtn('link-btn secondary', 'Corregir en la pizarra');
+      btnEditar.dataset.foco = 'editar-' + s.id + '-' + i;
+      btnEditar.addEventListener('click', () => Editor.abrir(s.id, i, f, btnEditar, modo.revision));
+      li.appendChild(btnEditar);
+    }
+    if (modo.revision && leida) {
+      const btnVisto = crearBtn('link-btn ' + (f.revisada ? 'secondary' : 'primary'),
+        f.revisada ? 'Quitar visto bueno' : '✓ Está bien');
+      btnVisto.dataset.foco = 'visto-' + s.id + '-' + i;
+      btnVisto.addEventListener('click', () => darVistoBueno(s.id, i, !f.revisada, btnVisto));
+      li.appendChild(btnVisto);
+    }
+
+    // Mientras la solicitud está en espera: reemplazar o quitar esta gráfica.
+    if (modo.edicion) {
+      const estado = crearEl('p', 'fig-status');
+      estado.setAttribute('role', 'status');
+      estado.setAttribute('aria-live', 'polite');
+      li.appendChild(crearAccionesEdicion(s, f, i, n, estado));
+      li.appendChild(estado);
+    }
+    return li;
+  }
+
+  function crearAccionesEdicion(s, f, i, n, estado) {
+    const cont = crearEl('div', 'fig-acciones-edicion');
+    const cual = ' gráfica ' + n;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.hidden = true;
+
+    function normal() {
+      cont.textContent = '';
+      const reemplazar = crearBtn('secondary small', 'Reemplazar imagen', 'Reemplazar imagen de la' + cual);
+      reemplazar.dataset.foco = 'reemplazar-' + s.id + '-' + i;
+      const quitar = crearBtn('danger small', 'Quitar', 'Quitar la' + cual + ' de la solicitud');
+      quitar.dataset.foco = 'quitar-' + s.id + '-' + i;
+      reemplazar.addEventListener('click', () => fileInput.click());
+      quitar.addEventListener('click', confirmar);
+      cont.append(reemplazar, quitar, fileInput);
+    }
+
+    // Confirmación en la misma tarjeta: nada se quita con un solo clic.
+    function confirmar() {
+      cont.textContent = '';
+      const pregunta = crearEl('span', 'fig-confirm', '¿Quitar esta gráfica de la solicitud? No se imprimirá (podrás restaurarla).');
+      pregunta.id = 'confirmar-' + s.id + '-' + i;
+      const si = crearBtn('danger solid small', 'Sí, quitar');
+      const no = crearBtn('secondary small', 'Cancelar');
+      si.setAttribute('aria-describedby', pregunta.id);
+      no.setAttribute('aria-describedby', pregunta.id);
+      si.addEventListener('click', async () => {
+        si.disabled = no.disabled = true;
+        const { resp, datos } = await postJson('/api/solicitudes/' + s.id + '/figuras/' + i + '/quitar');
+        if (!resp.ok || !datos.ok) { estado.textContent = datos.error || 'No se pudo quitar.'; estado.classList.add('error'); normal(); return; }
+        await recargarSolicitud(s.id, 'restaurar-' + s.id + '-' + i, 'Gráfica ' + n + ' quitada de la solicitud. Puedes restaurarla en "Gráficas quitadas".');
+      });
+      no.addEventListener('click', () => { normal(); cont.querySelector('[data-foco^="quitar-"]').focus(); });
+      cont.append(pregunta, si, no);
+      no.focus();
+    }
+
+    fileInput.addEventListener('change', async () => {
+      const archivo = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!archivo) return;
+      estado.classList.remove('error');
+      if (archivo.type && !archivo.type.startsWith('image/')) {
+        estado.textContent = 'Elige un archivo de imagen (PNG o JPG).';
+        estado.classList.add('error');
+        return;
+      }
+      cont.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      estado.textContent = 'Subiendo la imagen y leyéndola…';
+      const cuerpo = new FormData();
+      cuerpo.append('imagen', archivo);
+      const { resp, datos } = await llamarApi('/api/solicitudes/' + s.id + '/figuras/' + i + '/reemplazar',
+        { method: 'POST', body: cuerpo });
+      if (!resp.ok || !datos.ok) {
+        estado.textContent = 'No se pudo reemplazar: ' + (datos.error || 'error desconocido.');
+        estado.classList.add('error');
+        cont.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        return;
+      }
+      await recargarSolicitud(s.id, 'editar-' + s.id + '-' + i, 'Imagen de la gráfica ' + n + ' reemplazada: revísala.');
+    });
+
+    normal();
+    return cont;
+  }
+
+  // ---- agregar una gráfica que no se detectó ----
+  function crearBloqueAgregar(s) {
+    const bloque = crearEl('div', 'fig-agregar');
+    const idPanel = 'agregar-' + s.id;
+    const btn = crearBtn('secondary small', '+ Agregar una gráfica');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', idPanel);
+    btn.dataset.foco = 'agregar-' + s.id;
+
+    const panel = crearEl('div', 'agregar-panel');
+    panel.id = idPanel;
+    panel.hidden = true;
+    panel.setAttribute('role', 'group');
+    panel.setAttribute('aria-labelledby', idPanel + '-titulo');
+    const titulo = crearEl('p', 'agregar-titulo', 'Agregar una gráfica a esta solicitud (por ejemplo, un recorte del PDF)');
+    titulo.id = idPanel + '-titulo';
+
+    const campoArchivo = crearEl('div', 'campo-mini');
+    const etiquetaArchivo = crearEl('label', null, 'Imagen (PNG o JPG)');
+    etiquetaArchivo.setAttribute('for', idPanel + '-archivo');
+    const archivo = document.createElement('input');
+    archivo.type = 'file';
+    archivo.accept = 'image/*';
+    archivo.id = idPanel + '-archivo';
+    campoArchivo.append(etiquetaArchivo, archivo);
+
+    const campoTexto = crearEl('div', 'campo-mini');
+    const etiquetaTexto = crearEl('label', null, 'Pie de figura (opcional; abre la descripción narrada)');
+    etiquetaTexto.setAttribute('for', idPanel + '-texto');
+    const texto = document.createElement('input');
+    texto.type = 'text';
+    texto.id = idPanel + '-texto';
+    texto.maxLength = 500;
+    texto.placeholder = 'Por ejemplo: Figura 4. Curva de calibración';
+    campoTexto.append(etiquetaTexto, texto);
+
+    const estado = crearEl('p', 'fig-status');
+    estado.setAttribute('role', 'status');
+    estado.setAttribute('aria-live', 'polite');
+    const botones = crearEl('div', 'botones');
+    const agregar = crearBtn('primary small', 'Agregar a la solicitud');
+    const cancelar = crearBtn('secondary small', 'Cancelar');
+    botones.append(agregar, cancelar);
+
+    function cerrar() {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      archivo.value = '';
+      texto.value = '';
+      estado.textContent = '';
+      btn.focus();
+    }
+    btn.addEventListener('click', () => {
+      if (!panel.hidden) { cerrar(); return; }
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      archivo.focus();
+    });
+    cancelar.addEventListener('click', cerrar);
+    agregar.addEventListener('click', async () => {
+      estado.classList.remove('error');
+      const elegido = archivo.files && archivo.files[0];
+      if (!elegido) { estado.textContent = 'Elige primero una imagen.'; estado.classList.add('error'); archivo.focus(); return; }
+      botones.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      estado.textContent = 'Subiendo la imagen y leyéndola…';
+      const cuerpo = new FormData();
+      cuerpo.append('imagen', elegido);
+      cuerpo.append('texto', texto.value.trim());
+      const { resp, datos } = await llamarApi('/api/solicitudes/' + s.id + '/figuras/agregar', { method: 'POST', body: cuerpo });
+      if (!resp.ok || !datos.ok) {
+        estado.textContent = 'No se pudo agregar: ' + (datos.error || 'error desconocido.');
+        estado.classList.add('error');
+        botones.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        return;
+      }
+      const nueva = datos.solicitud.figuras.length - 1;
+      await recargarSolicitud(s.id, 'editar-' + s.id + '-' + nueva, 'Gráfica agregada a la solicitud: revísala.');
+    });
+
+    panel.append(titulo, campoArchivo, campoTexto, estado, botones);
+    bloque.append(btn, panel);
+    return bloque;
+  }
+
+  // ---- gráficas quitadas (se pueden restaurar mientras siga en espera) ----
+  function crearBloqueQuitadas(s) {
+    const bloque = crearEl('div', 'fig-quitadas');
+    const quitadas = s.figuras.map((f, i) => ({ f, i })).filter(x => x.f.quitada);
+    bloque.appendChild(crearEl('h4', null, 'Gráficas quitadas (' + quitadas.length + ')'));
+    bloque.appendChild(crearEl('p', 'hint', 'No se imprimirán. Si quitaste una por error, restáurala.'));
+    const ul = crearEl('ul', 'quitadas-lista');
+    quitadas.forEach(({ f, i }) => {
+      const item = crearEl('li', 'quitada-item');
+      const mini = crearBtn('thumb-btn', null, 'Ampliar gráfica quitada');
+      const img = document.createElement('img');
+      img.src = urlDeResultado(f.imagen_url);
+      img.alt = '';
+      img.loading = 'lazy';
+      mini.appendChild(img);
+      mini.addEventListener('click', () => abrirVisor(urlDeResultado(f.imagen_url), 'Gráfica quitada', f.caption));
+      const texto = crearEl('div', 'quitada-texto');
+      texto.appendChild(crearEl('strong', null, f.pagina ? 'Página ' + f.pagina : 'Gráfica agregada'));
+      if (f.caption) texto.appendChild(crearEl('span', null, f.caption));
+      const restaurar = crearBtn('secondary small', 'Restaurar', 'Restaurar gráfica: ' + (f.caption || ''));
+      restaurar.dataset.foco = 'restaurar-' + s.id + '-' + i;
+      restaurar.addEventListener('click', async () => {
+        restaurar.disabled = true;
+        const { resp, datos } = await postJson('/api/solicitudes/' + s.id + '/figuras/' + i + '/restaurar');
+        if (!resp.ok || !datos.ok) { restaurar.disabled = false; alert(datos.error || 'No se pudo restaurar.'); return; }
+        await recargarSolicitud(s.id, 'editar-' + s.id + '-' + i, 'Gráfica restaurada.');
+      });
+      item.append(mini, texto, restaurar);
+      ul.appendChild(item);
+    });
+    bloque.appendChild(ul);
+    return bloque;
+  }
+
+  // ---- tarjeta de una solicitud ----
+  function badgeSupervisor(s) {
+    const r = estadoRevision(s);
+    const imp = etiquetaImprenta(s.estado_imprenta);
+    if (s.estado_supervisor === 'rechazada') return '<span class="badge error">Rechazada</span>';
+    if (s.estado_supervisor === 'aprobada') {
+      return '<span class="badge ok">Autorizada</span><span class="badge ' + imp.clase + '">' + escapeHtml(imp.texto) + '</span>';
+    }
+    if (r.enRevision) return '<span class="badge wait">En revisión (' + r.revisadas + '/' + r.utilizables.length + ')</span>';
+    return '<span class="badge wait">Por revisar</span>';
   }
 
   function construirTarjetaSupervisor(s) {
-    const li = document.createElement('li');
-    li.className = 'request-card';
-
-    const btnResumen = document.createElement('button');
-    btnResumen.type = 'button';
-    btnResumen.className = 'request-summary';
+    const li = crearEl('li', 'request-card');
     const detailId = 'detalle-' + s.id;
+    const btnResumen = crearBtn('request-summary');
     btnResumen.setAttribute('aria-expanded', 'false');
     btnResumen.setAttribute('aria-controls', detailId);
-    const imp = etiquetaImprenta(s.estado_imprenta);
-    const cantidad = s.figuras.length;
-    const enEspera = s.estado_supervisor === 'en_espera';
-    // Revisión: gráficas ya segmentadas (las que fallaron no cuentan).
-    const utilizables = s.figuras.filter(f => !f.error);
-    const enRevision = enEspera && utilizables.some(f => f.correccion_id);
-    const revisadas = utilizables.filter(f => f.revisada).length;
-    let badge;
-    if (!enEspera) badge = '<span class="badge ok">Autorizada</span>';
-    else if (enRevision) badge = '<span class="badge wait">En revisión (' + revisadas + '/' + utilizables.length + ')</span>';
-    else badge = '<span class="badge wait">Por revisar</span>';
+    const visibles = s.figuras.filter(f => !f.quitada).length;
     btnResumen.innerHTML =
       '<strong>' + escapeHtml(s.estudiante.nombre) + '</strong>' +
-      '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>' +
-      '<span class="badges">' + badge +
-        (s.estado_supervisor === 'aprobada' ? '<span class="badge ' + imp.clase + '">' + imp.texto + '</span>' : '') +
-      '</span>';
+      '<span class="meta">' + visibles + (visibles === 1 ? ' lámina' : ' láminas') + ' · ' + escapeHtml(fechaCorta(s.creado_en)) + '</span>' +
+      '<span class="badges">' + badgeSupervisor(s) + '</span>';
 
-    const detalle = document.createElement('div');
-    detalle.className = 'request-detail';
+    const detalle = crearEl('div', 'request-detail');
     detalle.id = detailId;
     detalle.hidden = true;
-    detalle.appendChild(crearDetalleSolicitud(s, {
-      revision: enRevision,
-      corregible: enRevision || (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada'),
-    }));
 
-    const status = document.createElement('p');
-    status.className = 'status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    detalle.appendChild(status);
+    const r = estadoRevision(s);
+    const rechazada = s.estado_supervisor === 'rechazada';
+    const modo = {
+      revision: r.enRevision,
+      edicion: r.enEspera,
+      corregible: r.enRevision || (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada'),
+    };
 
-    const acciones = document.createElement('div');
-    acciones.className = 'actions';
+    const layout = crearEl('div', 'sup-layout');
+    layout.appendChild(crearPanelEstudiante(s));
+    const principal = crearEl('div', 'sup-main');
 
-    if (enEspera && !enRevision) {
-      // Paso 1: segmentar las gráficas para poder revisarlas.
-      const btnRevisar = document.createElement('button');
-      btnRevisar.type = 'button';
-      btnRevisar.className = 'primary';
-      btnRevisar.textContent = 'Revisar';
-      btnRevisar.dataset.foco = 'revisar-' + s.id;
-      btnRevisar.addEventListener('click', () => revisarSolicitud(s.id, btnRevisar, status));
-      acciones.appendChild(btnRevisar);
-    } else if (enEspera) {
-      // Pasos 2 y 3: visto bueno de cada gráfica y luego autorizar.
-      const faltan = utilizables.length - revisadas;
-      status.textContent = faltan > 0
-        ? 'Revisadas ' + revisadas + ' de ' + utilizables.length + '. Corrige en la pizarra lo que haga falta y da el visto bueno a cada gráfica para poder autorizar.'
-        : 'Todas las gráficas están revisadas: ya puedes autorizar.';
-      const btnAutorizar = document.createElement('button');
-      btnAutorizar.type = 'button';
-      btnAutorizar.className = 'primary';
-      btnAutorizar.textContent = 'Autorizar y generar las láminas';
-      btnAutorizar.dataset.foco = 'autorizar-' + s.id;
-      btnAutorizar.disabled = faltan > 0 || utilizables.length === 0;
-      btnAutorizar.addEventListener('click', () => autorizarSolicitud(s.id, btnAutorizar, status));
-      acciones.appendChild(btnAutorizar);
-    } else if (s.estado_supervisor === 'aprobada' && !s.stl_generado) {
-      // Autorizar es síncrono (no hay un trabajo en curso aparte): si llegó
-      // hasta acá con stl_generado en false es porque NINGUNA figura pudo
-      // convertirse — no "está generando", ya terminó y falló.
-      status.textContent = 'No se pudo generar ninguna lámina para esta solicitud — revisá el detalle de cada gráfico arriba.';
-      status.classList.add('error');
-    } else if (s.stl_generado && s.estado_imprenta === 'no_enviada') {
-      const btnEnviar = document.createElement('button');
-      btnEnviar.type = 'button';
-      btnEnviar.className = 'primary';
-      btnEnviar.textContent = 'Enviar a imprenta';
-      btnEnviar.addEventListener('click', () => enviarAImprenta(s.id, btnEnviar, status));
-      acciones.appendChild(btnEnviar);
-    } else {
-      status.textContent = imp.texto + '.';
+    if (rechazada) {
+      const info = crearEl('p', 'rechazo-info');
+      info.appendChild(crearEl('strong', null, 'Solicitud rechazada. '));
+      info.appendChild(document.createTextNode('Motivo: ' + (s.motivo_rechazo || 'no se indicó un motivo.')));
+      principal.appendChild(info);
     }
 
-    detalle.appendChild(acciones);
+    const ul = crearEl('ul', 'fig-thumbs');
+    let n = 0;
+    s.figuras.forEach((f, i) => {
+      if (f.quitada) return;
+      n += 1;
+      ul.appendChild(crearTarjetaFigura(s, f, i, n, modo));
+    });
+    if (n === 0) {
+      principal.appendChild(crearEl('p', 'empty-note', r.enEspera
+        ? 'No queda ninguna gráfica en esta solicitud: agrega una, restaura una quitada o rechaza la solicitud.'
+        : 'Esta solicitud no tiene gráficas.'));
+    } else {
+      principal.appendChild(ul);
+    }
+    if (modo.edicion) principal.appendChild(crearBloqueAgregar(s));
+    if (modo.edicion && s.figuras.some(f => f.quitada)) principal.appendChild(crearBloqueQuitadas(s));
+
+    const status = crearEl('p', 'status');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    const acciones = crearEl('div', 'actions');
+
+    if (r.enEspera && (r.sinLeer > 0 || !r.enRevision)) {
+      // Paso 1: leer las gráficas (todas, o las que falten) para revisarlas.
+      const btnRevisar = crearBtn('primary', r.enRevision
+        ? 'Leer ' + (r.sinLeer === 1 ? 'la gráfica que falta' : 'las ' + r.sinLeer + ' gráficas que faltan')
+        : 'Revisar');
+      btnRevisar.dataset.foco = 'revisar-' + s.id;
+      btnRevisar.disabled = r.utilizables.length === 0;
+      btnRevisar.addEventListener('click', () => revisarSolicitud(s.id, btnRevisar, status));
+      acciones.appendChild(btnRevisar);
+    }
+    if (r.enEspera && r.enRevision) {
+      // Pasos 2 y 3: visto bueno de cada gráfica y luego autorizar.
+      const faltan = r.utilizables.length - r.revisadas;
+      status.textContent = r.sinLeer > 0
+        ? 'Falta leer ' + r.sinLeer + ' gráfica(s) antes de poder revisarlas todas.'
+        : (faltan > 0
+          ? 'Revisadas ' + r.revisadas + ' de ' + r.utilizables.length + '. Corrige en la pizarra lo que haga falta y da el visto bueno a cada gráfica para poder autorizar.'
+          : 'Todas las gráficas están revisadas: ya puedes autorizar.');
+      const btnAutorizar = crearBtn('primary', 'Autorizar y generar las láminas');
+      btnAutorizar.dataset.foco = 'autorizar-' + s.id;
+      btnAutorizar.disabled = faltan > 0 || r.utilizables.length === 0;
+      btnAutorizar.addEventListener('click', () => autorizarSolicitud(s.id, btnAutorizar, status));
+      acciones.appendChild(btnAutorizar);
+    } else if (r.enEspera) {
+      // (todavía nada leído: solo "Revisar" y "Rechazar")
+    } else if (s.estado_supervisor === 'aprobada' && !s.stl_generado) {
+      status.textContent = 'No se pudo generar ninguna lámina para esta solicitud — revisá el detalle de cada gráfico.';
+      status.classList.add('error');
+    } else if (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'no_enviada') {
+      const btnEnviar = crearBtn('primary', 'Enviar a imprenta');
+      btnEnviar.dataset.foco = 'enviar-' + s.id;
+      btnEnviar.addEventListener('click', () => enviarAImprenta(s.id, btnEnviar, status));
+      acciones.appendChild(btnEnviar);
+    } else if (s.estado_supervisor === 'aprobada') {
+      status.textContent = etiquetaImprenta(s.estado_imprenta).texto + '.';
+    }
+    if (r.enEspera) {
+      const btnRechazar = crearBtn('danger', 'Rechazar solicitud');
+      btnRechazar.dataset.foco = 'rechazar-' + s.id;
+      btnRechazar.addEventListener('click', () => mostrarPanelRechazo(s, acciones));
+      acciones.appendChild(btnRechazar);
+    }
+
+    principal.appendChild(status);
+    principal.appendChild(acciones);
+    layout.appendChild(principal);
+    detalle.appendChild(layout);
 
     btnResumen.addEventListener('click', () => {
       const abierto = detalle.hidden;
       detalle.hidden = !abierto;
       btnResumen.setAttribute('aria-expanded', String(abierto));
     });
-
     li.appendChild(btnResumen);
     li.appendChild(detalle);
     return li;
   }
 
-  // Vuelve a pintar la lista (que se arma cerrada) y reabre la solicitud en
-  // la que se estaba trabajando, devolviendo el foco al control indicado.
-  async function recargarSolicitud(id, claveFoco) {
+  // ---- listado ----
+  //  pendientes: siempre visibles (en espera, por orden de llegada);
+  //  en curso: autorizadas aún no impresas, siempre visibles (falta una acción);
+  //  terminadas (impresas + rechazadas): solo las MAX_RECIENTES más recientes;
+  //  el resto de las terminadas, en el historial.
+  function repartirSolicitudesSupervisor(propias) {
+    const masReciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
+    const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera')
+      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+    const enCurso = propias.filter(s => s.estado_supervisor === 'aprobada' && s.estado_imprenta !== 'impreso').sort(masReciente);
+    const terminadas = propias.filter(s => s.estado_supervisor === 'rechazada' ||
+      (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'impreso')).sort(masReciente);
+    return {
+      pendientes,
+      visibles: enCurso.concat(terminadas.slice(0, MAX_RECIENTES)),
+      historial: terminadas.slice(MAX_RECIENTES),
+    };
+  }
+
+  // `aviso` (opcional): mensaje que se anuncia y recibe el foco.
+  async function pintarSolicitudesSupervisor(aviso) {
+    if (!usuarioActual) return;
+    document.getElementById('supervisor-codigo-valor').textContent = usuarioActual.usuario || '';
+
+    const { resp, datos } = await llamarApi('/api/solicitudes/supervisor', { method: 'GET' });
+    solicitudesSupervisor = (resp.ok && datos.ok) ? datos.solicitudes : [];
+    const reparto = repartirSolicitudesSupervisor(solicitudesSupervisor);
+
+    const listaPendientes = document.getElementById('lista-supervisor-pendientes');
+    const listaAutorizadas = document.getElementById('lista-supervisor-autorizadas');
+    listaPendientes.innerHTML = '';
+    listaAutorizadas.innerHTML = '';
+    document.getElementById('supervisor-pendientes-vacio').hidden = reparto.pendientes.length > 0;
+    document.getElementById('supervisor-autorizadas-vacio').hidden = reparto.visibles.length + reparto.historial.length > 0;
+    reparto.pendientes.forEach(s => listaPendientes.appendChild(construirTarjetaSupervisor(s)));
+    reparto.visibles.forEach(s => listaAutorizadas.appendChild(construirTarjetaSupervisor(s)));
+
+    const btnHistorial = document.getElementById('btn-historial-supervisor');
+    btnHistorial.hidden = reparto.historial.length === 0;
+    btnHistorial.textContent = 'Ver historial (' + reparto.historial.length + ')';
+
+    const avisoEl = document.getElementById('supervisor-aviso');
+    avisoEl.textContent = aviso || '';
+    if (aviso) avisoEl.focus();
+  }
+
+  // Vuelve a pintar la lista (que se arma cerrada), reabre la solicitud en la
+  // que se estaba trabajando y devuelve el foco al control indicado.
+  async function recargarSolicitud(id, claveFoco, aviso) {
     await pintarSolicitudesSupervisor();
     const resumen = document.querySelector('[aria-controls="detalle-' + id + '"]');
     if (resumen && resumen.getAttribute('aria-expanded') !== 'true') resumen.click();
+    const detalle = document.getElementById('detalle-' + id);
+    if (aviso && detalle) {
+      const status = detalle.querySelector('.sup-main > .status');
+      if (status) setTimeout(() => { status.classList.remove('error'); status.textContent = aviso; }, 60);
+    }
     const foco = claveFoco && document.querySelector('[data-foco="' + claveFoco + '"]');
     if (foco) foco.focus();
+    else if (resumen) resumen.focus();
   }
 
   async function revisarSolicitud(id, boton, status) {
@@ -1727,7 +2483,8 @@
       boton.disabled = false;
       return;
     }
-    await recargarSolicitud(id, 'editar-' + id + '-0');
+    const primera = datos.solicitud.figuras.findIndex(f => !f.quitada && !f.error);
+    await recargarSolicitud(id, 'editar-' + id + '-' + Math.max(primera, 0));
   }
 
   async function darVistoBueno(id, indice, revisada, boton) {
@@ -1746,7 +2503,6 @@
     boton.disabled = true;
     status.classList.remove('error');
     status.textContent = 'Generando láminas en braille y modelo STL… puede tardar un rato.';
-
     const { resp, datos } = await postJson('/api/solicitudes/' + id + '/autorizar');
     if (!resp.ok || !datos.ok) {
       status.textContent = datos.error || 'No se pudo generar el braille y el STL.';
@@ -1754,9 +2510,7 @@
       boton.disabled = false;
       return;
     }
-
-    status.textContent = '';
-    await recargarSolicitud(id);
+    await recargarSolicitud(id, 'enviar-' + id, 'Solicitud autorizada: las láminas están listas para descargar o enviar a imprenta.');
   }
 
   async function enviarAImprenta(id, boton, status) {
@@ -1768,8 +2522,39 @@
       boton.disabled = false;
       return;
     }
-    status.textContent = 'Enviado a la imprenta.';
-    await pintarSolicitudesSupervisor();
+    await recargarSolicitud(id, null, 'Enviado a la imprenta.');
+  }
+
+  function mostrarPanelRechazo(s, acciones) {
+    acciones.textContent = '';
+    const idCampo = 'motivo-' + s.id;
+    const panel = crearEl('div', 'rechazo-panel');
+    panel.setAttribute('role', 'group');
+    panel.setAttribute('aria-labelledby', idCampo + '-pregunta');
+    const pregunta = crearEl('p', 'rechazo-pregunta',
+      '¿Rechazar la solicitud de ' + s.estudiante.nombre + '? El estudiante verá que fue rechazada.');
+    pregunta.id = idCampo + '-pregunta';
+    const etiqueta = crearEl('label', null, 'Motivo (opcional; lo verá el estudiante)');
+    etiqueta.setAttribute('for', idCampo);
+    const campo = document.createElement('textarea');
+    campo.id = idCampo;
+    campo.rows = 2;
+    campo.maxLength = 300;
+    campo.placeholder = 'Por ejemplo: las imágenes no se pudieron procesar. Vuelve a enviar el PDF.';
+    const botones = crearEl('div', 'botones');
+    const si = crearBtn('danger solid small', 'Sí, rechazar');
+    const no = crearBtn('secondary small', 'Cancelar');
+    si.addEventListener('click', async () => {
+      si.disabled = no.disabled = true;
+      const { resp, datos } = await postJson('/api/solicitudes/' + s.id + '/rechazar', { motivo: campo.value });
+      if (!resp.ok || !datos.ok) { alert(datos.error || 'No se pudo rechazar.'); si.disabled = no.disabled = false; return; }
+      await pintarSolicitudesSupervisor('Rechazaste la solicitud de ' + s.estudiante.nombre + '. Quedó en "Autorizadas y rechazadas".');
+    });
+    no.addEventListener('click', () => recargarSolicitud(s.id, 'rechazar-' + s.id));
+    botones.append(si, no);
+    panel.append(pregunta, etiqueta, campo, botones);
+    acciones.appendChild(panel);
+    campo.focus();
   }
 
   // ------------------------------------------------------------------
@@ -2279,74 +3064,86 @@
   })();
 
   // ---------------------------------------------------------------
-  // APP: IMPRENTA
+  // APP: IMPRENTA — tablero de tres columnas (diseño de tactiverso 12)
   // ---------------------------------------------------------------
+  let solicitudesImprenta = [];   // último listado (lo usa el historial)
+
   async function pintarSolicitudesImprenta() {
     if (!usuarioActual) return;
     const { resp, datos } = await llamarApi('/api/solicitudes/imprenta', { method: 'GET' });
-    const propias = (resp.ok && datos.ok) ? datos.solicitudes : [];
+    solicitudesImprenta = (resp.ok && datos.ok) ? datos.solicitudes : [];
+    const masReciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
 
-    const pendientes = propias.filter(s => s.estado_imprenta === 'pendiente');
-    const imprimiendo = propias.filter(s => s.estado_imprenta === 'imprimiendo');
-    const impresos = propias.filter(s => s.estado_imprenta === 'impreso');
+    const pendientes = solicitudesImprenta.filter(s => s.estado_imprenta === 'pendiente')
+      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+    const imprimiendo = solicitudesImprenta.filter(s => s.estado_imprenta === 'imprimiendo');
+    const impresos = solicitudesImprenta.filter(s => s.estado_imprenta === 'impreso').sort(masReciente);
 
-    const listaPendientes = document.getElementById('lista-imprenta-pendientes');
-    const listaImprimiendo = document.getElementById('lista-imprenta-imprimiendo');
-    const listaImpresos = document.getElementById('lista-imprenta-impresos');
-    listaPendientes.innerHTML = '';
-    listaImprimiendo.innerHTML = '';
-    listaImpresos.innerHTML = '';
-    document.getElementById('imprenta-pendientes-vacio').hidden = pendientes.length > 0;
-    document.getElementById('imprenta-imprimiendo-vacio').hidden = imprimiendo.length > 0;
-    document.getElementById('imprenta-impresos-vacio').hidden = impresos.length > 0;
+    const columnas = [
+      ['pendientes', pendientes, 'pendiente'],
+      ['imprimiendo', imprimiendo, 'imprimiendo'],
+      ['impresos', impresos.slice(0, MAX_RECIENTES), 'impreso'],
+    ];
+    columnas.forEach(([clave, lista, estado]) => {
+      const ul = document.getElementById('lista-imprenta-' + clave);
+      ul.innerHTML = '';
+      lista.forEach(s => ul.appendChild(construirTarjetaImprenta(s, estado)));
+      document.getElementById('imprenta-' + clave + '-vacio').hidden = lista.length > 0;
+    });
+    document.getElementById('count-imprenta-pendientes').textContent = pendientes.length;
+    document.getElementById('count-imprenta-imprimiendo').textContent = imprimiendo.length;
+    document.getElementById('count-imprenta-impresos').textContent = impresos.length;
 
-    pendientes.forEach(s => listaPendientes.appendChild(construirTarjetaImprenta(s, 'pendiente')));
-    imprimiendo.forEach(s => listaImprimiendo.appendChild(construirTarjetaImprenta(s, 'imprimiendo')));
-    impresos.forEach(s => listaImpresos.appendChild(construirTarjetaImprenta(s, 'impreso')));
+    const anteriores = impresos.length - MAX_RECIENTES;
+    const btnHistorial = document.getElementById('btn-historial-imprenta');
+    btnHistorial.hidden = anteriores <= 0;
+    btnHistorial.textContent = 'Ver historial (' + Math.max(anteriores, 0) + ')';
   }
 
   function construirTarjetaImprenta(s, estado) {
-    const li = document.createElement('li');
-    li.className = 'request-card';
-    const cantidad = s.figuras.length;
-    const detailId = 'detalle-imprenta-' + s.id;
+    const li = crearEl('li', 'request-card print-card');
+    const laminas = s.figuras.map((f, i) => ({ f, i })).filter(x => !x.f.quitada && !x.f.error);
 
-    const btnResumen = document.createElement('button');
-    btnResumen.type = 'button';
-    btnResumen.className = 'request-summary';
-    btnResumen.setAttribute('aria-expanded', 'false');
-    btnResumen.setAttribute('aria-controls', detailId);
-    btnResumen.innerHTML =
-      '<strong>' + escapeHtml(s.estudiante.nombre) + ' — ' + escapeHtml(s.estudiante.carrera) + '</strong>' +
-      '<span class="meta">Orden ' + escapeHtml(s.orden || String(s.id).padStart(5, '0')) + ' · ' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + '</span>';
+    li.appendChild(crearEl('strong', null, s.estudiante.nombre));
+    li.appendChild(crearEl('p', 'print-meta', (s.estudiante.carrera || '') + ' · ' + (s.estudiante.facultad || '')));
+    li.appendChild(crearEl('p', 'print-meta',
+      'Orden ' + (s.orden || String(s.id).padStart(5, '0')) + ' · ' + laminas.length +
+      (laminas.length === 1 ? ' lámina' : ' láminas') + ' · ' + fechaCorta(s.creado_en)));
 
-    const detalle = document.createElement('div');
-    detalle.className = 'request-detail';
-    detalle.id = detailId;
-    detalle.hidden = true;
-    detalle.appendChild(crearDetalleSolicitud(s));
-
-    btnResumen.addEventListener('click', () => {
-      const abierto = detalle.hidden;
-      detalle.hidden = !abierto;
-      btnResumen.setAttribute('aria-expanded', String(abierto));
-    });
-
-    li.appendChild(btnResumen);
-    li.appendChild(detalle);
+    // Miniaturas de lo que se imprime (al hacer clic se ven ampliadas) y,
+    // debajo, la descarga del STL de cada lámina.
+    if (laminas.length) {
+      const miniaturas = crearEl('ul', 'print-thumbs');
+      const descargas = crearEl('div', 'fig-acciones-edicion');
+      laminas.forEach(({ f }, k) => {
+        const item = crearEl('li');
+        const boton = crearBtn('thumb-btn', null, 'Ampliar lámina ' + (k + 1));
+        const img = document.createElement('img');
+        img.src = urlDeResultado(f.imagen_url);
+        img.alt = '';
+        img.loading = 'lazy';
+        boton.appendChild(img);
+        boton.appendChild(crearEl('span', 'thumb-cap', 'Lámina ' + (k + 1)));
+        boton.addEventListener('click', () => abrirVisor(urlDeResultado(f.imagen_url), 'Lámina ' + (k + 1), f.caption));
+        item.appendChild(boton);
+        miniaturas.appendChild(item);
+        if (f.stl_download_url) {
+          const a = crearEl('a', 'link-btn secondary', 'STL lámina ' + (k + 1));
+          a.href = API_BASE + f.stl_download_url;
+          a.setAttribute('download', '');
+          descargas.appendChild(a);
+        }
+      });
+      li.appendChild(miniaturas);
+      if (descargas.children.length) li.appendChild(descargas);
+    }
 
     if (estado === 'pendiente' || estado === 'imprimiendo') {
-      const acciones = document.createElement('div');
-      acciones.className = 'actions';
-      acciones.style.padding = '0 1.1rem 1.1rem';
-      const status = document.createElement('p');
-      status.className = 'status';
+      const status = crearEl('p', 'status');
       status.setAttribute('role', 'status');
       status.setAttribute('aria-live', 'polite');
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'primary';
-      btn.textContent = estado === 'pendiente' ? 'Empezar impresión' : 'Impresión lista';
+      const acciones = crearEl('div', 'actions');
+      const btn = crearBtn('primary', estado === 'pendiente' ? 'Empezar impresión' : 'Impresión lista');
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         status.classList.remove('error');
@@ -2360,12 +3157,127 @@
         await pintarSolicitudesImprenta();
       });
       acciones.appendChild(btn);
-      detalle.appendChild(status);
-      detalle.appendChild(acciones);
+      li.appendChild(acciones);
+      li.appendChild(status);
     }
-
     return li;
   }
+
+  // ---------------------------------------------------------------
+  // Código del supervisor: copiar con un clic
+  // ---------------------------------------------------------------
+  document.getElementById('copiar-codigo').addEventListener('click', async () => {
+    const valor = document.getElementById('supervisor-codigo-valor');
+    const estado = document.getElementById('copiar-codigo-estado');
+    try {
+      await navigator.clipboard.writeText(valor.textContent);
+      estado.textContent = 'Código copiado';
+    } catch (e) {
+      // Sin acceso al portapapeles: se deja seleccionado para copiarlo a mano.
+      const rango = document.createRange();
+      rango.selectNodeContents(valor);
+      const seleccion = window.getSelection();
+      seleccion.removeAllRanges();
+      seleccion.addRange(rango);
+      estado.textContent = 'Código seleccionado: cópialo con Ctrl+C';
+    }
+    setTimeout(() => { estado.textContent = ''; }, 4000);
+  });
+
+  // ---------------------------------------------------------------
+  // HISTORIAL (supervisor e imprenta): lo terminado hace más tiempo,
+  // agrupado por el mes en que se envió, con búsqueda y filtro.
+  // ---------------------------------------------------------------
+  const histBuscar = document.getElementById('historial-buscar');
+  const histFiltro = document.getElementById('historial-filtro');
+  const histLista = document.getElementById('lista-historial');
+  const histConteo = document.getElementById('historial-conteo');
+
+  function normalizarTexto(texto) {
+    return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  function itemsDelHistorial(esSupervisor) {
+    if (esSupervisor) return repartirSolicitudesSupervisor(solicitudesSupervisor).historial;
+    return solicitudesImprenta.filter(s => s.estado_imprenta === 'impreso')
+      .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en))
+      .slice(MAX_RECIENTES);
+  }
+
+  function pintarHistorial() {
+    if (!usuarioActual) return;
+    const esSupervisor = usuarioActual.rol === 'supervisor';
+    document.getElementById('historial-heading').textContent = esSupervisor ? 'Historial de solicitudes' : 'Historial de impresiones';
+    document.getElementById('historial-lede').textContent = esSupervisor
+      ? 'Las solicitudes impresas y las rechazadas de hace más tiempo, agrupadas por el mes en que se enviaron. Presiona un mes para ver sus solicitudes.'
+      : 'Los trabajos impresos hace más tiempo, agrupados por el mes en que se envió la solicitud. Presiona un mes para ver sus trabajos.';
+    document.getElementById('historial-filtro-grupo').hidden = !esSupervisor;
+
+    let items = itemsDelHistorial(esSupervisor);
+    const filtro = histFiltro.value;
+    if (esSupervisor && filtro !== 'todas') items = items.filter(s => s.estado_supervisor === filtro);
+    const consulta = normalizarTexto(histBuscar.value.trim());
+    if (consulta) {
+      items = items.filter(s => normalizarTexto([s.estudiante.nombre, s.estudiante.codigo, s.estudiante.carrera].join(' ')).includes(consulta));
+    }
+
+    const grupos = [];
+    items.forEach(s => {
+      const d = new Date(s.creado_en);
+      const clave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      let g = grupos[grupos.length - 1];
+      if (!g || g.clave !== clave) {
+        const etiqueta = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+        g = { clave, etiqueta: etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1), items: [] };
+        grupos.push(g);
+      }
+      g.items.push(s);
+    });
+    // Cerrados; si se busca o filtra, se abren los que tienen resultados.
+    const abrirTodos = consulta !== '' || (esSupervisor && filtro !== 'todas');
+
+    histLista.innerHTML = '';
+    grupos.forEach(g => {
+      const li = crearEl('li', 'mes-grupo');
+      const titulo = crearEl('h2', 'mes-titulo');
+      const toggle = crearBtn('mes-toggle');
+      toggle.setAttribute('aria-expanded', String(abrirTodos));
+      toggle.setAttribute('aria-controls', 'mes-' + g.clave);
+      toggle.appendChild(crearEl('span', 'mes-nombre', g.etiqueta));
+      toggle.appendChild(crearEl('span', 'mes-cuenta', g.items.length + ' ' +
+        (esSupervisor ? (g.items.length === 1 ? 'solicitud' : 'solicitudes') : (g.items.length === 1 ? 'trabajo' : 'trabajos'))));
+      titulo.appendChild(toggle);
+      const lista = crearEl('ul', 'request-list mes-lista' + (esSupervisor ? '' : ' historial-grid'));
+      lista.id = 'mes-' + g.clave;
+      lista.hidden = !abrirTodos;
+      g.items.forEach(s => lista.appendChild(esSupervisor ? construirTarjetaSupervisor(s) : construirTarjetaImprenta(s, 'impreso')));
+      toggle.addEventListener('click', () => {
+        const abrir = lista.hidden;
+        lista.hidden = !abrir;
+        toggle.setAttribute('aria-expanded', String(abrir));
+      });
+      li.append(titulo, lista);
+      histLista.appendChild(li);
+    });
+    histConteo.textContent = items.length === 0
+      ? 'No hay solicitudes que coincidan.'
+      : items.length + (items.length === 1 ? ' solicitud' : ' solicitudes') + ' en ' + grupos.length + (grupos.length === 1 ? ' mes.' : ' meses.');
+  }
+
+  function abrirHistorial() {
+    histBuscar.value = '';
+    histFiltro.value = 'todas';
+    pintarHistorial();
+    goTo('screen-historial');
+  }
+  document.getElementById('btn-historial-supervisor').addEventListener('click', abrirHistorial);
+  document.getElementById('btn-historial-imprenta').addEventListener('click', abrirHistorial);
+  histBuscar.addEventListener('input', pintarHistorial);
+  histFiltro.addEventListener('change', pintarHistorial);
+  document.getElementById('historial-volver').addEventListener('click', async () => {
+    if (usuarioActual && usuarioActual.rol === 'imprenta') { await pintarSolicitudesImprenta(); goTo('screen-app-imprenta'); }
+    else { await pintarSolicitudesSupervisor(); goTo('screen-app-supervisor'); }
+  });
 
   // ---------------------------------------------------------------
   // Arranque: si ya hay una sesión de verdad en el servidor (cookie), entrar

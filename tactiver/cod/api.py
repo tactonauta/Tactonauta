@@ -85,7 +85,7 @@ POST /api/segmentar/<id>?stl=1
 
 POST /api/generar-stl/<id>
     Segmenta esa figura y devuelve directamente la lámina STL.
-    Cuerpo JSON opcional: {"ancho": 210, "alto": 148} (milímetros;
+    Cuerpo JSON opcional: {"ancho": 220, "alto": 220} (milímetros;
     mínimo 130 x 90).
 
 POST /api/procesar
@@ -134,21 +134,28 @@ GET /api/salud
 ------------------------------------------------------------------
 """
 
+import glob
 import os
 import json
 import secrets
 import shutil
+import time
 import uuid
 import traceback
+
+import cv2
 from flask import Flask, request, jsonify, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+import numpy as np
 
 import db
 from segmentador import aplicar_correcciones, procesar_imagen
 import narracion
 import pipeline_rapido
-from generador_stl import generar_modelo_bana, generar_modelo_desde_recta
+from generador_stl import (
+    PLACA_ALTO, PLACA_ANCHO, generar_modelo_bana, generar_modelo_desde_recta,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -578,8 +585,8 @@ def revisar_solicitud(id_solicitud):
     figuras = []
     for figura in solicitud["figuras"]:
         figura = dict(figura)
-        # Ya segmentada (y quizá corregida): no se rehace.
-        if figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"]):
+        # Quitada por el supervisor, o ya segmentada (y quizá corregida): no se toca.
+        if figura.get("quitada") or (figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"])):
             figuras.append(figura)
             continue
         ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
@@ -631,7 +638,9 @@ def autorizar_solicitud(id_solicitud):
     if solicitud["estado_supervisor"] != "en_espera":
         return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
 
-    utilizables = [f for f in solicitud["figuras"] if not f.get("error")]
+    utilizables = [f for f in solicitud["figuras"] if not f.get("error") and not f.get("quitada")]
+    if not utilizables:
+        return jsonify({"ok": False, "error": "No queda ninguna gráfica para autorizar: agrega o restaura una, o rechaza la solicitud."}), 400
     if not any(f.get("correccion_id") for f in utilizables):
         return jsonify({"ok": False, "error": "Primero pulsa \"Revisar\" para ver las gráficas."}), 400
     pendientes = [f for f in utilizables if not f.get("revisada")]
@@ -645,7 +654,7 @@ def autorizar_solicitud(id_solicitud):
     algun_exito = False
     for figura in solicitud["figuras"]:
         figura_actualizada = dict(figura)
-        if figura.get("error"):
+        if figura.get("error") or figura.get("quitada"):
             figuras_actualizadas.append(figura_actualizada)
             continue
         resultado = _resultado_guardado(figura.get("correccion_id"))
@@ -736,6 +745,173 @@ def corregir_figura_solicitud(id_solicitud, indice):
         cambios["stl_generado"] = any(f.get("stl_url") for f in figuras)
     solicitud = db.actualizar_solicitud(id_solicitud, cambios)
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+# ====================================================================
+# Revisión del supervisor: rechazar, quitar/restaurar, reemplazar y agregar
+# gráficas, y descargar el PDF original (funciones de tactiverso 12, acá
+# guardadas en el servidor y no en el navegador).
+# ====================================================================
+LARGO_MAX_MOTIVO = 300
+
+
+def _figura_en_revision(id_solicitud, indice):
+    """(solicitud, figuras, None) si la solicitud es del supervisor, sigue en
+    espera y el índice existe; si no, (None, None, respuesta de error)."""
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return None, None, error
+    if solicitud["estado_supervisor"] != "en_espera":
+        return None, None, (jsonify({"ok": False, "error": "Solo se pueden cambiar las gráficas de una solicitud en espera."}), 400)
+    figuras = list(solicitud["figuras"])
+    if indice is not None and not 0 <= indice < len(figuras):
+        return None, None, (jsonify({"ok": False, "error": "No se encontró esa gráfica."}), 404)
+    return solicitud, figuras, None
+
+
+def _guardar_imagen_subida(solicitud, sufijo):
+    """Guarda como PNG la imagen del campo "imagen" del formulario, junto a
+    las demás figuras del lote. Devuelve (nombre, None) o (None, error)."""
+    archivo = request.files.get("imagen")
+    if archivo is None or archivo.filename == "":
+        return None, "Elige una imagen (PNG o JPG)."
+    if not extension_valida(archivo.filename):
+        return None, "Formato no soportado. Usa PNG, JPG, JPEG, BMP o TIFF."
+    datos = np.frombuffer(archivo.read(), dtype=np.uint8)
+    imagen = cv2.imdecode(datos, cv2.IMREAD_COLOR) if datos.size else None
+    if imagen is None:
+        return None, "No se pudo leer esa imagen. Prueba con otro archivo PNG o JPG."
+    lote = secure_filename(solicitud.get("lote_id") or "") or "sup"
+    nombre = f"{lote}_{sufijo}_{uuid.uuid4().hex[:8]}.png"
+    cv2.imwrite(os.path.join(RESULTADOS_DIR, nombre), imagen)
+    return nombre, None
+
+
+def _segmentar_para_revision(figura):
+    """Segmenta una figura nueva (reemplazada o agregada) para que entre a
+    la revisión como las demás; si falla, queda con su "error"."""
+    try:
+        resultado = segmentar_figura(os.path.join(RESULTADOS_DIR, figura["id"]))
+        figura.update(_campos_revision(resultado, figura.get("pie_figura")))
+        figura["revisada"] = False
+    except Exception as e:
+        print(f"ERROR SEGMENTANDO figura {figura.get('id')}:", flush=True)
+        print(traceback.format_exc(), flush=True)
+        figura["error"] = f"No se pudo leer esta gráfica: {e}"
+    return figura
+
+
+_CAMPOS_SEGMENTACION = ("resumen", "advertencias", "csv_url", "overlay_url", "json_url",
+                        "correccion_id", "descripcion", "revisada", "error")
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/rechazar", methods=["POST"])
+def rechazar_solicitud(id_solicitud):
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
+    if solicitud["estado_supervisor"] != "en_espera":
+        return jsonify({"ok": False, "error": "Solo se puede rechazar una solicitud en espera."}), 400
+    motivo = str((request.get_json(silent=True) or {}).get("motivo") or "").strip()[:LARGO_MAX_MOTIVO]
+    solicitud = db.actualizar_solicitud(id_solicitud, {
+        "rechazo": motivo,              # "" = rechazada sin motivo
+        "rechazado_en": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/quitar", methods=["POST"])
+def quitar_figura(id_solicitud, indice):
+    """La gráfica sale de la solicitud (no se imprime), pero se guarda para
+    poder restaurarla mientras la solicitud siga en espera."""
+    solicitud, figuras, error = _figura_en_revision(id_solicitud, indice)
+    if error:
+        return error
+    figuras[indice] = {**figuras[indice], "quitada": True, "revisada": False}
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/restaurar", methods=["POST"])
+def restaurar_figura(id_solicitud, indice):
+    solicitud, figuras, error = _figura_en_revision(id_solicitud, indice)
+    if error:
+        return error
+    figura = dict(figuras[indice])
+    figura.pop("quitada", None)
+    # Si se quitó antes de "Revisar" y la revisión ya empezó, nunca se leyó:
+    # se lee ahora para que entre a la revisión como las demás.
+    revision_iniciada = any(f.get("correccion_id") for f in figuras)
+    if revision_iniciada and not figura.get("correccion_id") and not figura.get("error"):
+        figura = _segmentar_para_revision(figura)
+    figuras[indice] = figura
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/reemplazar", methods=["POST"])
+def reemplazar_figura(id_solicitud, indice):
+    """Se copió la figura equivocada: el supervisor sube la correcta (por
+    ejemplo, un recorte del PDF). Se segmenta de nuevo y vuelve a revisión."""
+    solicitud, figuras, error = _figura_en_revision(id_solicitud, indice)
+    if error:
+        return error
+    nombre, problema = _guardar_imagen_subida(solicitud, "reemplazo")
+    if problema:
+        return jsonify({"ok": False, "error": problema}), 400
+    figura = {k: v for k, v in figuras[indice].items() if k not in _CAMPOS_SEGMENTACION}
+    figura.update({"id": nombre, "imagen_url": f"/api/resultados/{nombre}", "reemplazada": True})
+    figuras[indice] = _segmentar_para_revision(figura)
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/agregar", methods=["POST"])
+def agregar_figura(id_solicitud):
+    """Una figura que el sistema no detectó: el supervisor la sube, con un
+    texto opcional que hace de pie de figura (abre la descripción narrada)."""
+    solicitud, figuras, error = _figura_en_revision(id_solicitud, None)
+    if error:
+        return error
+    if len(figuras) >= MAX_FIGURAS_POR_SOLICITUD:
+        return jsonify({"ok": False, "error": "La solicitud ya tiene el máximo de gráficas."}), 400
+    nombre, problema = _guardar_imagen_subida(solicitud, "agregada")
+    if problema:
+        return jsonify({"ok": False, "error": problema}), 400
+    texto = str(request.form.get("texto") or "").strip()[:LARGO_MAX_CAMPO * 3]
+    figura = {
+        "id": nombre, "titulo": "Gráfico de línea", "pagina": None,
+        "caption": texto or "Imagen agregada por el supervisor.",
+        "imagen_url": f"/api/resultados/{nombre}", "pie_figura": texto, "agregada": True,
+    }
+    figuras.append(_segmentar_para_revision(figura))
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/pdf", methods=["GET"])
+def pdf_de_solicitud(id_solicitud):
+    """El PDF que subió el estudiante, para compararlo con las gráficas.
+    Lo pueden bajar el estudiante, su supervisor y la imprenta asignada."""
+    solicitud = db.buscar_solicitud(id_solicitud)
+    usuario_id, rol = session.get("usuario_id"), session.get("rol")
+    dueno = solicitud and (
+        (rol == "estudiante" and solicitud["estudiante_id"] == usuario_id)
+        or (rol == "supervisor" and solicitud["supervisor_id"] == usuario_id)
+        or (rol == "imprenta" and solicitud.get("imprenta_id") == usuario_id))
+    if not dueno:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+    lote = secure_filename(solicitud.get("lote_id") or "")
+    candidatos = sorted(glob.glob(os.path.join(UPLOAD_DIR, f"{lote}_*.pdf"))) if lote else []
+    if not candidatos:
+        return jsonify({
+            "ok": False,
+            "error": "El PDF ya no está en el servidor (se borra al reiniciarse). "
+                     "Pídele al estudiante que lo vuelva a enviar si lo necesitas.",
+        }), 404
+    return send_from_directory(UPLOAD_DIR, os.path.basename(candidatos[0]), as_attachment=True,
+                               download_name=solicitud.get("archivo_nombre") or "documento.pdf",
+                               mimetype="application/pdf")
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/enviar-imprenta", methods=["POST"])
@@ -853,7 +1029,7 @@ def _payload_stl(resultado):
 
 
 def crear_stl_desde_resultado(
-    resultado, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=True,
+    resultado, prefijo="grafica", dim_x=PLACA_ANCHO, dim_y=PLACA_ALTO, incluir_etiquetas=True,
     pie_figura=None,
 ):
     """Convierte una segmentación ya hecha en una placa táctil STL, y escribe
@@ -911,11 +1087,16 @@ def crear_stl_desde_resultado(
     advertencias.extend(diseno.get("avisos") or [])
 
     descripcion = narracion.describir_grafica(payload, pie_figura, diseno)
+    exportacion = narracion.exportar_hand_tracking(payload, diseno, descripcion)
     nombre_narracion = f"{base}_narracion.json"
     with open(os.path.join(STL_DIR, nombre_narracion), "w", encoding="utf-8") as f:
-        json.dump(narracion.exportar_hand_tracking(payload, diseno, descripcion),
-                  f, ensure_ascii=False, indent=2)
-    return nombre, advertencias, {"descripcion": descripcion, "nombre": nombre_narracion}
+        json.dump(exportacion, f, ensure_ascii=False, indent=2)
+    # Lo mismo en CSV: coordenadas de todo lo que hay en la placa + textos a
+    # narrar, para Hand_Tracking (lo carga igual que el JSON).
+    nombre_csv = f"{base}_handtracking.csv"
+    narracion.exportar_csv_hand_tracking(exportacion, os.path.join(STL_DIR, nombre_csv))
+    return nombre, advertencias, {"descripcion": descripcion, "nombre": nombre_narracion,
+                                  "csv": nombre_csv}
 
 
 def _urls_lamina(nombre_stl, narracion_info):
@@ -926,6 +1107,8 @@ def _urls_lamina(nombre_stl, narracion_info):
         "descripcion": narracion_info["descripcion"],
         "narracion_url": f"/api/resultados/stl/{narracion_info['nombre']}",
         "narracion_download_url": f"/api/resultados/stl/{narracion_info['nombre']}/descargar",
+        "handtracking_csv_url": f"/api/resultados/stl/{narracion_info['csv']}",
+        "handtracking_csv_download_url": f"/api/resultados/stl/{narracion_info['csv']}/descargar",
     }
 
 
@@ -964,7 +1147,7 @@ def segmentar_figura(ruta_imagen, palabras=None):
 
 
 def crear_stl_desde_imagen(
-    ruta_imagen, prefijo="grafica", dim_x=210.0, dim_y=148.0, incluir_etiquetas=True,
+    ruta_imagen, prefijo="grafica", dim_x=PLACA_ANCHO, dim_y=PLACA_ALTO, incluir_etiquetas=True,
     pie_figura=None, palabras=None,
 ):
     """Segmenta una gráfica lineal y genera su placa táctil STL.
@@ -983,9 +1166,9 @@ def crear_stl_desde_imagen(
 
 
 def _dimensiones_placa(datos):
-    """Lee ancho/alto (mm) del cuerpo de la petición, con los valores A5 por defecto."""
+    """Lee ancho/alto (mm) del cuerpo de la petición; por defecto la placa de 22 x 22 cm."""
     try:
-        return float(datos.get("ancho", 210)), float(datos.get("alto", 148))
+        return float(datos.get("ancho", PLACA_ANCHO)), float(datos.get("alto", PLACA_ALTO))
     except (TypeError, ValueError):
         raise ValueError("'ancho' y 'alto' deben ser números en milímetros.")
 
@@ -1047,7 +1230,7 @@ def generar_stl():
 def generar_stl_desde_grafico(id_grafico):
     """Convierte una gráfica extraída previamente por /api/clasificar a STL.
 
-    Cuerpo JSON opcional: {"ancho": 210, "alto": 148} en milímetros.
+    Cuerpo JSON opcional: {"ancho": 220, "alto": 220} en milímetros.
     """
     nombre_seguro = secure_filename(id_grafico)
     ruta_imagen = os.path.join(RESULTADOS_DIR, nombre_seguro)

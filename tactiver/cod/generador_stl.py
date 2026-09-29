@@ -84,23 +84,23 @@ LETRAS = {
     "w": [2, 4, 5, 6], "x": [1, 3, 4, 6], "y": [1, 3, 4, 5, 6],
     "z": [1, 3, 5, 6],
 }
-_DESPLAZAMIENTO_NEMETH = {1: 2, 2: 3, 4: 5, 5: 6}
 _ORDEN_DIGITOS = list("abcdefghij")
 
 BRAILLE = dict(LETRAS)
-BRAILLE["numeral"] = [3, 4, 5, 6]
+BRAILLE["numeral"] = [3, 4, 5, 6]   # signo de número
 BRAILLE["menos"] = [3, 6]
-# Punto decimal Nemeth. A diferencia de las letras/dígitos de arriba (tabla
-# estándar), este signo se agregó para poder mostrar valores no enteros
-# (ejes 0-1 de accuracy/loss, por ejemplo) y NO se verificó contra una
-# fuente Nemeth impresa. Antes de usar láminas con decimales en un
-# contexto educativo real, pedir a un transcriptor Braille certificado que
-# confirme este patrón de puntos (ver también la nota equivalente sobre
-# alturas de relieve en AplicarFormato/Bloque3).
-BRAILLE["punto"] = [4, 6]
+# Coma decimal del Braille español (punto 2): "12,5" = numeral 1 2 , 5.
+# (La clave se sigue llamando "punto" por compatibilidad con el resto del
+# código.) Antes era el punto decimal Nemeth (puntos 4-6).
+BRAILLE["punto"] = [2]
+# Dígitos del Braille ESPAÑOL (Signografía de la ONCE / CBE, la que se usa en
+# el Perú): el signo de número seguido de las letras a-j en la parte ALTA de
+# la celda (1 = a = punto 1, 2 = b = puntos 1-2, ... 0 = j). Antes se usaban
+# los dígitos Nemeth, que van en la parte BAJA de la celda (1 = punto 2...):
+# impresos se leían "corridos una línea hacia abajo" y no eran los números
+# que un lector de Braille español espera.
 for _n, _letra in enumerate(_ORDEN_DIGITOS, start=1):
-    _digito = str(_n % 10)
-    BRAILLE[_digito] = sorted(_DESPLAZAMIENTO_NEMETH[d] for d in LETRAS[_letra])
+    BRAILLE[str(_n % 10)] = list(LETRAS[_letra])
 
 
 # ============================================================
@@ -134,6 +134,35 @@ def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
         (3, 0, 4), (3, 4, 7),  # izquierda(normal -X)
     )
     return v[np.array(caras)]
+
+
+def _malla_prisma(poligono, altura, z0=0.0):
+    """Un polígono CONVEXO (vértices en sentido antihorario, en mm) extruido
+    `altura` mm hacia arriba desde z0: la placa base con una esquina
+    recortada. Tapas en abanico y una pared por lado, con el mismo sentido
+    de vértices que `_malla_caja` (normales hacia afuera)."""
+    z1 = z0 + altura
+    abajo = [(x, y, z0) for x, y in poligono]
+    arriba = [(x, y, z1) for x, y in poligono]
+    tris = []
+    for i in range(1, len(poligono) - 1):
+        tris.append((arriba[0], arriba[i], arriba[i + 1]))      # tapa de arriba (+Z)
+        tris.append((abajo[0], abajo[i + 1], abajo[i]))         # tapa de abajo (-Z)
+    for i in range(len(poligono)):
+        j = (i + 1) % len(poligono)
+        tris.append((abajo[i], abajo[j], arriba[j]))            # pared
+        tris.append((abajo[i], arriba[j], arriba[i]))
+    return np.array(tris, dtype=float)
+
+
+def contorno_placa(ancho, alto, chaflan):
+    """Contorno de la placa (antihorario): un rectángulo al que le falta un
+    triángulo de `chaflan` mm de lado en la esquina SUPERIOR DERECHA. Esa
+    esquina cortada permite orientar la lámina al tacto (saber cuál es el
+    "arriba") antes de empezar a leerla."""
+    if chaflan <= 0:
+        return [(0.0, 0.0), (ancho, 0.0), (ancho, alto), (0.0, alto)]
+    return [(0.0, 0.0), (ancho, 0.0), (ancho, alto - chaflan), (ancho - chaflan, alto), (0.0, alto)]
 
 
 def _malla_cilindro(radio, altura, cx=0.0, cy=0.0, z0=0.0, lados=CILINDRO_LADOS):
@@ -554,20 +583,15 @@ _ESTILOS_SERIE = [
     {"nombre": "punteada", "patron": "punteado", "diametro": DIAM_LINEA * 1.3, "altura": RELIEVE_LINEA - 0.3},
 ]
 
-# Textura de cada eje: distinta entre sí y de las series de datos (que se
-# quedan con la línea sólida, la más alta — "dato > eje > marca de escala").
-# Antes ambos ejes eran una barra lisa idéntica entre sí y de la misma
-# familia de forma que una curva sólida; con esto un eje ya no se confunde
-# al tacto ni con el otro eje ni con un dato. El espaciado es más fino que
-# el de las series para que se sientan como una guía, no como un dato.
+# Los dos ejes son líneas CONTINUAS, más bajas que las curvas de datos
+# (RELIEVE_EJE < RELIEVE_LINEA): se sienten como guía, no como dato. Antes
+# el eje X era rayado y el Y punteado para distinguirlos entre sí, pero en
+# las pruebas con estudiantes esos cortes desorientaban al seguir el eje.
 EJE_X_ESTILO = {
-    "patron": "rayado", "diametro": 2.0, "altura": RELIEVE_EJE,
-    "raya_largo": 3.0, "raya_hueco": 2.0, "punteado_espaciado": PUNTEADO_ESPACIADO,
+    "patron": "solido", "diametro": 2.0, "altura": RELIEVE_EJE,
+    "raya_largo": RAYA_LARGO, "raya_hueco": RAYA_HUECO, "punteado_espaciado": PUNTEADO_ESPACIADO,
 }
-EJE_Y_ESTILO = {
-    "patron": "punteado", "diametro": 2.0, "altura": RELIEVE_EJE,
-    "raya_largo": RAYA_LARGO, "raya_hueco": RAYA_HUECO, "punteado_espaciado": 4.0,
-}
+EJE_Y_ESTILO = dict(EJE_X_ESTILO)
 
 
 # Leyenda (solo con 2+ series): cada entrada es una muestra corta de la
@@ -934,14 +958,25 @@ def _ancho_numero(valor, decimales=0):
     return CELDA_PITCH * celdas
 
 
+# Formato de la lámina: placa cuadrada de 22 x 22 cm con la esquina superior
+# derecha recortada (orientación al tacto); el gráfico ocupa solo la parte de
+# ABAJO y los 6 cm de arriba quedan en blanco.
+PLACA_ANCHO = 220.0
+PLACA_ALTO = 220.0
+PLACA_MARGEN_SUPERIOR = 60.0
+PLACA_CHAFLAN = 10.0
+
+
 def generar_modelo_desde_recta(
     datos_segmentador,
-    dim_x=210.0,
-    dim_y=148.0,
+    dim_x=PLACA_ANCHO,
+    dim_y=PLACA_ALTO,
     archivo_salida="grafica_tactil.stl",
     incluir_etiquetas=False,
     incluir_leyenda=False,
     diseno=None,
+    margen_superior=PLACA_MARGEN_SUPERIOR,
+    chaflan=PLACA_CHAFLAN,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -984,6 +1019,11 @@ def generar_modelo_desde_recta(
     una leyenda con una muestra de la textura de cada serie y su nombre en
     Braille. Sin ella, qué textura es cada serie lo dice la narración.
 
+    `margen_superior` (mm): franja de arriba que queda en blanco; todo el
+    gráfico (títulos, números, ejes y curvas) va en la parte de abajo.
+    `chaflan` (mm): lado del triángulo recortado en la esquina superior
+    derecha de la placa (0 = sin recorte).
+
     `diseno`: si se pasa un dict, se llena con dónde quedó cada cosa en la
     placa (mm, origen abajo a la izquierda) y la escala usada. Lo usa
     narracion.py para que un programa de narración sepa qué hay bajo el dedo.
@@ -992,6 +1032,12 @@ def generar_modelo_desde_recta(
     if dim_x < 130 or dim_y < 90:
         raise ValueError(
             "La placa debe medir al menos 130 x 90 mm."
+        )
+    # Alto que puede usar el gráfico: todo menos la franja de arriba en blanco.
+    alto_util = dim_y - margen_superior
+    if alto_util < 90:
+        raise ValueError(
+            "Con ese margen superior no quedan al menos 90 mm de alto para el gráfico."
         )
 
     # ================================================================
@@ -1285,19 +1331,19 @@ def generar_modelo_desde_recta(
     decimales_y = _decimales_necesarios(reales_y) if reales_y else 0
 
     # ================================================================
-    # 6b. DISTRIBUCIÓN EN LA PLACA: el gráfico centrado
+    # 6b. DISTRIBUCIÓN EN LA PLACA: el gráfico ocupa todo el espacio
     # ================================================================
-    # El recuadro del gráfico (lo que encierran los ejes) queda en el CENTRO
-    # de la placa: mismo espacio a izquierda y derecha, y arriba y abajo.
-    # Ese espacio es el mayor de lo que hay que escribir de cada lado:
+    # El conjunto (números y títulos + gráfico) llena la placa con
+    # MARGEN_PLACA en cada borde, sin espacio muerto:
     #   izquierda: números del eje Y + separación BANA hasta el eje;
-    #   derecha:   la mitad del último rótulo del eje X (va centrado en su
-    #              marca y sobresale del gráfico);
+    #   derecha:   el gráfico llega hasta el margen, salvo lo justo para que
+    #              el último rótulo del eje X (centrado en su valor) no se
+    #              salga de la placa;
     #   abajo:     fila de rótulos del eje X + fila del título del eje X;
-    #   arriba:    una fila por título (eje Y y gráfico) y por fila de leyenda;
-    # más MARGEN_PLACA hasta el borde. (Antes se centraba el conjunto con
-    # los números incluidos, y como los del eje Y están solo a la izquierda,
-    # el gráfico quedaba corrido hacia la derecha.)
+    #   arriba:    una fila por título (eje Y y gráfico) y por fila de leyenda.
+    # (La versión anterior dejaba el recuadro en el centro exacto de la
+    # placa, y al imprimir quedaba espacio sin usar a la derecha, del ancho
+    # de la columna de números del eje Y.)
     #
     # Eje X de categorías ("Ene", "Feb"...): el valor i del eje es la
     # categoría i, y en la placa se escribe su nombre en vez del número.
@@ -1318,8 +1364,17 @@ def generar_modelo_desde_recta(
 
     ancho_numeros_y = max(anchos_y, default=0.0)
     bloque_izquierdo = (ancho_numeros_y + CLEARANCE_BRAILLE) if valores_y else 6.0
-    sobresale_derecha = anchos_x[-1] / 2 if anchos_x else 3.0
-    lateral = MARGEN_PLACA + max(bloque_izquierdo, sobresale_derecha)
+    izquierda = MARGEN_PLACA + bloque_izquierdo
+
+    # Ancho del gráfico: hasta el margen derecho, achicado solo si algún
+    # rótulo del eje X (centrado en su valor) quedaría fuera de la placa.
+    disponible = dim_x - MARGEN_PLACA - izquierda
+    ancho_plot = disponible
+    for v, ancho_rotulo in zip(valores_x, anchos_x):
+        fraccion = (v - x_min) / rango_x
+        if fraccion > 1e-6:
+            ancho_plot = min(ancho_plot, (disponible - ancho_rotulo / 2) / min(fraccion, 1.0))
+    derecha = dim_x - izquierda - ancho_plot
 
     filas_arriba = int(bool(titulo_grafico)) + int(bool(titulo_eje_y_txt))
 
@@ -1335,13 +1390,10 @@ def generar_modelo_desde_recta(
     # gráfico: sobresale media fila aunque no haya títulos.
     bloque_arriba = max(ALTURA_FILA_BRAILLE / 2,
                         (filas_arriba + len(filas_leyenda)) * fila_reservada)
-    vertical = MARGEN_PLACA + max(bloque_abajo, bloque_arriba)
+    abajo = MARGEN_PLACA + bloque_abajo
+    arriba = MARGEN_PLACA + bloque_arriba
 
-    izquierda = derecha = lateral
-    abajo = arriba = vertical
-
-    ancho_plot = dim_x - izquierda - derecha
-    alto_plot = dim_y - abajo - arriba
+    alto_plot = alto_util - abajo - arriba
 
     if ancho_plot <= 0 or alto_plot <= 0:
         raise ValueError(
@@ -1467,7 +1519,7 @@ def generar_modelo_desde_recta(
     # 9. PLACA BASE
     # ================================================================
 
-    modelo = _malla_caja(dim_x, dim_y, BASE_THICKNESS, cx=dim_x / 2, cy=dim_y / 2, z0=0.0)
+    modelo = _malla_prisma(contorno_placa(dim_x, dim_y, chaflan), BASE_THICKNESS)
 
     # Todas las piezas en relieve (ejes, ticks, números y texto Braille,
     # curvas) se acumulan acá y se sueldan a la placa base de una sola vez
@@ -1487,35 +1539,25 @@ def generar_modelo_desde_recta(
     eje_y_inicio = (izquierda, abajo)
     eje_y_fin = (
         izquierda,
-        dim_y - arriba
+        alto_util - arriba
     )
 
-    # Cada eje con su propia textura (rayado el X, punteado el Y) para que
-    # no se confundan entre sí ni con una curva de datos (que se queda con
-    # la línea sólida): ver EJE_X_ESTILO / EJE_Y_ESTILO.
+    # Ejes continuos, más bajos que las curvas: ver EJE_X_ESTILO / EJE_Y_ESTILO.
     _agregar_eje(piezas, eje_x_inicio, eje_x_fin, EJE_X_ESTILO)
     _agregar_eje(piezas, eje_y_inicio, eje_y_fin, EJE_Y_ESTILO)
 
     # ================================================================
-    # 11. MARCAS Y NÚMEROS DE LOS EJES
+    # 11. NÚMEROS DE LOS EJES
     # ================================================================
-    # Todas las marcas van en relieve; los números solo los que entran sin
-    # tocarse (ver _indices_legibles): en el eje Y, una fila de Braille mide
-    # ~6 mm, y 8 números en un eje de 45 mm quedaban pegados.
+    # Cada número va a la altura (eje Y) o debajo (eje X) de su valor, sin
+    # marca que cruce el eje: los segmentos transversales cortaban la línea
+    # del eje y desorientaban al seguirla con el dedo. Se escriben solo los
+    # números que entran sin tocarse (ver _indices_legibles).
     avisos = []
     x_marcas = [min(max(valor_a_fisico(v, y_min)[0], izquierda), izquierda + ancho_plot)
                 for v in valores_x]
     y_marcas = [min(max(valor_a_fisico(x_min, v)[1], abajo), abajo + alto_plot)
                 for v in valores_y]
-
-    for x_fis in x_marcas:
-        agregar_segmento_relieve(
-            piezas, (x_fis, abajo - 3), (x_fis, abajo + 3), 1.5, RELIEVE_TICK
-        )
-    for y_fis in y_marcas:
-        agregar_segmento_relieve(
-            piezas, (izquierda - 3, y_fis), (izquierda + 3, y_fis), 1.5, RELIEVE_TICK
-        )
 
     if incluir_etiquetas:
         con_numero_x = _indices_legibles(x_marcas, anchos_x, CELDA_PITCH)
@@ -1536,7 +1578,7 @@ def generar_modelo_desde_recta(
             if escritos < total:
                 avisos.append(
                     f"Eje {eje}: se escribieron {escritos} de {total} números en Braille "
-                    "para que no se toquen (todas las marcas siguen en relieve)."
+                    "para que no se toquen."
                 )
 
     # ================================================================
@@ -1576,7 +1618,7 @@ def generar_modelo_desde_recta(
             if not texto_crudo:
                 continue
             celdas = _titulo(texto_crudo, nombre)
-            y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
+            y_fila = (alto_util - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
                 + fila_arriba * fila_reservada
             if nombre == "título del eje Y":
                 x_primera = max(MARGEN_PLACA, izquierda - ancho_numeros_y) + BORDE_A_CELDA
@@ -1684,7 +1726,7 @@ def generar_modelo_desde_recta(
     # nada que distinguir.
     leyenda_diseno = []
     for fila, entradas in enumerate(filas_leyenda):
-        y_fila = (dim_y - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2             + (filas_arriba + fila) * fila_reservada
+        y_fila = (alto_util - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2             + (filas_arriba + fila) * fila_reservada
         x = LEYENDA_MARGEN
         for indice, celdas in entradas:
             estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
@@ -1711,7 +1753,8 @@ def generar_modelo_desde_recta(
 
     if diseno is not None:
         diseno.update({
-            "placa": {"ancho_mm": dim_x, "alto_mm": dim_y},
+            "placa": {"ancho_mm": dim_x, "alto_mm": dim_y,
+                      "margen_superior_mm": margen_superior, "chaflan_mm": chaflan},
             "area": {"izquierda": izquierda, "abajo": abajo, "ancho": ancho_plot, "alto": alto_plot},
             # en el espacio del eje: log10(valor) si la escala es "log"
             "dominio": {"x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max,

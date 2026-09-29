@@ -76,6 +76,18 @@ _ESQUEMA = [
     """,
 ]
 
+# Columnas agregadas después de la primera versión del esquema. CREATE TABLE
+# IF NOT EXISTS no toca una tabla que ya existe, así que se suman con ALTER
+# TABLE; si la columna ya está, la base responde error y se sigue (funciona
+# igual en SQLite y en Turso).
+_COLUMNAS_NUEVAS = [
+    # Rechazo del supervisor: motivo ("" si no dio uno) y cuándo. Una
+    # solicitud con `rechazo` no nulo está rechazada (la columna
+    # estado_supervisor tiene un CHECK que no se puede ampliar sin migrar).
+    ("solicitudes", "rechazo TEXT"),
+    ("solicitudes", "rechazado_en TEXT"),
+]
+
 
 # ============================================================
 # Conexión: SQLite local o Turso, misma interfaz hacia afuera
@@ -211,6 +223,11 @@ def _obtener_conexion():
             _conexion = _ConexionSQLite(DB_LOCAL_PATH)
         for sentencia in _ESQUEMA:
             _conexion.ejecutar_escritura(sentencia)
+        for tabla, columna in _COLUMNAS_NUEVAS:
+            try:
+                _conexion.ejecutar_escritura(f"ALTER TABLE {tabla} ADD COLUMN {columna}")
+            except Exception:
+                pass   # ya existía
     return _conexion
 
 
@@ -346,7 +363,10 @@ def _fila_a_solicitud(fila):
         "lote_id": fila.get("lote_id"),
         "archivo_nombre": fila.get("archivo_nombre"),
         "figuras": json.loads(figuras_json) if figuras_json else [],
-        "estado_supervisor": fila.get("estado_supervisor"),
+        # "rechazada" no está en la columna (ver _COLUMNAS_NUEVAS): se deduce.
+        "estado_supervisor": "rechazada" if fila.get("rechazo") is not None else fila.get("estado_supervisor"),
+        "motivo_rechazo": fila.get("rechazo"),
+        "rechazado_en": fila.get("rechazado_en"),
         "estado_imprenta": fila.get("estado_imprenta"),
         "stl_generado": bool(fila.get("stl_generado")),
         "orden": fila.get("orden"),
@@ -408,7 +428,7 @@ def solicitudes_de_imprenta(imprenta_id):
 
 _CAMPOS_SOLICITUD_DIRECTOS = (
     "supervisor_id", "imprenta_id", "estado_supervisor", "estado_imprenta",
-    "stl_generado", "orden",
+    "stl_generado", "orden", "rechazo", "rechazado_en",
 )
 
 

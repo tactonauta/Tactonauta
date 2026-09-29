@@ -1,3 +1,4 @@
+import csv
 import cv2
 import json
 import mediapipe as mp
@@ -202,6 +203,10 @@ puntos = {
 # (botón "Descargar narración (Hand_Tracking)" en la web). Uso:
 #
 #     python rastreo_gesto_pinza_grafica_autocalibrada.py grafica_tactil_xxxx_narracion.json
+#     python rastreo_gesto_pinza_grafica_autocalibrada.py grafica_tactil_xxxx_handtracking.csv
+#
+# (el CSV es el que se descarga en la web con "Descargar CSV (Hand_Tracking)";
+# trae lo mismo que el JSON, una fila por elemento)
 #
 # Trae los puntos y tramos de cada curva, los ejes y la leyenda, en mm
 # sobre la placa (origen arriba a la izquierda), cada uno con el texto a
@@ -210,9 +215,47 @@ puntos = {
 narracion = None
 SEGMENTOS_ORIGINALES = None   # solo con narración: tramos ya definidos en el JSON
 
+def cargar_narracion_csv(ruta):
+    """Lee el CSV de tactiverso (columnas tipo, id, serie, x1_mm, y1_mm,
+    x2_mm, y2_mm, valor_x, valor_y, tendencia, texto) y lo devuelve con la
+    misma forma que el JSON de narración."""
+    def num(v):
+        return float(v) if v not in (None, "") else None
+
+    datos = {"formato": "tactiverso-narracion", "descripcion": "", "placa": {},
+             "puntos": [], "segmentos": []}
+    with open(ruta, encoding="utf-8-sig", newline="") as f:
+        for fila in csv.DictReader(f):
+            tipo = fila["tipo"]
+            if tipo == "placa":
+                datos["placa"] = {"ancho_mm": num(fila["x2_mm"]), "alto_mm": num(fila["y2_mm"])}
+            elif tipo == "descripcion":
+                datos["descripcion"] = fila["texto"]
+            elif tipo == "punto":
+                datos["puntos"].append({
+                    "id": fila["id"], "serie": fila["serie"],
+                    "x": num(fila["x1_mm"]), "y": num(fila["y1_mm"]),
+                    "valor_x": num(fila["valor_x"]), "valor_y": num(fila["valor_y"]),
+                    "texto": fila["texto"],
+                })
+            elif tipo in ("curva", "eje", "leyenda"):
+                datos["segmentos"].append({
+                    "id": fila["id"], "tipo": tipo, "serie": fila["serie"] or None,
+                    "x1": num(fila["x1_mm"]), "y1": num(fila["y1_mm"]),
+                    "x2": num(fila["x2_mm"]), "y2": num(fila["y2_mm"]),
+                    "tendencia": fila["tendencia"], "texto": fila["texto"],
+                })
+    if not datos["placa"]:
+        raise SystemExit(f"{ruta} no es un CSV de narración de tactiverso (falta la fila 'placa').")
+    return datos
+
+
 if len(sys.argv) > 1:
-    with open(sys.argv[1], encoding="utf-8") as f:
-        narracion = json.load(f)
+    if sys.argv[1].lower().endswith(".csv"):
+        narracion = cargar_narracion_csv(sys.argv[1])
+    else:
+        with open(sys.argv[1], encoding="utf-8") as f:
+            narracion = json.load(f)
     if narracion.get("formato") != "tactiverso-narracion":
         raise SystemExit(f"{sys.argv[1]} no es un archivo de narración de tactiverso.")
     puntos = {

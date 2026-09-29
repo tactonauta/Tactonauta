@@ -19,11 +19,16 @@ exportar_hand_tracking(datos, diseno, descripcion)
     que hay que narrar. Hand_Tracking/rastreo_gesto_pinza_grafica_autocalibrada.py
     lo carga con:  python rastreo_gesto_pinza_grafica_autocalibrada.py narracion.json
 
+exportar_csv_hand_tracking(exportacion, ruta)
+    Lo mismo en un CSV (una fila por elemento), para abrirlo en una hoja de
+    cálculo o cargarlo en Hand_Tracking igual que el JSON.
+
 `datos` es el JSON que escribe segmentador.py (claves ejes, textos, series,
 resumen). `diseno` es el dict que llena generador_stl.generar_modelo_desde_recta
 con dónde quedó cada cosa en la placa; sin él solo se puede describir, no
 ubicar.
 """
+import csv
 import math
 
 import numpy as np
@@ -61,6 +66,17 @@ def _formato_lineal(rango):
         exponente = int(math.floor(math.log10(rango))) - 2
         paso = 10.0 ** exponente if exponente > 0 else 1.0
     return lambda v: _fmt(round(v / paso) * paso if (v is not None and math.isfinite(v)) else v, dec)
+
+
+def _valor_con_nombre(valor_txt, nombre):
+    """Cómo se dice un valor del eje Y en un punto: "Miles de soles 78" si
+    el eje tiene un nombre, "3 mm" / "20 %" si el nombre es una unidad corta,
+    y solo "78" si el eje no tiene nombre."""
+    if not nombre or nombre == "valor":
+        return valor_txt
+    if len(nombre) <= 5 and " " not in nombre:
+        return f"{valor_txt} {nombre}"
+    return f"{nombre} {valor_txt}"
 
 
 def _fmt_significativo(valor):
@@ -337,7 +353,7 @@ def exportar_hand_tracking(datos, diseno, descripcion):
         for k, (x, y, vx, vy, nombre_x) in enumerate(clave):
             hx, hy = a_hoja(x, y)
             if calibrado:
-                texto = f"{prefijo}{nombre_x}: {tit_y} {fmt_y(vy)}."
+                texto = f"{prefijo}{nombre_x}: {_valor_con_nombre(fmt_y(vy), tit_y)}."
             else:
                 texto = f"{prefijo}Punto {k + 1} de {len(clave)} de la curva."
             punto = {"id": f"s{s['indice'] + 1}_p{k + 1}", "serie": nombre,
@@ -402,8 +418,61 @@ def exportar_hand_tracking(datos, diseno, descripcion):
         "version": VERSION,
         "descripcion": descripcion,
         "placa": {"ancho_mm": ancho, "alto_mm": alto,
-                  "origen": "esquina superior izquierda, y hacia abajo"},
+                  "margen_superior_mm": diseno["placa"].get("margen_superior_mm", 0),
+                  "chaflan_mm": diseno["placa"].get("chaflan_mm", 0),
+                  "origen": "esquina superior izquierda, y hacia abajo "
+                            "(la esquina recortada es la superior derecha)"},
         "series": resumen_series,
         "puntos": puntos,
         "segmentos": segmentos,
     }
+
+
+# ------------------------------------------------------------------
+# Exportación para Hand_Tracking en CSV
+# ------------------------------------------------------------------
+COLUMNAS_CSV = ["tipo", "id", "serie", "x1_mm", "y1_mm", "x2_mm", "y2_mm",
+                "valor_x", "valor_y", "tendencia", "texto"]
+
+
+def exportar_csv_hand_tracking(exportacion, ruta):
+    """Escribe en CSV lo mismo que `exportar_hand_tracking`: todo lo que
+    Hand_Tracking necesita para narrar la lámina. Coordenadas en mm sobre la
+    placa, con el origen en la esquina superior IZQUIERDA y la y hacia abajo
+    (como la imagen de la cámara). Una fila por elemento, columna "tipo":
+
+      placa        x2_mm/y2_mm = ancho y alto de la placa; texto = origen,
+                   esquina recortada y margen superior en blanco.
+      descripcion  texto = descripción completa (tecla "d" en Hand_Tracking).
+      serie        una por curva: serie = nombre, texto = su textura.
+      punto        x1_mm/y1_mm = dónde está; valor_x/valor_y = sus valores;
+                   texto = lo que se narra al tocarlo.
+      curva        tramo entre dos puntos de una curva (x1,y1 -> x2,y2),
+                   con tendencia (aumento / disminución / estable).
+      eje          el eje X o el Y, de punta a punta.
+      leyenda      una entrada de la leyenda (si la lámina la tiene).
+
+    Se guarda en UTF-8 con BOM para que Excel respete las tildes."""
+    placa = exportacion["placa"]
+
+    def r(v):
+        # valores con 4 decimales (más es ruido de píxeles); vacío si no hay
+        return round(v, 4) if isinstance(v, float) else ("" if v is None else v)
+
+    with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(COLUMNAS_CSV)
+        w.writerow(["placa", "placa", "", 0, 0, placa["ancho_mm"], placa["alto_mm"], "", "", "",
+                    f"{placa['origen']}; esquina recortada de {placa.get('chaflan_mm', 0)} mm; "
+                    f"margen superior en blanco de {placa.get('margen_superior_mm', 0)} mm"])
+        w.writerow(["descripcion", "descripcion", "", "", "", "", "", "", "", "",
+                    exportacion.get("descripcion", "")])
+        for i, s in enumerate(exportacion.get("series") or [], start=1):
+            w.writerow(["serie", f"serie_{i}", s["nombre"], "", "", "", "", "", "", "",
+                        f"Textura {s['textura']}"])
+        for p in exportacion.get("puntos") or []:
+            w.writerow(["punto", p["id"], p.get("serie") or "", p["x"], p["y"], "", "",
+                        r(p.get("valor_x")), r(p.get("valor_y")), "", p["texto"]])
+        for s in exportacion.get("segmentos") or []:
+            w.writerow([s["tipo"], s["id"], s.get("serie") or "", s["x1"], s["y1"], s["x2"], s["y2"],
+                        "", "", s.get("tendencia", ""), s["texto"]])
