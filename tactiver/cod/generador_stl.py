@@ -57,6 +57,15 @@ RAYA_HUECO = 3.5
 # que no se junten hasta parecer una línea continua otra vez.
 PUNTEADO_ESPACIADO = 5.0
 
+# Patrón "celdas" (curva principal): una cadena CONTINUA de celdas largas,
+# anchas y altas, unidas por un cuello corto, angosto y más bajo. Al tacto
+# es una sola línea que no se corta, pero con un ritmo (celda-muesca-celda)
+# que la distingue de los ejes, que son lisos y más bajos.
+CELDA_LARGO = 5.0            # mm de cada celda
+CUELLO_LARGO = 2.0           # mm del cuello que queda a la vista entre dos celdas
+CUELLO_DIAMETRO = 1.0        # mm (la celda usa el diámetro del estilo)
+CUELLO_ALTURA = 1.0          # mm sobre la placa (la celda usa la altura del estilo)
+
 # Resolución de las mallas generadas a mano (nº de caras). Antes esto lo
 # decidía automáticamente el teselado de OCCT; acá se elige directamente, sin
 # depender de una "tolerancia" indirecta. 8x12 y 16 lados ya son más finos de
@@ -481,6 +490,36 @@ def _dividir_en_rayas(p0, p1, largo_raya=RAYA_LARGO, largo_hueco=RAYA_HUECO):
     return tramos
 
 
+def _dividir_en_celdas(puntos, largo_celda=CELDA_LARGO, largo_cuello=CUELLO_LARGO):
+    """Recorre TODA la polilínea (sin reiniciar en cada vértice, así el
+    ritmo es parejo aunque la curva tenga muchos quiebres) y la corta en
+    tramos alternos celda / cuello. Devuelve [(es_celda, [p0, ..., pn])];
+    cada tramo empieza donde terminó el anterior, así la línea no se corta."""
+    tramos = []
+    es_celda = True
+    restante = largo_celda
+    actual = [tuple(puntos[0])]
+    for a, b in zip(puntos[:-1], puntos[1:]):
+        largo = hypot(b[0] - a[0], b[1] - a[1])
+        if largo < 1e-9:
+            continue
+        pos = 0.0
+        while largo - pos > 1e-9:
+            paso = min(restante, largo - pos)
+            pos += paso
+            punto = (a[0] + (b[0] - a[0]) * pos / largo, a[1] + (b[1] - a[1]) * pos / largo)
+            actual.append(punto)
+            restante -= paso
+            if restante <= 1e-9:
+                tramos.append((es_celda, actual))
+                es_celda = not es_celda
+                restante = largo_celda if es_celda else largo_cuello
+                actual = [punto]
+    if len(actual) >= 2:
+        tramos.append((es_celda, actual))
+    return tramos
+
+
 def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
     """
     Simplifica una polilínea conservando su forma aproximada.
@@ -578,7 +617,8 @@ def simplificar_polilinea(puntos, tolerancia=1.0, max_puntos=80):
 
 
 _ESTILOS_SERIE = [
-    {"nombre": "sólida", "patron": "solido", "diametro": DIAM_LINEA, "altura": RELIEVE_LINEA},
+    # Curva principal: cadena continua de celdas (ver CELDA_LARGO).
+    {"nombre": "en celdas", "patron": "celdas", "diametro": DIAM_LINEA * 1.25, "altura": RELIEVE_LINEA},
     {"nombre": "rayada", "patron": "rayado", "diametro": DIAM_LINEA * 0.85, "altura": RELIEVE_LINEA + 0.4},
     {"nombre": "punteada", "patron": "punteado", "diametro": DIAM_LINEA * 1.3, "altura": RELIEVE_LINEA - 0.3},
 ]
@@ -774,9 +814,24 @@ def agregar_funcion(
         configurable). Con solo 2 puntos (un tramo recto, como un eje) hay
         que densificarlo primero — ver `_linea_recta` — porque si no el
         patrón solo pondría un bulto en cada punta.
+      - "celdas"   -> línea continua hecha de celdas largas (diámetro y
+        altura del estilo) unidas por cuellos angostos y bajos.
     """
 
     if not puntos or len(puntos) < 2:
+        return
+
+    if patron == "celdas":
+        # Cada tramo recto termina en una tapa redonda que sobresale medio
+        # diámetro: la celda se acorta eso en cada punta (y el cuello se
+        # alarga lo mismo) para que las tapas no tapen el cuello y la muesca
+        # entre celdas mida de verdad CUELLO_LARGO.
+        largo_celda = max(CELDA_LARGO - diametro, 0.5)
+        for es_celda, tramo in _dividir_en_celdas(puntos, largo_celda, CUELLO_LARGO + diametro):
+            d = diametro if es_celda else CUELLO_DIAMETRO
+            h = altura if es_celda else CUELLO_ALTURA
+            for p0, p1 in zip(tramo[:-1], tramo[1:]):
+                agregar_segmento_relieve(piezas, p0, p1, d, h)
         return
 
     if patron == "punteado":
