@@ -1,16 +1,8 @@
 """
-segmentador.py 
-  1) Detectar los ejes X e Y de una gráfica y el rectángulo del área de dibujo.
-  2) Detectar UNA O VARIAS curvas de datos por color dominante.
-  3) Detectar y clasificar el texto (título, título de ejes, números de eje,
-     etiquetas de dato, leyenda) con Tesseract OCR.
-  4) Calibrar píxel -> valor real con ajuste lineal ROBUSTO (descarta números
-     mal leídos por el OCR).
-  5) Exportar un CSV (compatible con la versión anterior) y un JSON
-     estructurado, pensado como entrada directa de la etapa BANA/STL.
+segmentador.py — extrae los datos de una gráfica (imagen) para la etapa BANA/STL.
 
-Salidas de procesar_imagen():
-    ruta_csv, ruta_json, ruta_overlay, resumen, advertencias, series
+Pasos: ejes y área de dibujo -> curvas por color -> textos (OCR + plantillas)
+-> calibración píxel->valor -> CSV, JSON y overlay de verificación.
 """
 
 import os
@@ -23,13 +15,11 @@ import uuid
 import cv2
 import numpy as np
 
-# Cambia con cada entrega: sale en el JSON (resumen.version_segmentador) para
-# confirmar que el servidor está usando ESTE archivo y no uno viejo en memoria.
-__version__ = "2026-10-01-simbolos-v2"
 import pytesseract
 from pytesseract import Output
 
-# --- Configuración de Tesseract OCR en Windows ---
+__version__ = "2026-10-01-compacto-v7"
+
 _RUTA_TESSERACT_WINDOWS = os.environ.get(
     "TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 )
@@ -37,14 +27,10 @@ if os.name == "nt" and os.path.isfile(_RUTA_TESSERACT_WINDOWS):
     pytesseract.pytesseract.tesseract_cmd = _RUTA_TESSERACT_WINDOWS
 
 
-# ============================================================
-# 0) UTILIDADES GENERALES
-# ============================================================
+# ---------- 0) UTILIDADES GENERALES ----------
 
 def _tolerancias(forma):
-    """
-    Todas las tolerancias se derivan del tamaño de la imagen
-    """
+    """Tolerancias en píxeles, proporcionales al tamaño de la imagen."""
     alto, ancho = forma[:2]
     diag = math.hypot(alto, ancho)
     return {
@@ -59,9 +45,7 @@ def _tolerancias(forma):
 
 
 def _idioma_ocr(preferido=None):
-    """
-    Aquí usamos spa+eng 
-    """
+    """Idioma de Tesseract: spa+eng si están instalados."""
     if preferido:
         return preferido
     try:
@@ -86,22 +70,17 @@ def _es_numero(texto):
 
 
 def _a_float(texto):
-    """
-    Convierte a float respetando notación española e inglesa. Devuelve None si
-    no se puede (antes esto podía lanzar ValueError y tumbar el pipeline).
-    """
+    """Texto -> float (notación española o inglesa); None si no se puede."""
     t = texto.strip().replace("−", "-").replace("–", "-").replace("—", "-")
     t = t.replace(" ", "")
     tiene_punto, tiene_coma = "." in t, "," in t
     if tiene_punto and tiene_coma:
-        # el separador decimal es el que aparece más a la derecha
         if t.rfind(",") > t.rfind("."):
             t = t.replace(".", "").replace(",", ".")
         else:
             t = t.replace(",", "")
     elif tiene_coma:
         entero, _, dec = t.partition(",")
-        # "1,000" con 3 dígitos después -> miles; "3,5" -> decimal
         t = t.replace(",", "") if (len(dec) == 3 and len(entero.lstrip("-")) <= 3) else t.replace(",", ".")
     try:
         return float(t)
@@ -119,16 +98,10 @@ def _mediana_movil(v, k):
     return np.median(ventanas, axis=1)
 
 
-# ============================================================
-# 1) DETECCIÓN DE EJES Y DEL ÁREA DE DIBUJO
-# ============================================================
+# ---------- 1) DETECCIÓN DE EJES Y DEL ÁREA DE DIBUJO ----------
 
 def _fusionar_lineas(lineas, orientacion, tol):
-    """
-    Canny devuelve DOS bordes por cada trazo grueso, así que Hough entrega el
-    mismo eje duplicado (y en trozos). Aquí se agrupan las líneas casi
-    colineales y se unen sus extremos.
-    """
+    """Une las líneas casi colineales que Hough devuelve duplicadas o en trozos."""
     if not lineas:
         return []
 
@@ -158,19 +131,7 @@ def _fusionar_lineas(lineas, orientacion, tol):
 
 
 def detectar_ejes(gris, tol=None):
-    """
-    Devuelve (eje_x, eje_y) como tuplas (x1,y1,x2,y2), o (None, None).
-
-    Correcciones respecto a la versión anterior:
-      - umbrales relativos al tamaño de la imagen;
-      - clasificación horizontal/vertical con elif (antes una misma línea podía
-        entrar en las dos listas);
-      - fusión de líneas duplicadas por Canny;
-      - se descarta el marco de la imagen (líneas pegadas al borde), que antes
-        podía ganarle al eje X real por estar "más abajo";
-      - el eje Y se elige por cercanía a la esquina inferior izquierda del eje
-        X, considerando también que su extremo inferior toque esa fila.
-    """
+    """Devuelve (eje_x, eje_y) como (x1, y1, x2, y2), o None si no se encuentran."""
     t = tol or _tolerancias(gris.shape)
     alto, ancho = gris.shape[:2]
 
@@ -197,14 +158,6 @@ def detectar_ejes(gris, tol=None):
     gv = [g for g in _fusionar_lineas(verticales, "v", t["tol_linea"] * 2)
           if g["largo"] >= t["largo_min_v"] and 0.01 * ancho < g["pos"] < 0.98 * ancho]
 
-    # Un "marco" (borde del recorte de la figura, típico al extraer imágenes de
-    # un PDF con algo de relleno) es MUY largo y toca las dos puntas de su
-    # propio eje (columna/fila 0 y la última). Un eje real, aunque sea largo,
-    # casi nunca toca el borde exacto: siempre queda margen para las etiquetas
-    # y el título. El filtro anterior (por posición) no distinguía esto, así
-    # que un marco le podía ganar al eje real en `_elegir_esquina` por ser más
-    # largo, dejando los ejes detectados pegados al borde de toda la imagen en
-    # vez de sobre las líneas reales del gráfico.
     margen_marco = max(3, int(round(0.01 * min(alto, ancho))))
 
     def _es_marco(g, dim):
@@ -215,21 +168,15 @@ def detectar_ejes(gris, tol=None):
 
     eje_x, eje_y = _elegir_esquina(gh_sin_marco, gv_sin_marco, t, alto, ancho)
     if eje_x is None and eje_y is None:
-        # Ninguna L sin marco: se reintenta con las líneas originales (mejor un
-        # eje pegado al borde que ninguno, por si la figura de verdad no tiene
-        # margen alrededor del gráfico).
         eje_x, eje_y = _elegir_esquina(gh, gv, t, alto, ancho)
     if eje_x is not None or eje_y is not None:
         return eje_x, eje_y
 
-    # ---- Respaldo (no hay ninguna L clara): heurística anterior ----
-    # Igual que arriba: se prefieren las líneas sin marco si hay alguna.
     gh_resp = gh_sin_marco or gh
     gv_resp = gv_sin_marco or gv
 
     eje_x = None
     if gh_resp:
-        # el eje X es la horizontal larga más baja del gráfico
         mejor = max(gh_resp, key=lambda g: (round(g["pos"]), g["largo"]))
         fila = int(round(mejor["pos"]))
         eje_x = (int(mejor["a"]), fila, int(mejor["b"]), fila)
@@ -251,36 +198,18 @@ def detectar_ejes(gris, tol=None):
 
 
 def _elegir_esquina(gh, gv, t, alto, ancho):
-    """
-    Un par de ejes es una "L": el eje Y termina donde empieza el eje X.
-    Antes el eje X era simplemente "la horizontal larga más baja", y el Y "la
-    vertical más cercana a su extremo". Eso falla en dos casos reales:
-
-      1) Hough alarga los segmentos a través de las marcas (ticks) y de las
-         etiquetas del origen: el eje X arrancaba a la izquierda del eje Y y el
-         eje Y bajaba por debajo del eje X (los ejes no se cortaban);
-      2) una leyenda, un marco o una tabla debajo de la gráfica tiene una
-         horizontal más baja que el eje y le ganaba.
-
-    Aquí se prueban todos los pares (horizontal, vertical) y se elige el que
-    mejor forma la esquina inferior-izquierda; luego cada eje se recorta a esa
-    esquina. Si no hay ninguna L clara devuelve (None, None) y el llamador usa
-    la heurística de respaldo.
-    """
+    """Elige el par horizontal/vertical que mejor forma la "L" inferior izquierda."""
     if not gh or not gv:
         return None, None
     diag = math.hypot(alto, ancho)
-    # cuánto pueden sobresalir los ejes por marcas/etiquetas del origen
     sobrepaso = max(t["tol_linea"] * 3, int(round(0.10 * min(alto, ancho))))
 
     mejor, mejor_costo = None, None
     for h in gh:
         for v in gv:
             vx, hy = v["pos"], h["pos"]
-            # el eje Y debe caer cerca del EXTREMO IZQUIERDO del eje X ...
             if not (h["a"] - sobrepaso <= vx <= h["a"] + 0.25 * h["largo"]):
                 continue
-            # ... y el eje X cerca del EXTREMO INFERIOR del eje Y
             if not (v["b"] - sobrepaso <= hy <= v["b"] + sobrepaso):
                 continue
             if v["a"] >= hy - 0.5 * t["largo_min_v"]:      # la vertical debe subir desde la fila
@@ -296,18 +225,11 @@ def _elegir_esquina(gh, gv, t, alto, ancho):
     h, v = mejor
     col = int(round(v["pos"]))
     fila = int(round(h["pos"]))
-    # La esquina ya fue validada (ambos extremos a menos de `sobrepaso`), así que
-    # los dos ejes se hacen tocar exactamente en ella.
     return (col, fila, int(h["b"]), fila), (col, int(v["a"]), col, fila)
 
 
 def area_de_dibujo(eje_x, eje_y, forma):
-    """
-    Rectángulo (x0, y0, x1, y1) donde vive la curva. Es clave: en la versión
-    anterior la curva se buscaba en TODA la imagen, así que un logo de color,
-    un recuadro de leyenda o un título coloreado podían ganar el concurso de
-    "color dominante".
-    """
+    """Rectángulo (x0, y0, x1, y1) delimitado por los ejes."""
     alto, ancho = forma[:2]
     x0 = eje_y[0] if eje_y else 0
     x1 = eje_x[2] if eje_x else ancho - 1
@@ -320,15 +242,10 @@ def area_de_dibujo(eje_x, eje_y, forma):
     return (x0, y0, x1, y1)
 
 
-# ============================================================
-# 2) DETECCIÓN DE CURVAS (una o varias series)
-# ============================================================
+# ---------- 2) DETECCIÓN DE CURVAS (una o varias series) ----------
 
 def _hues_dominantes(h, mask, n_max=3, tol=12, minimo_relativo=0.06):
-    """
-    Histograma circular de tonos. El `np.argmax` plano de la versión anterior
-    partía en dos cualquier curva roja (tono ~0 y ~179 a la vez).
-    """
+    """Tonos más frecuentes (histograma circular, para no partir el rojo)."""
     valores = h[mask]
     if valores.size == 0:
         return []
@@ -357,11 +274,7 @@ def _mascara_por_hue(h, base, hue, tol):
 
 
 def _limpiar_componentes(mask_u8, area_minima):
-    """
-    Cierra huecos (líneas punteadas, cortes por rejilla) y se queda con todos
-    los trozos grandes de ese color, no solo con el mayor: antes, una curva
-    cortada por las líneas de rejilla se truncaba al fragmento más largo.
-    """
+    """Cierra huecos y conserva todos los trozos grandes de la máscara."""
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     cerrada = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel, iterations=2)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(cerrada, connectivity=8)
@@ -379,11 +292,7 @@ def _limpiar_componentes(mask_u8, area_minima):
 
 def detectar_curvas(imagen_bgr, rect=None, sat_minima=60, tolerancia_hue=12,
                     area_minima=40, max_series=3):
-    """
-    Devuelve una lista de dicts {"hue", "mascara", "modo"}. Para el objetivo
-    BANA esto importa: cada serie necesita su propia textura en el STL, y la
-    versión anterior solo podía devolver una.
-    """
+    """Lista de series {"hue", "mascara", "modo"}; respaldo por intensidad si no hay color."""
     alto, ancho = imagen_bgr.shape[:2]
     dentro = np.zeros((alto, ancho), dtype=bool)
     if rect is None:
@@ -407,11 +316,6 @@ def detectar_curvas(imagen_bgr, rect=None, sat_minima=60, tolerancia_hue=12,
     if series:
         return series
 
-    # --- Respaldo: curva negra/gris (muy común en papers en blanco y negro) ---
-    # Aquí los ejes son negros igual que la curva, así que el recorte se separa
-    # unos píxeles más de los bordes: con un inset de 1 px, las primeras
-    # columnas se comían el trazo del propio eje Y y el primer punto de la
-    # polilínea salía desplazado.
     if rect is not None:
         inset = max(3, int(round(0.004 * max(alto, ancho))))
         dentro = np.zeros((alto, ancho), dtype=bool)
@@ -428,14 +332,12 @@ def detectar_curvas(imagen_bgr, rect=None, sat_minima=60, tolerancia_hue=12,
 
 
 def detectar_curva(imagen_bgr, **kw):
-    """Compatibilidad con la API anterior: devuelve solo la primera máscara."""
+    """Compatibilidad: solo la máscara de la primera serie."""
     s = detectar_curvas(imagen_bgr, **kw)
     return s[0]["mascara"] if s else None
 
 
-# ============================================================
-# 3) OCR: DETECCIÓN Y CLASIFICACIÓN DE TEXTO
-# ============================================================
+# ---------- 3) OCR: DETECCIÓN Y CLASIFICACIÓN DE TEXTO ----------
 
 def _mapa_distancia_curva(mascaras):
     if not mascaras:
@@ -449,23 +351,7 @@ def _mapa_distancia_curva(mascaras):
 
 def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
                     tol=None, escala_ocr=2.0, lang=None, excluir=None):
-    """
-    Corre OCR una sola vez y clasifica en DOS pasadas (antes era una sola
-    cadena de if/elif, y eso causaba dos errores reales):
-
-      1) el "0" del origen, que está a la izquierda del eje Y pero a la altura
-         del eje X, se clasificaba como etiqueta del eje X y arruinaba la
-         calibración horizontal. Ahora una etiqueta de eje X además debe estar
-         dentro del rango horizontal del gráfico, y una de eje Y dentro del
-         rango vertical;
-      2) cualquier texto no numérico dentro del gráfico (leyenda, anotaciones,
-         unidades) se pegaba al título. Ahora el título solo puede estar por
-         ENCIMA del área de dibujo; lo de adentro va a "leyenda".
-
-    Además el título se arma respetando el orden de lectura de Tesseract
-    (bloque, párrafo, línea, palabra). Antes se ordenaba solo por `cy`, así que
-    las palabras de una misma línea salían barajadas.
-    """
+    """OCR global de la imagen y clasificación de cada texto (ejes, títulos, leyenda, datos)."""
     t = tol or _tolerancias(gris.shape)
     margen = t["margen_texto"]
     radio_dato = t["radio_dato"]
@@ -483,7 +369,6 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
         config="--psm 11", lang=_idioma_ocr(lang),
     )
 
-    # ---------- pasada 1: recolectar tokens ----------
     tokens = []
     for i in range(len(datos["text"])):
         texto = datos["text"][i].strip()
@@ -510,9 +395,6 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
                       datos["line_num"][i], datos["word_num"][i]),
         })
 
-    # Los números que ya se leyeron por regiones (`detectar_etiquetas_ejes`) no
-    # se vuelven a clasificar: evita duplicados y que sus restos acaben en la
-    # leyenda o en los títulos.
     if excluir:
         def _dentro(tk):
             for b in excluir:
@@ -522,7 +404,6 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
             return False
         tokens = [tk for tk in tokens if not _dentro(tk)]
 
-    # ---------- pasada 2: clasificar ----------
     x0, y0, x1, y1 = rect if rect else (None, None, None, None)
     etiquetas_x, etiquetas_y, etiquetas_dato = [], [], []
     tok_titulo, tok_titulo_x, tok_leyenda = [], [], []
@@ -562,7 +443,6 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
                 tok_leyenda.append(tk)
             continue
 
-        # --- texto no numérico ---
         limite_superior = y0 if y0 is not None else eje_x_fila
         if limite_superior is not None and cy < limite_superior - margen:
             tok_titulo.append(tk)
@@ -584,9 +464,6 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
         bbox["ph"] = max(z["py"] + z["ph"] for z in toks) - bbox["py"]
         return texto, bbox
 
-    # El título del eje X es la línea de texto MÁS CERCANA debajo de los números
-    # del eje (antes se tomaba todo lo que hubiera debajo, y una leyenda puesta
-    # bajo la gráfica se pegaba al título: "Meses — Serie A"). Lo demás es leyenda.
     if tok_titulo_x and etiquetas_x:
         base_num = max(e["py"] + e["ph"] for e in etiquetas_x)
         bajo = [z for z in tok_titulo_x if z["centro_y"] > base_num]
@@ -618,20 +495,7 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
     }
 
 
-# ============================================================
-# 3a) ETIQUETAS NUMÉRICAS DE LOS EJES (lectura por regiones)
-# ============================================================
-#
-# Por qué existe: el OCR de la imagen completa (`psm 11`) es bueno para títulos
-# pero malo para las marcas de los ejes: son números sueltos, diminutos y en
-# negrita, y Tesseract se los salta o los lee como basura ("2 4 6 8 10" daba
-# solo "10"). Aquí el eje ya se conoce, así que:
-#   1) se recorta la franja donde DEBEN estar las etiquetas (debajo del eje X,
-#      a la izquierda del eje Y);
-#   2) se separa cada etiqueta por componentes conectados (sin depender del
-#      OCR para saber dónde hay texto);
-#   3) cada etiqueta se agranda y se lee sola, solo con dígitos;
-#   4) se conserva la fila (X) o la columna (Y) que más etiquetas alinea.
+# ---------- 3a) ETIQUETAS NUMÉRICAS DE LOS EJES (lectura por regiones) ----------
 
 _WHITELIST_NUM = "0123456789.,-+%"
 _CONFUSIONES = str.maketrans({
@@ -642,7 +506,7 @@ _CONFUSIONES = str.maketrans({
 
 
 def _normalizar_numero(texto):
-    """Devuelve el texto listo para _a_float o None si no es un número plausible."""
+    """Texto listo para _a_float, o None si no es un número plausible."""
     t = texto.strip().strip(".,:;")
     if t.endswith("%"):
         t = t[:-1].strip()
@@ -651,18 +515,13 @@ def _normalizar_numero(texto):
     if not _es_numero(t):
         t2 = t.replace(" ", "")
         if not _es_numero(t2) and any(c.isdigit() for c in t2):
-            # confusiones típicas ("1O" -> "10"), solo si ya hay al menos un dígito real
             t2 = t2.translate(_CONFUSIONES)
         t = t2
     return t if _es_numero(t) else None
 
 
 def _grosor_hasta_borde(gris, eje, lado, fondo):
-    """
-    Devuelve la fila (eje X, lado='abajo') o la columna (eje Y, lado='izq') donde
-    TERMINA el trazo del eje. Las etiquetas se buscan a partir de ahí, así el
-    propio eje (que puede medir 3-5 px) no se cuela en la franja.
-    """
+    """Fila/columna donde termina el trazo del eje (para no incluirlo en la franja)."""
     alto, ancho = gris.shape[:2]
     tinta = gris < (int(fondo) - 40)
     if lado == "abajo":
@@ -683,12 +542,7 @@ def _grosor_hasta_borde(gris, eje, lado, fondo):
 
 
 def _candidatos_etiquetas(gris, region, lado_eje):
-    """
-    Cajas (x, y, w, h) en coordenadas de la imagen con posibles etiquetas dentro
-    de `region`. `lado_eje` = 'arriba' (el eje X está justo encima de la franja)
-    o 'derecha' (el eje Y está justo a la derecha).
-    Devuelve (cajas, altura_tipica_de_glifo).
-    """
+    """Cajas de posibles etiquetas numéricas en una franja junto al eje."""
     x0, y0, x1, y1 = region
     sub = gris[y0:y1, x0:x1]
     if sub.size == 0 or int(sub.max()) - int(sub.min()) < 40:
@@ -711,13 +565,10 @@ def _candidatos_etiquetas(gris, region, lado_eje):
 
     utiles = []
     for c in comps:
-        # Sin filtro de área mínima: el punto decimal de un texto chico mide 1-2 px
-        # y, si se descarta, "1.0" se parte en "1" y "0".
         delgado = min(c["w"], c["h"]) <= 2
         if delgado and max(c["w"], c["h"]) >= 2.5 * h_ref:
             continue                       # resto del eje o del marco
         if c["toca"]:
-            # marca (tick): pegada al eje, fina y más corta que un dígito
             if lado_eje == "arriba":
                 es_marca = c["w"] <= max(3, 0.4 * h_ref) and c["h"] <= 0.65 * h_ref
             else:
@@ -729,9 +580,6 @@ def _candidatos_etiquetas(gris, region, lado_eje):
         return [], h_ref
 
     limpia = np.isin(lab, utiles).astype(np.uint8) * 255
-    # Une los dígitos de UNA misma etiqueta. Debe ser menor que la separación
-    # entre los números y el título rotado del eje Y (si no, la caja de "20" se
-    # ensancha hasta la letra del título).
     r = max(1, int(round(0.25 * h_ref)))
     dil = cv2.dilate(limpia, cv2.getStructuringElement(cv2.MORPH_RECT, (2 * r + 1, 1)))
     n2, lab2, st2, _ = cv2.connectedComponentsWithStats(dil, connectivity=8)
@@ -752,13 +600,7 @@ def _candidatos_etiquetas(gris, region, lado_eje):
 
 
 def _ocr_numero(crop, margen_px=2):
-    """
-    Lee UN número en un recorte pequeño. Devuelve (texto_normalizado, confianza).
-
-    `margen_px` es el contorno de fondo que se dejó alrededor de la tinta; sirve
-    para calcular la altura real del glifo y agrandarlo hasta ~42 px, que es donde
-    Tesseract lee bien (con glifos de 5 px de alto no lee ni un "0").
-    """
+    """Lee UN número en un recorte pequeño. Devuelve (texto, confianza)."""
     if crop.size == 0:
         return None, 0.0
     if np.median(crop) < 127:
@@ -772,8 +614,6 @@ def _ocr_numero(crop, margen_px=2):
     big = cv2.normalize(big, None, 0, 255, cv2.NORM_MINMAX)
     _, otsu = cv2.threshold(big, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Primero solo dígitos; si Tesseract no devuelve nada, se reintenta sin la
-    # lista blanca (a veces con ella lee vacío) y `_normalizar_numero` filtra.
     intentos = ((7, True), (8, True), (7, False), (10, False))
     mejor, mejor_conf = None, -1.0
     for variante in (big, otsu):
@@ -808,9 +648,6 @@ def _ocr_numero(crop, margen_px=2):
             break
 
     if mejor is None:
-        # Tesseract casi nunca reconoce un dígito AISLADO (un "0" suelto sale
-        # vacío). Se repite el recorte lado a lado ("0 0"), se lee esa línea y,
-        # si sale un patrón duplicado, se toma una mitad.
         hueco = np.full((big.shape[0], int(round(big.shape[0] * 0.6))), fondo, dtype=big.dtype)
         doble = np.hstack([big, hueco, big])
         for psm in (7, 8):
@@ -830,8 +667,6 @@ def _ocr_numero(crop, margen_px=2):
                         pass
             n = len(crudo)
             conf_media = (sum(confs) / len(confs)) if confs else 0.0
-            # Umbral estricto: una lectura falsa con confianza baja es peor que
-            # no leer nada (en una gráfica táctil un número falso pasa inadvertido).
             if n >= 2 and n % 2 == 0 and crudo[:n // 2] == crudo[n // 2:] and conf_media >= 50:
                 num = _normalizar_numero(crudo[:n // 2])
                 if num is not None:
@@ -840,11 +675,7 @@ def _ocr_numero(crop, margen_px=2):
 
 
 def _elegir_alineacion(tokens, clave, tol, distancia_eje):
-    """
-    Entre todos los números leídos, se queda con los que están ALINEADOS: misma
-    fila (etiquetas del eje X) o mismo borde derecho (etiquetas del eje Y). Así
-    un número suelto de una leyenda o un título rotado mal leído no entra.
-    """
+    """Se queda con el grupo de números mejor alineado (misma fila o columna)."""
     if len(tokens) <= 1:
         return tokens
     orden = sorted(tokens, key=clave)
@@ -860,16 +691,11 @@ def _elegir_alineacion(tokens, clave, tol, distancia_eje):
 
 
 def detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=None, tol=None):
-    """
-    Lee las marcas numéricas de los dos ejes por regiones.
-    Devuelve (etiquetas_x, etiquetas_y): listas de dicts con el mismo formato que
-    los tokens de `detectar_textos`.
-    """
+    """Lee los números de ambos ejes por regiones. Devuelve (etiquetas_x, etiquetas_y)."""
     t = tol or _tolerancias(gris.shape)
     alto, ancho = gris.shape[:2]
     margen = t["margen_texto"]
     fondo = int(np.median(gris))
-    x0r, y0r, x1r, y1r = rect if rect else (0, 0, ancho - 1, alto - 1)
 
     def _tokens(cajas, orden0):
         out = []
@@ -890,7 +716,6 @@ def detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=None, tol=None):
             })
         return out
 
-    # ---------- eje X: franja bajo el eje ----------
     etiquetas_x = []
     if eje_x is not None:
         borde = _grosor_hasta_borde(gris, eje_x, "abajo", fondo)
@@ -906,7 +731,6 @@ def detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=None, tol=None):
                 toks, lambda z: z["centro_y"], tol_fila,
                 lambda z: z["centro_y"] - borde)
 
-    # ---------- eje Y: franja a la izquierda del eje ----------
     etiquetas_y = []
     if eje_y is not None:
         borde = _grosor_hasta_borde(gris, eje_y, "izq", fondo)
@@ -927,18 +751,11 @@ def detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=None, tol=None):
     return etiquetas_x, etiquetas_y
 
 
-# Letras válidas en un título: latín (con tildes) y GRIEGO. Sin el griego, un
-# título o una leyenda como "Ω", "λ (nm)" o "Δt" se descartaba por "no tener letras".
 _RE_LETRA = r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\u0370-\u03FF\u2126\u00B5]"
 
 
 def _texto_plausible(texto):
-    """
-    Un título de verdad es mayoritariamente letras. El OCR sobre números
-    rotados devuelve cosas como "» es 2 @ 8 ° 8 8 8": eso NO es un título.
-    Quita los tokens sin ningún alfanumérico y exige que las letras sean al
-    menos la mitad de lo que queda.
-    """
+    """True si el texto es mayoritariamente letras (descarta basura del OCR)."""
     if not texto:
         return False
     toks = [w for w in texto.split() if re.search(_RE_LETRA[:-1] + r"0-9]", w)]
@@ -950,12 +767,7 @@ def _texto_plausible(texto):
 
 
 def _limite_titulo_vertical(gris, eje_y, eje_x, fondo, margen):
-    """
-    Cuando no se pudieron leer los números del eje Y, se localiza la banda de
-    esos números por la tinta: la franja pegada al eje son las marcas y sus
-    números, y lo que quede a su izquierda, separado por un hueco, es el título
-    rotado. Devuelve la x donde termina el título (o None si no hay título).
-    """
+    """x donde termina el título del eje Y cuando no se leyeron sus números."""
     alto, ancho = gris.shape[:2]
     borde = _grosor_hasta_borde(gris, eje_y, "izq", fondo)
     ya = max(0, int(eje_y[1]) - 3 * margen)
@@ -980,27 +792,14 @@ def _limite_titulo_vertical(gris, eje_y, eje_x, fondo, margen):
     if ini is not None:
         runs.append((ini, fin))
     if len(runs) < 2:
-        return None                 # una sola banda: son las marcas, no hay título
+        return None
     return runs[-1][0]              # inicio de la banda pegada al eje
 
 
-# ============================================================
-# 3b) TEXTO VERTICAL (título del eje Y, rotado 90°)
-# ============================================================
+# ---------- 3b) TEXTO VERTICAL (título del eje Y, rotado 90°) ----------
 
 def detectar_texto_vertical(gris, x_limite, margen=6, ancho_minimo=15, lang=None):
-    """
-    Lee el título del eje Y (texto rotado 90°) en la franja a la izquierda de
-    `x_limite`.
-
-    Cambios respecto a la versión anterior:
-      - `x_limite` ahora es el borde izquierdo de los NÚMEROS del eje Y, no el
-        eje: si se pasaba la columna del eje, la franja incluía los números
-        (1000, 800, 600...) y el OCR los devolvía como "» es 2 @ 8 ° 8 8 8";
-      - la franja se agranda antes de rotarla (el texto rotado suele ser chico);
-      - el resultado se descarta si no parece un título (`_texto_plausible`);
-      - la rotación ganadora se elige por confianza x sqrt(nº de caracteres).
-    """
+    """Lee el título del eje Y (texto girado 90°) a la izquierda de x_limite."""
     x_limite = int(x_limite) - margen
     if x_limite < ancho_minimo:
         return "", None
@@ -1061,21 +860,7 @@ def detectar_texto_vertical(gris, x_limite, margen=6, ancho_minimo=15, lang=None
     return mejor_texto, mejor_bbox
 
 
-# ============================================================
-# 3c) TEXTOS CORTOS Y SÍMBOLOS: título del eje X y leyenda
-# ============================================================
-#
-# Por qué existe: el OCR global (`psm 11`) se salta los textos de UNA sola letra
-# ("r", "t", "x") y no conoce los símbolos griegos si solo está instalado `eng`
-# (la "Ω" de una leyenda salía como "—_—N" con confianza 0 y se descartaba).
-# Igual que con los números de los ejes, aquí se usa la geometría ya conocida:
-#   - título del eje X: la primera línea de tinta DEBAJO de los números del eje;
-#   - leyenda: se busca la "muestra" de cada serie (el trazo corto del mismo
-#     color que la curva, fuera del área de dibujo) y se lee lo que tiene a la
-#     derecha.
-# Cada texto se recorta, se agranda y se lee solo. Si es un único glifo, además
-# se compara contra plantillas dibujadas con fuentes del sistema (latín +
-# griego + símbolos), lo que permite reconocer "Ω" aunque Tesseract no pueda.
+# ---------- 3c) TEXTOS CORTOS Y SÍMBOLOS: título del eje X y leyenda ----------
 
 _SIMBOLOS_PLANTILLA = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -1085,18 +870,15 @@ _SIMBOLOS_PLANTILLA = (
 )
 
 _FUENTES_CANDIDATAS = [
-    # Windows (Excel usa Calibri por defecto)
     r"C:\Windows\Fonts\calibri.ttf", r"C:\Windows\Fonts\calibrib.ttf",
     r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf",
     r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\segoeui.ttf",
-    # Linux
     "/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf",
     "/usr/share/fonts/truetype/crosextra/Carlito-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-    # macOS
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
@@ -1106,12 +888,7 @@ _CACHE_PLANTILLAS = None
 
 
 def _cargar_plantillas(max_fuentes=6, tam=64):
-    """
-    Dibuja cada símbolo con las fuentes disponibles y guarda el glifo recortado
-    (tinta=1.0, fondo=0.0). Se hace una sola vez por proceso.
-    Variable de entorno opcional SEGMENTADOR_FUENTES="ruta1;ruta2" para añadir
-    fuentes propias (p. ej. la que usa la editorial de los libros).
-    """
+    """Dibuja cada símbolo con las fuentes del sistema (una vez por proceso)."""
     global _CACHE_PLANTILLAS
     if _CACHE_PLANTILLAS is not None:
         return _CACHE_PLANTILLAS
@@ -1138,8 +915,6 @@ def _cargar_plantillas(max_fuentes=6, tam=64):
             fuente = ImageFont.truetype(ruta, tam)
         except Exception:
             continue
-        # glifo "tofu" (carácter inexistente): si un símbolo se dibuja igual,
-        # la fuente no lo tiene y no se usa como plantilla.
         tofu = _dibujar(fuente, "\U0010FFFD")
         for ch in _SIMBOLOS_PLANTILLA:
             g = _dibujar(fuente, ch)
@@ -1159,15 +934,7 @@ def _ncc(a, b):
 
 
 def _clasificar_glifo(tinta):
-    """
-    `tinta`: recorte float (1 = tinta, 0 = fondo) ajustado a UN glifo.
-    Devuelve [(simbolo, puntaje)] ordenado de mejor a peor (puntaje ~ -1..1).
-
-    La plantilla se reduce a la MISMA altura en píxeles que el glifo real con
-    INTER_AREA, así sufre el mismo emborronamiento que un texto de 8-10 px, y
-    se prueban desplazamientos de ±1 px porque a ese tamaño medio píxel cambia
-    mucho la correlación.
-    """
+    """Compara un glifo con las plantillas. Devuelve [(símbolo, puntaje)], mejor primero."""
     plantillas = _cargar_plantillas()
     h, w = tinta.shape
     if not plantillas or h < 4 or w < 1:
@@ -1201,7 +968,7 @@ def _clasificar_glifo(tinta):
 
 
 def _idioma_ocr_simbolos(lang=None):
-    """Igual que _idioma_ocr, pero añade griego si está instalado (ell / grc)."""
+    """Como _idioma_ocr, añadiendo griego (ell/grc) si está instalado."""
     base = _idioma_ocr(lang)
     try:
         disponibles = set(pytesseract.get_languages(config=""))
@@ -1214,7 +981,7 @@ def _idioma_ocr_simbolos(lang=None):
 
 
 def _tinta_de_recorte(crop):
-    """Recorte de gris -> (tinta float 0..1, máscara binaria). Tolera fondo oscuro."""
+    """Recorte en gris -> (tinta 0..1, máscara binaria)."""
     c = crop.astype(np.float32)
     fondo = float(np.percentile(c, 90)) if np.median(c) >= 127 else float(np.percentile(c, 10))
     tinta = np.abs(fondo - c)
@@ -1226,7 +993,7 @@ def _tinta_de_recorte(crop):
 
 
 def _glifos(binaria):
-    """Cajas (x, y, w, h) de los glifos, uniendo trozos que se solapan en x (la 'i', el '%')."""
+    """Cajas (x, y, w, h) de cada glifo."""
     n, _, st, _ = cv2.connectedComponentsWithStats(binaria.astype(np.uint8), connectivity=8)
     comps = sorted((tuple(int(v) for v in st[i][:4]) for i in range(1, n)
                     if st[i][cv2.CC_STAT_AREA] >= 2), key=lambda c: c[0])
@@ -1244,10 +1011,7 @@ def _glifos(binaria):
 
 
 def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
-    """
-    Lee un texto corto (una palabra, una letra o un símbolo) dentro de `caja`
-    = (x, y, w, h). Devuelve (texto, confianza, metodo) o ("", 0, None).
-    """
+    """Lee una palabra, letra o símbolo dentro de caja. Devuelve (texto, conf, método)."""
     alto, ancho = gris.shape[:2]
     x, y, w, h = caja
     c = 2
@@ -1257,8 +1021,6 @@ def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
     tinta, binaria = _tinta_de_recorte(crop)
     if tinta is None:
         return "", 0.0, None
-    # El margen de 2 px es solo contexto para el reescalado: la tinta que cae
-    # ahí (la punta de la muestra de la leyenda, un tick) no es parte del texto.
     ox, oy = x - max(0, x - c), y - max(0, y - c)
     dentro = np.zeros_like(binaria)
     dentro[oy:oy + h, ox:ox + w] = True
@@ -1268,7 +1030,6 @@ def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
     if not glifos:
         return "", 0.0, None
 
-    # ---------- Tesseract sobre el recorte agrandado ----------
     ys, xs = np.nonzero(binaria)
     h_tinta = int(ys.max() - ys.min() + 1)
     esc = float(np.clip(48.0 / max(h_tinta, 1), 2.0, 12.0))
@@ -1298,7 +1059,6 @@ def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
             if conf > ocr_conf:
                 ocr_txt, ocr_conf = " ".join(pal), conf
 
-    # ---------- Varios glifos: Tesseract manda; plantillas solo de respaldo ----------
     if len(glifos) > 1:
         if ocr_txt and ocr_conf >= 50 and _texto_plausible(ocr_txt):
             return ocr_txt, ocr_conf, "ocr"
@@ -1316,19 +1076,13 @@ def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
             return ocr_txt, ocr_conf, "ocr"
         return "", 0.0, None
 
-    # ---------- Un solo glifo: se contrasta Tesseract con las plantillas ----------
     gx, gy, gw, gh = glifos[0]
     ranking = _clasificar_glifo(tinta[gy:gy + gh, gx:gx + gw])
     if not ranking:
-        # Sin plantillas no hay forma de distinguir "Ω" de "Q"/"O": se devuelve
-        # la lectura del OCR pero marcada, para que salga una advertencia.
         return (ocr_txt, ocr_conf, "ocr_sin_verificar") if ocr_txt else ("", 0.0, None)
     mejor_ch, mejor_p = ranking[0]
     puntajes = dict(ranking)
     if len(ocr_txt) == 1 and ocr_conf >= 50:
-        # Tesseract gana si la forma de SU lectura también encaja casi igual de
-        # bien (así una "r" sigue siendo "r" y no "Γ"); si propone "Q" o "O"
-        # para una "Ω", la plantilla de "Ω" encaja claramente mejor y gana ella.
         if puntajes.get(ocr_txt, -9) >= mejor_p - 0.03:
             return ocr_txt, ocr_conf, "ocr"
     if mejor_p >= umbral_plantilla:
@@ -1339,13 +1093,7 @@ def _leer_texto_corto(gris, caja, lang=None, umbral_plantilla=0.55):
 
 
 def _lineas_de_texto(gris, region, fondo=None):
-    """
-    Agrupa la tinta de `region` = (x0, y0, x1, y1) en líneas de texto y, dentro
-    de cada línea, en frases (separadas por huecos grandes). Descarta restos de
-    marcos y rejillas (trazos finos y muy largos).
-    Devuelve una lista de cajas (x, y, w, h) en coordenadas de la imagen,
-    ordenadas de arriba abajo y de izquierda a derecha.
-    """
+    """Agrupa la tinta de una región en cajas de texto (x, y, w, h)."""
     x0, y0, x1, y1 = (int(v) for v in region)
     sub = gris[y0:y1, x0:x1]
     if sub.size == 0:
@@ -1369,7 +1117,6 @@ def _lineas_de_texto(gris, region, fondo=None):
     if not comps:
         return []
 
-    # líneas: componentes que se solapan verticalmente
     comps.sort(key=lambda c: c[1] + c[3] / 2.0)
     lineas = []
     for c in comps:
@@ -1416,11 +1163,7 @@ def _solapa(a, b, holgura=2):
 
 def detectar_leyenda(imagen_bgr, gris, rect, series, tol=None, lang=None,
                      sat_minima=60, tolerancia_hue=12, advertencias=None):
-    """
-    Busca la muestra de color de cada serie FUERA de la curva (trazo corto
-    horizontal o cuadradito del mismo tono) y lee el texto a su derecha.
-    Devuelve [{"hue", "texto", "conf", "metodo", "bbox", "muestra_bbox"}].
-    """
+    """Busca la muestra de color de cada serie y lee el texto a su derecha."""
     t = tol or _tolerancias(gris.shape)
     alto, ancho = gris.shape[:2]
     hsv = cv2.cvtColor(imagen_bgr, cv2.COLOR_BGR2HSV)
@@ -1455,7 +1198,6 @@ def detectar_leyenda(imagen_bgr, gris, rect, series, tol=None, lang=None,
             if region[2] - region[0] < 3:
                 continue
             lineas = _lineas_de_texto(gris, region, fondo)
-            # el texto de ESTA muestra: misma fila y pegado a su derecha
             hueco_max = max(10, 4 * banda)
             lineas = [b for b in lineas
                       if b[1] <= cy <= b[1] + b[3] + 2 and b[0] - (mx + mw) <= hueco_max]
@@ -1480,10 +1222,7 @@ def detectar_leyenda(imagen_bgr, gris, rect, series, tol=None, lang=None,
 
 
 def detectar_leyenda_sin_muestra(gris, rect, tol=None, lang=None, excluir_cajas=()):
-    """
-    Respaldo para leyendas sin muestra de color reconocible (series negras):
-    lee las líneas de texto que haya A LA DERECHA del área de dibujo.
-    """
+    """Respaldo: lee el texto a la derecha del área de dibujo."""
     t = tol or _tolerancias(gris.shape)
     alto, ancho = gris.shape[:2]
     x0, y0, x1, y1 = rect
@@ -1505,12 +1244,7 @@ def detectar_leyenda_sin_muestra(gris, rect, tol=None, lang=None, excluir_cajas=
 
 def detectar_titulo_eje_x_por_region(gris, eje_x, etiquetas_x, rect, tol=None,
                                      lang=None, excluir_cajas=()):
-    """
-    El título del eje X es la PRIMERA línea de texto debajo de los números del
-    eje. Se lee por regiones porque el OCR global no detecta títulos de una sola
-    letra ("r", "t", "x").
-    Devuelve (texto, bbox) o ("", None).
-    """
+    """Primera línea de texto bajo los números del eje X. Devuelve (texto, bbox)."""
     if eje_x is None:
         return "", None
     t = tol or _tolerancias(gris.shape)
@@ -1537,21 +1271,10 @@ def detectar_titulo_eje_x_por_region(gris, eje_x, etiquetas_x, rect, tol=None,
     return "", None
 
 
-# ============================================================
-# 4) CALIBRACIÓN LINEAL ROBUSTA
-# ============================================================
+# ---------- 4) CALIBRACIÓN LINEAL ROBUSTA ----------
 
 def ajustar_lineal_robusto(pixeles, valores, umbral_rel=0.04):
-    """
-    np.polyfit con todos los puntos (versión anterior) significa que UN número
-    mal leído por el OCR ("100" leído como "10") desplaza toda la escala sin
-    aviso. Para una gráfica táctil destinada a un estudiante ciego eso es el
-    peor error posible: la figura sale plausible pero mal.
-
-    Aquí: consenso tipo RANSAC sobre todos los pares, luego ajuste final con
-    los inliers y R² reportado.
-    Devuelve (m, b, info) con info = {n_total, n_usados, r2, descartados}.
-    """
+    """Ajuste lineal tipo RANSAC que descarta números mal leídos. Devuelve (m, b, info)."""
     p = np.asarray(pixeles, dtype=float)
     v = np.asarray(valores, dtype=float)
     info = {"n_total": int(p.size), "n_usados": 0, "r2": None, "descartados": [],
@@ -1596,17 +1319,13 @@ def ajustar_lineal_robusto(pixeles, valores, umbral_rel=0.04):
 
 
 def ajustar_lineal(pixeles, valores):
-    """Compatibilidad con la firma anterior."""
+    """Compatibilidad: devuelve solo (m, b)."""
     m, b, _ = ajustar_lineal_robusto(pixeles, valores)
     return m, b
 
 
 def _variantes_numero(texto):
-    """
-    Lecturas alternativas plausibles de un número mal leído por el OCR:
-    punto decimal perdido ("15" <- 1.5), punto de más ("1.5" <- 15), un cero
-    perdido o de sobra ("10" <- "1", "100" <- "1000").
-    """
+    """Lecturas alternativas de un número (punto o cero perdidos/sobrantes)."""
     neg = texto.strip().startswith(("-", "−", "–"))
     d = re.sub(r"[^0-9]", "", texto)
     if not d:
@@ -1628,12 +1347,7 @@ def _variantes_numero(texto):
 
 
 def rescatar_etiquetas(etiquetas, clave_px):
-    """
-    Corrige etiquetas que no encajan con la recta que forman las demás, pero
-    SOLO si alguna lectura alternativa sí encaja (dentro de la tolerancia del
-    ajuste). Necesita al menos 3 etiquetas coherentes para poder juzgar.
-    Devuelve [(texto_antes, texto_despues)] y modifica `etiquetas` en el sitio.
-    """
+    """Corrige etiquetas incoherentes con la escala si una variante encaja."""
     if len(etiquetas) < 4:
         return []
     px = [clave_px(e) for e in etiquetas]
@@ -1657,22 +1371,10 @@ def rescatar_etiquetas(etiquetas, clave_px):
     return hechos
 
 
-# ============================================================
-# 5) MÁSCARA -> POLILÍNEA
-# ============================================================
+# ---------- 5) MÁSCARA -> POLILÍNEA ----------
 
 def mascara_a_polilinea(mascara, n_puntos=300, ventana_mediana=5):
-    """
-    Devuelve (cols, filas_suavizadas, cols_remuestreadas, filas_remuestreadas).
-
-    Cambios:
-      - el promedio por columna se calcula vectorizado (antes era un bucle con
-        `filas_c[cols_c == col]` dentro, es decir O(n_columnas × n_píxeles):
-        en una figura grande eso son decenas de millones de comparaciones);
-      - se aplica mediana móvil para quitar el ruido del antialiasing;
-      - se remuestrea a un número fijo de puntos, que es lo que necesita la
-        etapa STL (una polilínea limpia y uniforme, no un punto por píxel).
-    """
+    """Máscara -> (cols, filas_suavizadas, cols_remuestreadas, filas_remuestreadas)."""
     filas, cols = np.where(mascara)
     if cols.size == 0:
         return None
@@ -1696,35 +1398,98 @@ def mascara_a_polilinea(mascara, n_puntos=300, ventana_mediana=5):
     return cols_u.astype(float), filas_suav, cols_rs, filas_rs
 
 
-# ============================================================
-# 6) PIPELINE COMPLETO
-# ============================================================
+def simplificar_polilinea(puntos, tolerancia):
+    """Ramer–Douglas–Peucker: deja solo los vértices donde cambia la pendiente."""
+    p = np.asarray(puntos, dtype=float)
+    if len(p) <= 2 or tolerancia <= 0:
+        return p
+    conservar = np.zeros(len(p), dtype=bool)
+    conservar[0] = conservar[-1] = True
+    pila = [(0, len(p) - 1)]
+    while pila:                                   # iterativo: sin límite de recursión
+        i, j = pila.pop()
+        if j - i < 2:
+            continue
+        a, b = p[i], p[j]
+        seg = b - a
+        largo = math.hypot(seg[0], seg[1])
+        tramo = p[i + 1:j]
+        if largo == 0:
+            dist = np.hypot(tramo[:, 0] - a[0], tramo[:, 1] - a[1])
+        else:
+            dist = np.abs(seg[0] * (tramo[:, 1] - a[1]) - seg[1] * (tramo[:, 0] - a[0])) / largo
+        k = int(np.argmax(dist))
+        if dist[k] > tolerancia:
+            m = i + 1 + k
+            conservar[m] = True
+            pila.append((i, m))
+            pila.append((m, j))
+    return p[conservar]
+
+
+def densificar_polilinea(puntos, n_puntos=300):
+    """Reparte ~n_puntos sobre la polilínea conservando sus vértices."""
+    p = np.asarray(puntos, dtype=float).reshape(-1, 2)
+    if len(p) < 2 or not n_puntos or len(p) >= n_puntos:
+        return [tuple(q) for q in p]
+    largos = np.hypot(np.diff(p[:, 0]), np.diff(p[:, 1]))
+    total = float(largos.sum())
+    if total == 0:
+        return [tuple(q) for q in p]
+    salida = [tuple(p[0])]
+    disponibles = n_puntos - len(p)
+    for i, largo in enumerate(largos):
+        extra = int(round(disponibles * largo / total))
+        for k in range(1, extra + 1):
+            f = k / (extra + 1)
+            salida.append(tuple(p[i] + f * (p[i + 1] - p[i])))
+        salida.append(tuple(p[i + 1]))
+    return salida
+
+
+def tolerancia_simplificacion(forma, rect=None):
+    """Desvío máximo (px) para simplificar: 0,6 % de la diagonal del área de dibujo."""
+    if rect is not None:
+        diag = math.hypot(rect[2] - rect[0], rect[3] - rect[1])
+    else:
+        diag = math.hypot(forma[0], forma[1])
+    return max(1.5, 0.006 * diag)
+
+
+# ---------- 6) PIPELINE COMPLETO ----------
+
+def _bbox_json(b):
+    """Caja {px, py, pw, ph} con enteros, lista para JSON."""
+    if not b:
+        return None
+    return {k: int(round(float(b[k]))) for k in ("px", "py", "pw", "ph") if k in b}
+
+
+def _bbox_desde_posicion(pos, forma):
+    """Punto marcado en la pizarra -> caja pequeña centrada en él."""
+    if not pos or len(pos) < 2:
+        return None
+    alto, ancho = forma[:2]
+    lado = max(6, int(round(0.03 * min(alto, ancho))))
+    cx = min(max(float(pos[0]), 0), ancho - 1)
+    cy = min(max(float(pos[1]), 0), alto - 1)
+    return {"px": int(round(cx - lado / 2)), "py": int(round(cy - lado / 2)),
+            "pw": lado, "ph": lado}
+
 
 def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
                           eje_x, eje_y, rect, series, txt,
                           etiquetas_x, etiquetas_y, etiquetas_dato,
                           titulo_eje_y, titulo_eje_y_bbox,
-                          advertencias, n_puntos=300):
-    """
-    Segunda mitad del pipeline: a partir de ejes/etiquetas/curva(s) YA
-    DECIDIDOS (por la detección automática, o por el usuario corrigiendo en
-    la pizarra) hace la calibración píxel->valor y escribe CSV/JSON/overlay.
-
-    Cada elemento de `series` puede venir de dos formas:
-      - {"mascara": np.ndarray bool, "hue":.., "modo":..}      (detección automática)
-      - {"puntos_px": [(px,py), ...], "hue":.., "modo":..}     (curva editada a mano)
-    """
+                          advertencias, n_puntos=300, simplificar=False):
+    """Calibra píxel->valor y escribe JSON, CSV y overlay."""
     alto_imagen, ancho_imagen = imagen.shape[:2]
 
-    # --- Calibración ---
     m_x, b_x, info_x = ajustar_lineal_robusto(
         [e["centro_x"] for e in etiquetas_x], [e["valor"] for e in etiquetas_x])
     m_y, b_y, info_y = ajustar_lineal_robusto(
         [e["centro_y"] for e in etiquetas_y], [e["valor"] for e in etiquetas_y])
 
-    # --- Respaldo: calibrar Y con las etiquetas pegadas a la curva ---
-    # (solo tiene sentido si la curva viene como máscara; una curva ya editada
-    # a mano por el usuario no necesita este respaldo)
     calibrado_y_por_datos = False
     mascaras = [s["mascara"] for s in series if "mascara" in s]
     if m_y is None and etiquetas_dato and mascaras:
@@ -1776,17 +1541,19 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
     def pixel_a_y(y_px):
         return None if m_y is None else float(m_y * y_px + b_y)
 
-    # --- Polilíneas por serie ---
     series_salida = []
     for i, s in enumerate(series, start=1):
         if "puntos_px" in s:
-            puntos_px = s["puntos_px"]
+            puntos_px = densificar_polilinea(s["puntos_px"], n_puntos)
         else:
             pl = mascara_a_polilinea(s["mascara"], n_puntos=n_puntos)
             if pl is None:
                 continue
             _, _, cols_rs, filas_rs = pl
             puntos_px = list(zip(cols_rs, filas_rs))
+            if simplificar:
+                tol_px = tolerancia_simplificacion(imagen.shape, rect)
+                puntos_px = [tuple(q) for q in simplificar_polilinea(puntos_px, tol_px)]
         puntos = [{
             "px": float(c), "py": float(f),
             "valor_x": pixel_a_x(c), "valor_y": pixel_a_y(f),
@@ -1799,7 +1566,6 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
 
     puntos_curva = series_salida[0]["puntos"] if series_salida else []
 
-    # --- Overlay de verificación ---
     overlay = imagen.copy()
     cv2.rectangle(overlay, (rect[0], rect[1]), (rect[2], rect[3]), (200, 200, 200), 1)
     colores = [(0, 255, 0), (0, 200, 255), (255, 200, 0)]
@@ -1866,7 +1632,6 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
         ),
     }
 
-    # --- JSON estructurado (entrada natural de la etapa BANA/STL) ---
     nombre_json = f"grafica_{uid}.json"
     ruta_json = os.path.join(dir_resultados, nombre_json)
     with open(ruta_json, "w", encoding="utf-8") as f:
@@ -1884,6 +1649,9 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
                 "titulo": txt["titulo"],
                 "titulo_eje_x": txt["titulo_x"],
                 "titulo_eje_y": titulo_eje_y,
+                "titulo_bbox": _bbox_json(txt.get("titulo_bbox")),
+                "titulo_eje_x_bbox": _bbox_json(txt.get("titulo_x_bbox")),
+                "titulo_eje_y_bbox": _bbox_json(titulo_eje_y_bbox),
                 "leyenda": txt["leyenda"],
                 "leyenda_entradas": [
                     {"texto": e["texto"], "hue": e["hue"], "metodo": e.get("metodo"),
@@ -1902,7 +1670,6 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
             "_ruta_imagen_original": os.path.abspath(ruta_imagen),
         }, f, ensure_ascii=False, indent=2)
 
-    # --- CSV (mismo esquema de columnas que la versión anterior) ---
     nombre_csv = f"descripcion_{uid}.csv"
     ruta_csv = os.path.join(dir_resultados, nombre_csv)
     with open(ruta_csv, "w", newline="", encoding="utf-8") as f:
@@ -1999,21 +1766,10 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
 
 def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
                           ruta_json_original=None, n_puntos=300):
-    """
-    Recalcula CSV/JSON/overlay a partir de lo que el usuario corrigió a mano
-    en la pizarra. `correcciones` trae SOLO lo que el usuario tocó; lo que
-    falte se completa con el resultado original (ruta_json_original), así el
-    usuario no tiene que rehacer todo, solo arreglar lo que falló.
+    """Recalcula con las correcciones de la pizarra (lo que falte se toma del JSON original).
 
-    Formato de `correcciones` (todas las claves son opcionales):
-    {
-      "eje_x": [x1, y1, x2, y2] | null,
-      "eje_y": [x1, y1, x2, y2] | null,
-      "etiquetas_x": [{"centro_x": num, "valor": num}, ...],
-      "etiquetas_y": [{"centro_y": num, "valor": num}, ...],
-      "series": [{"puntos_px": [[px, py], ...], "nombre": "Ω"}, ...],
-      "titulo_eje_x": "r", "leyenda": "Ω"
-    }
+    Claves opcionales de `correcciones`: eje_x, eje_y, etiquetas_x, etiquetas_y,
+    series [{"puntos_px": [[x, y], ...]}], titulo_eje_x(_pos), titulo_eje_y(_pos), leyenda.
     """
     imagen = cv2.imread(ruta_imagen)
     if imagen is None:
@@ -2075,17 +1831,27 @@ def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
                   for s in base.get("series", [])]
 
     txt = {
-        "titulo": textos_base.get("titulo", ""), "titulo_bbox": None,
-        "titulo_x": textos_base.get("titulo_eje_x", ""), "titulo_x_bbox": None,
+        "titulo": textos_base.get("titulo", ""),
+        "titulo_bbox": textos_base.get("titulo_bbox"),
+        "titulo_x": textos_base.get("titulo_eje_x", ""),
+        "titulo_x_bbox": textos_base.get("titulo_eje_x_bbox"),
         "leyenda": textos_base.get("leyenda", ""),
         "leyenda_entradas": textos_base.get("leyenda_entradas", []),
     }
     titulo_eje_y = textos_base.get("titulo_eje_y", "")
-    # textos corregidos a mano (p. ej. un símbolo que el OCR leyó mal)
+    titulo_eje_y_bbox = textos_base.get("titulo_eje_y_bbox")
     if "titulo_eje_x" in correcciones:
-        txt["titulo_x"] = correcciones["titulo_eje_x"] or ""
+        txt["titulo_x"] = (correcciones["titulo_eje_x"] or "").strip()
+        if not txt["titulo_x"]:
+            txt["titulo_x_bbox"] = None
+        elif correcciones.get("titulo_eje_x_pos"):
+            txt["titulo_x_bbox"] = _bbox_desde_posicion(correcciones["titulo_eje_x_pos"], imagen.shape)
     if "titulo_eje_y" in correcciones:
-        titulo_eje_y = correcciones["titulo_eje_y"] or ""
+        titulo_eje_y = (correcciones["titulo_eje_y"] or "").strip()
+        if not titulo_eje_y:
+            titulo_eje_y_bbox = None
+        elif correcciones.get("titulo_eje_y_pos"):
+            titulo_eje_y_bbox = _bbox_desde_posicion(correcciones["titulo_eje_y_pos"], imagen.shape)
     if "leyenda" in correcciones:
         txt["leyenda"] = correcciones["leyenda"] or ""
         txt["leyenda_entradas"] = []
@@ -2097,20 +1863,14 @@ def aplicar_correcciones(ruta_imagen, dir_resultados, correcciones,
         imagen=imagen, ruta_imagen=ruta_imagen, dir_resultados=dir_resultados, uid=uid,
         eje_x=eje_x, eje_y=eje_y, rect=rect, series=series, txt=txt,
         etiquetas_x=etiquetas_x, etiquetas_y=etiquetas_y, etiquetas_dato=etiquetas_dato,
-        titulo_eje_y=titulo_eje_y, titulo_eje_y_bbox=None,
+        titulo_eje_y=titulo_eje_y, titulo_eje_y_bbox=titulo_eje_y_bbox,
         advertencias=advertencias, n_puntos=n_puntos,
     )
 
 
-def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None):
-    """
-    Ejecuta el pipeline y devuelve un dict con:
-      ruta_csv / nombre_csv, ruta_json / nombre_json, ruta_overlay /
-      nombre_overlay, resumen, advertencias, series, puntos_curva.
-
-    (El docstring anterior prometía un ZIP con 4 CSVs y devolvía un solo CSV;
-    aquí la documentación y el retorno ya coinciden.)
-    """
+def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lang=None,
+                    simplificar=False):
+    """Pipeline completo. Devuelve rutas (csv, json, overlay), resumen, advertencias y series."""
     os.makedirs(dir_resultados, exist_ok=True)
     uid = uuid.uuid4().hex[:8]
     advertencias = []
@@ -2123,7 +1883,6 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     t = _tolerancias(imagen.shape)
     gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
-    # --- Ejes ---
     eje_x, eje_y = detectar_ejes(gris, tol=t)
     if eje_x is None:
         advertencias.append("No se detectó el eje X: no habrá calibración horizontal.")
@@ -2133,7 +1892,6 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     eje_y_col = float((eje_y[0] + eje_y[2]) / 2) if eje_y else None
     rect = area_de_dibujo(eje_x, eje_y, imagen.shape)
 
-    # --- Curvas ---
     series = detectar_curvas(imagen, rect=rect, area_minima=t["area_min_curva"],
                              max_series=max_series)
     if not series:
@@ -2149,23 +1907,17 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         )
     mascaras = [s["mascara"] for s in series]
 
-    # --- Etiquetas numéricas de los ejes (lectura por regiones) ---
     reg_x, reg_y = detectar_etiquetas_ejes(gris, eje_x, eje_y, rect=rect, tol=t)
     usa_reg_x, usa_reg_y = len(reg_x) >= 2, len(reg_y) >= 2
     excluir = (reg_x if usa_reg_x else []) + (reg_y if usa_reg_y else [])
 
-    # --- Texto (títulos, leyenda, etiquetas de dato) ---
     txt = detectar_textos(gris, eje_x_fila, eje_y_col, rect=rect,
                           mascaras_curva=mascaras, tol=t, lang=lang,
                           excluir=excluir)
-    # Si la lectura por regiones no consiguió al menos 2 números en un eje, se
-    # queda con lo mejor de las dos lecturas.
     etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
     etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
     etiquetas_dato = txt["etiquetas_dato"]
 
-    # --- Título del eje Y (vertical) ---
-    # El límite es el borde izquierdo de los NÚMEROS del eje, no el eje mismo.
     x_limite_vertical = None
     if etiquetas_y:
         x_limite_vertical = min(e["px"] for e in etiquetas_y)
@@ -2177,9 +1929,6 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         titulo_eje_y, titulo_eje_y_bbox = detectar_texto_vertical(
             gris, x_limite_vertical, lang=lang)
 
-    # --- Leyenda (muestra de color + texto) y título del eje X por regiones ---
-    # Se hacen DESPUÉS del OCR global y solo completan/corrigen lo que este no
-    # leyó: títulos de una letra ("r") y símbolos que `eng` no conoce ("Ω").
     if not _cargar_plantillas():
         advertencias.append(
             "No hay plantillas de símbolos (falta Pillow o no se encontraron fuentes): "
@@ -2209,12 +1958,6 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
                 "Leyenda: " + ", ".join(f"'{z}'" for z in sin_verif) + " se leyó solo con OCR, "
                 "sin comparar formas; si era un símbolo (Ω, μ, λ...) probablemente está mal."
             )
-        por_forma = [e["texto"] for e in leyenda_entradas if e["metodo"] == "plantilla"]
-        if por_forma:
-            advertencias.append(
-                "Leyenda: " + ", ".join(f"'{z}'" for z in por_forma) + " se leyó por "
-                "comparación de formas (símbolo que el OCR no reconoce). Verifícalo en el overlay."
-            )
     txt["leyenda_entradas"] = leyenda_entradas
 
     if not txt["titulo_x"]:
@@ -2222,12 +1965,7 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
             gris, eje_x, etiquetas_x, rect, tol=t, lang=lang, excluir_cajas=cajas_leyenda)
         if tx:
             txt["titulo_x"], txt["titulo_x_bbox"] = tx, tx_bbox
-            if tx_bbox.get("metodo") == "plantilla":
-                advertencias.append(
-                    f"Título del eje X leído por comparación de formas: '{tx}'. Verifícalo."
-                )
 
-    # --- Corrección por consistencia (punto decimal perdido, cero de más...) ---
     for nombre, etqs, clave in (("X", etiquetas_x, lambda e: e["centro_x"]),
                                 ("Y", etiquetas_y, lambda e: e["centro_y"])):
         for antes, despues in rescatar_etiquetas(etqs, clave):
@@ -2241,18 +1979,13 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
         eje_x=eje_x, eje_y=eje_y, rect=rect, series=series, txt=txt,
         etiquetas_x=etiquetas_x, etiquetas_y=etiquetas_y, etiquetas_dato=etiquetas_dato,
         titulo_eje_y=titulo_eje_y, titulo_eje_y_bbox=titulo_eje_y_bbox,
-        advertencias=advertencias, n_puntos=n_puntos,
+        advertencias=advertencias, n_puntos=n_puntos, simplificar=simplificar,
     )
 
-# ============================================================
-# 7) DIAGNÓSTICO
-# ============================================================
+# ---------- 7) DIAGNÓSTICO ----------
 
 def diagnostico(ruta_imagen=None, lang=None):
-    """
-    Muestra qué está fallando cuando no salen el título del eje X o la leyenda:
-        python -c "import segmentador; segmentador.diagnostico('grafica.png')"
-    """
+    """Muestra versión, Tesseract, Pillow, fuentes y qué detecta en la imagen."""
     print("segmentador.py :", os.path.abspath(__file__))
     print("versión        :", __version__)
     try:
