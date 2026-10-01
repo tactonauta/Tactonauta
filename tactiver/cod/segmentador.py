@@ -18,7 +18,7 @@ import numpy as np
 import pytesseract
 from pytesseract import Output
 
-__version__ = "2026-10-01-compacto-v7"
+__version__ = "2026-10-01-overlay-texto-v8"
 
 _RUTA_TESSERACT_WINDOWS = os.environ.get(
     "TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -1462,7 +1462,10 @@ def _bbox_json(b):
     """Caja {px, py, pw, ph} con enteros, lista para JSON."""
     if not b:
         return None
-    return {k: int(round(float(b[k]))) for k in ("px", "py", "pw", "ph") if k in b}
+    out = {k: int(round(float(b[k]))) for k in ("px", "py", "pw", "ph") if k in b}
+    if b.get("manual"):
+        out["manual"] = True
+    return out
 
 
 def _bbox_desde_posicion(pos, forma):
@@ -1474,7 +1477,36 @@ def _bbox_desde_posicion(pos, forma):
     cx = min(max(float(pos[0]), 0), ancho - 1)
     cy = min(max(float(pos[1]), 0), alto - 1)
     return {"px": int(round(cx - lado / 2)), "py": int(round(cy - lado / 2)),
-            "pw": lado, "ph": lado}
+            "pw": lado, "ph": lado, "manual": True}
+
+
+def _dibujar_texto(img, texto, centro, color_bgr, alto_px):
+    """Escribe `texto` (admite Ω, Δ, μ...) centrado en `centro`, con fondo blanco y borde."""
+    alto, ancho = img.shape[:2]
+    cx, cy = centro
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        rutas = [r for r in _FUENTES_CANDIDATAS if os.path.isfile(r)]
+        fuente = ImageFont.truetype(rutas[0], alto_px) if rutas else ImageFont.load_default()
+        pil = Image.fromarray(img[:, :, ::-1])
+        dib = ImageDraw.Draw(pil)
+        x0, y0, x1, y1 = dib.textbbox((0, 0), texto, font=fuente)
+        w, h = x1 - x0, y1 - y0
+        x = int(min(max(cx - w / 2, 3), ancho - w - 3))
+        y = int(min(max(cy - h / 2, 3), alto - h - 3))
+        color_rgb = tuple(int(c) for c in color_bgr[::-1])
+        dib.rectangle((x - 3, y - 3, x + w + 2, y + h + 2), fill=(255, 255, 255), outline=color_rgb)
+        dib.text((x - x0, y - y0), texto, font=fuente, fill=color_rgb)
+        img[:] = np.asarray(pil)[:, :, ::-1]
+    except Exception:
+        # sin Pillow: solo caracteres ASCII
+        t = texto.encode("ascii", "replace").decode()
+        esc = alto_px / 30.0
+        (w, h), _ = cv2.getTextSize(t, cv2.FONT_HERSHEY_SIMPLEX, esc, 1)
+        x, y = int(cx - w / 2), int(cy + h / 2)
+        cv2.rectangle(img, (x - 3, y - h - 3), (x + w + 3, y + 3), (255, 255, 255), -1)
+        cv2.rectangle(img, (x - 3, y - h - 3), (x + w + 3, y + 3), color_bgr, 1)
+        cv2.putText(img, t, (x, y), cv2.FONT_HERSHEY_SIMPLEX, esc, color_bgr, 1, cv2.LINE_AA)
 
 
 def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
@@ -1586,10 +1618,17 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
     for e in etiquetas_dato:
         cv2.rectangle(overlay, (e["px"], e["py"]),
                       (e["px"] + e["pw"], e["py"] + e["ph"]), (128, 0, 128), 1)
-    for bbox, color in ((txt["titulo_bbox"], (255, 255, 0)),
-                        (txt["titulo_x_bbox"], (0, 165, 255)),
-                        (titulo_eje_y_bbox, (255, 0, 255))):
-        if bbox:
+    alto_letra = max(12, int(round(0.05 * alto_imagen)))
+    for bbox, color, texto in ((txt["titulo_bbox"], (255, 255, 0), txt["titulo"]),
+                               (txt["titulo_x_bbox"], (0, 165, 255), txt["titulo_x"]),
+                               (titulo_eje_y_bbox, (255, 0, 255), titulo_eje_y)):
+        if not bbox:
+            continue
+        if bbox.get("manual") and texto:
+            # no está en la imagen original: se escribe para poder verificarlo
+            centro = (bbox["px"] + bbox["pw"] / 2, bbox["py"] + bbox["ph"] / 2)
+            _dibujar_texto(overlay, texto, centro, color, alto_letra)
+        else:
             cv2.rectangle(overlay, (bbox["px"], bbox["py"]),
                           (bbox["px"] + bbox["pw"], bbox["py"] + bbox["ph"]), color, 1)
 
@@ -1701,7 +1740,8 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
             ("titulo_eje_y", "Título del eje Y (texto vertical)", titulo_eje_y, titulo_eje_y_bbox),
         ):
             if bbox:
-                desc = (f"{etiqueta} leído por OCR: '{texto}', "
+                origen = "escrito en la pizarra" if bbox.get("manual") else "leído por OCR"
+                desc = (f"{etiqueta} {origen}: '{texto}', "
                         f"recuadro {bbox['pw']}x{bbox['ph']} px.")
                 w.writerow(["texto", clave, bbox["px"], bbox["py"], "", "",
                             bbox["pw"], bbox["ph"], "", "", texto, desc])
