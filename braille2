@@ -1,0 +1,544 @@
+# ============================================================
+# TACTONAUTA
+# Módulo para manejo de texto Braille español
+# y detección de etiquetas demasiado largas
+# ============================================================
+
+import unicodedata
+
+
+# ============================================================
+# 1. MEDIDAS
+# Deben coincidir con generador_stl.py
+# ============================================================
+
+ESPACIADO_BRAILLE = 2.4
+DIAM_PUNTO_BRAILLE = 1.5
+CELDA_PITCH = 6.2
+
+
+# ============================================================
+# 2. LETRAS BRAILLE
+# ============================================================
+
+LETRAS = {
+    "a": [1],
+    "b": [1, 2],
+    "c": [1, 4],
+    "d": [1, 4, 5],
+    "e": [1, 5],
+    "f": [1, 2, 4],
+    "g": [1, 2, 4, 5],
+    "h": [1, 2, 5],
+    "i": [2, 4],
+    "j": [2, 4, 5],
+    "k": [1, 3],
+    "l": [1, 2, 3],
+    "m": [1, 3, 4],
+    "n": [1, 3, 4, 5],
+    "o": [1, 3, 5],
+    "p": [1, 2, 3, 4],
+    "q": [1, 2, 3, 4, 5],
+    "r": [1, 2, 3, 5],
+    "s": [2, 3, 4],
+    "t": [2, 3, 4, 5],
+    "u": [1, 3, 6],
+    "v": [1, 2, 3, 6],
+    "w": [2, 4, 5, 6],
+    "x": [1, 3, 4, 6],
+    "y": [1, 3, 4, 5, 6],
+    "z": [1, 3, 5, 6],
+}
+
+
+# ============================================================
+# 3. TABLA BRAILLE
+# ============================================================
+
+BRAILLE = dict(LETRAS)
+
+# Signos especiales
+BRAILLE["numeral"] = [3, 4, 5, 6]
+
+# Signo de mayúscula en Braille español
+BRAILLE["mayuscula"] = [4, 6]
+
+# Signos usados por el proyecto
+BRAILLE["menos"] = [3, 6]
+BRAILLE["punto"] = [2]
+
+
+# ============================================================
+# 4. NÚMEROS EN BRAILLE ESPAÑOL
+#
+# En Braille español los números utilizan las formas
+# de las letras a-j después del signo numeral.
+#
+# 1=a, 2=b, ..., 9=i, 0=j
+# ============================================================
+
+DIGITOS = {
+    "1": LETRAS["a"],
+    "2": LETRAS["b"],
+    "3": LETRAS["c"],
+    "4": LETRAS["d"],
+    "5": LETRAS["e"],
+    "6": LETRAS["f"],
+    "7": LETRAS["g"],
+    "8": LETRAS["h"],
+    "9": LETRAS["i"],
+    "0": LETRAS["j"],
+}
+
+BRAILLE.update(DIGITOS)
+
+
+# ============================================================
+# 5. LIMPIAR UNA LETRA
+#
+# Quita tildes para poder encontrar la letra en nuestra tabla.
+# Ejemplo:
+#
+# á -> a
+# é -> e
+# ============================================================
+
+def quitar_tilde(caracter):
+
+    normalizado = unicodedata.normalize("NFKD", caracter)
+
+    sin_tilde = "".join(
+        c
+        for c in normalizado
+        if not unicodedata.combining(c)
+    )
+
+    return sin_tilde
+
+
+# ============================================================
+# 6. CONVERTIR TEXTO A CELDAS BRAILLE
+#
+# Ejemplo:
+#
+# "hola"
+# ->
+# ["h", "o", "l", "a"]
+#
+# "A"
+# ->
+# ["mayuscula", "a"]
+#
+# "A2"
+# ->
+# ["mayuscula", "a", "numeral", "2"]
+# ============================================================
+
+def texto_a_celdas(texto):
+
+    texto = str(texto)
+
+    celdas = []
+
+    anterior_digito = False
+
+    for caracter_original in texto:
+
+        # ----------------------------------------
+        # ESPACIOS
+        # ----------------------------------------
+
+        if caracter_original == " ":
+
+            if celdas and celdas[-1] != " ":
+                celdas.append(" ")
+
+            anterior_digito = False
+            continue
+
+
+        # ----------------------------------------
+        # NÚMEROS
+        # ----------------------------------------
+
+        if caracter_original.isdigit():
+
+            # Solo agregamos un signo numeral
+            # al inicio de cada grupo de números.
+
+            if not anterior_digito:
+                celdas.append("numeral")
+
+            celdas.append(caracter_original)
+
+            anterior_digito = True
+            continue
+
+
+        anterior_digito = False
+
+
+        # ----------------------------------------
+        # LETRAS
+        # ----------------------------------------
+
+        caracter = quitar_tilde(caracter_original)
+
+        if not caracter:
+            continue
+
+        # ¿La letra original era mayúscula?
+        es_mayuscula = caracter_original.isupper()
+
+        caracter = caracter.lower()
+
+
+        if caracter in LETRAS:
+
+            # Si era mayúscula agregamos primero
+            # el signo de mayúscula.
+
+            if es_mayuscula:
+                celdas.append("mayuscula")
+
+            celdas.append(caracter)
+
+
+    # Evitamos espacios sobrantes al final
+
+    while celdas and celdas[-1] == " ":
+        celdas.pop()
+
+
+    return celdas
+
+
+# ============================================================
+# 7. CONVERTIR CELDAS A PUNTOS
+#
+# Ejemplo:
+#
+# ["mayuscula", "a"]
+#
+# ->
+#
+# [
+#   [4, 6],
+#   [1]
+# ]
+# ============================================================
+
+def celdas_a_puntos(celdas):
+
+    resultado = []
+
+    for celda in celdas:
+
+        if celda == " ":
+            resultado.append([])
+
+        else:
+            resultado.append(
+                BRAILLE.get(celda, [])
+            )
+
+    return resultado
+
+
+# ============================================================
+# 8. CALCULAR EL ANCHO FÍSICO DEL BRAILLE
+#
+# Usa las mismas dimensiones físicas del generador STL.
+# ============================================================
+
+def ancho_braille(celdas):
+
+    numero_celdas = len(celdas)
+
+    if numero_celdas == 0:
+        return 0.0
+
+
+    ancho = (
+        (numero_celdas - 1) * CELDA_PITCH
+        + ESPACIADO_BRAILLE
+        + DIAM_PUNTO_BRAILLE
+    )
+
+
+    return ancho
+
+
+# ============================================================
+# 9. COMPROBAR SI UN TEXTO CABE
+# ============================================================
+
+def texto_cabe(texto, ancho_disponible):
+
+    celdas = texto_a_celdas(texto)
+
+    ancho = ancho_braille(celdas)
+
+    return ancho <= ancho_disponible
+
+
+# ============================================================
+# 10. CREAR IDENTIFICADORES PARA LA LEYENDA
+#
+# IMPORTANTE:
+# ahora son MAYÚSCULAS.
+#
+# A
+# B
+# C
+# ...
+# ============================================================
+
+def crear_identificador(indice):
+
+    alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    if indice < len(alfabeto):
+        return alfabeto[indice]
+
+    # Por seguridad, si hubiera más de 26 etiquetas
+    # usamos A1, A2, etc.
+
+    return "A" + str(indice - 25)
+
+
+# ============================================================
+# 11. PROCESAR TODAS LAS ETIQUETAS
+#
+# Esta es la función principal de tu módulo.
+# ============================================================
+
+def procesar_etiquetas(etiquetas, ancho_disponible):
+
+    etiquetas_procesadas = []
+
+    leyenda = []
+
+    contador_leyenda = 0
+
+
+    for texto in etiquetas:
+
+        # ----------------------------------------
+        # Convertimos el texto a Braille
+        # ----------------------------------------
+
+        celdas = texto_a_celdas(texto)
+
+        ancho = ancho_braille(celdas)
+
+
+        # ========================================
+        # CASO 1:
+        # EL TEXTO SÍ CABE
+        # ========================================
+
+        if ancho <= ancho_disponible:
+
+            etiquetas_procesadas.append({
+
+                "texto_original": texto,
+
+                "texto_stl": texto,
+
+                "celdas": celdas,
+
+                "puntos": celdas_a_puntos(celdas),
+
+                "ancho_mm": ancho,
+
+                "usa_leyenda": False,
+
+                "identificador": None
+
+            })
+
+
+        # ========================================
+        # CASO 2:
+        # EL TEXTO NO CABE
+        # ========================================
+
+        else:
+
+            # Creamos:
+            #
+            # A
+            # B
+            # C
+            # ...
+
+            identificador = crear_identificador(
+                contador_leyenda
+            )
+
+            contador_leyenda += 1
+
+
+            # Convertimos también el identificador
+            # a Braille.
+            #
+            # Por ejemplo:
+            #
+            # A
+            # ->
+            # ["mayuscula", "a"]
+
+            celdas_id = texto_a_celdas(
+                identificador
+            )
+
+
+            # Lo que irá físicamente en la gráfica
+
+            etiquetas_procesadas.append({
+
+                "texto_original": texto,
+
+                "texto_stl": identificador,
+
+                "celdas": celdas_id,
+
+                "puntos": celdas_a_puntos(celdas_id),
+
+                "ancho_mm": ancho_braille(celdas_id),
+
+                "usa_leyenda": True,
+
+                "identificador": identificador
+
+            })
+
+
+            # Guardamos el texto completo
+            # para posteriormente crear la leyenda.
+
+            leyenda.append({
+
+                "identificador": identificador,
+
+                "texto": texto,
+
+                "celdas_identificador": celdas_id,
+
+                "puntos_identificador":
+                    celdas_a_puntos(celdas_id),
+
+                "celdas_texto": celdas,
+
+                "puntos_texto":
+                    celdas_a_puntos(celdas)
+
+            })
+
+
+    return etiquetas_procesadas, leyenda
+
+
+# ============================================================
+# 12. PRUEBA
+#
+# Esta parte solo se ejecuta cuando corres
+# directamente braille.py.
+# ============================================================
+
+if __name__ == "__main__":
+
+    print("\nTACTONAUTA - PRUEBA BRAILLE ESPAÑOL\n")
+
+
+    etiquetas = [
+
+        "Tiempo",
+
+        "Temperatura",
+
+        "Presión",
+
+        "Temperatura promedio durante el experimento",
+
+        "Grupo experimental con tratamiento"
+
+    ]
+
+
+    ancho_disponible = 80.0
+
+
+    procesadas, leyenda = procesar_etiquetas(
+        etiquetas,
+        ancho_disponible
+    )
+
+
+    # --------------------------------------------------------
+    # RESULTADO DE LAS ETIQUETAS
+    # --------------------------------------------------------
+
+    print(
+        "Ancho disponible:",
+        ancho_disponible,
+        "mm"
+    )
+
+
+    print("\nETIQUETAS EN LA GRÁFICA\n")
+
+
+    for etiqueta in procesadas:
+
+        print(
+            etiqueta["texto_original"],
+            "->",
+            etiqueta["texto_stl"],
+            "| ancho:",
+            round(
+                etiqueta["ancho_mm"],
+                1
+            ),
+            "mm",
+            "| usa leyenda:",
+            etiqueta["usa_leyenda"]
+        )
+
+
+    # --------------------------------------------------------
+    # RESULTADO DE LA LEYENDA
+    # --------------------------------------------------------
+
+    print("\nLEYENDA\n")
+
+
+    if not leyenda:
+
+        print(
+            "No fue necesario crear una leyenda."
+        )
+
+
+    else:
+
+        for entrada in leyenda:
+
+            print(
+                entrada["identificador"],
+                "=",
+                entrada["texto"]
+            )
+
+
+            print(
+                "  Braille identificador:",
+                entrada["celdas_identificador"]
+            )
+
+
+            print(
+                "  Puntos:",
+                entrada["puntos_identificador"]
+            )
