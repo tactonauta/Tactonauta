@@ -254,6 +254,174 @@ def _elegir_esquina(gh, gv, t, alto, ancho):
     return (col, fila, int(h["b"]), fila), (col, int(v["a"]), col, fila)
 
 
+def _lineas_horizontales_largas(gris, largo_min):
+    """Líneas horizontales largas aunque sean muy tenues: la rejilla gris
+    claro de Excel o la rejilla blanca sobre el fondo gris de ggplot, que
+    el detector de bordes de detectar_ejes no ve. También el borde de un
+    panel de fondo gris. Devuelve [(fila, x_inicio, x_fin)] de arriba abajo."""
+    fondo = cv2.medianBlur(gris, 15)
+    marcas = (cv2.absdiff(gris, fondo) > 10).astype(np.uint8)
+    largo_min = max(15, int(largo_min))
+    marcas = cv2.morphologyEx(marcas, cv2.MORPH_OPEN,
+                              cv2.getStructuringElement(cv2.MORPH_RECT, (largo_min, 1)))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(marcas, connectivity=8)
+    crudas = sorted((y + h / 2.0, x, x + w - 1) for x, y, w, h, _ in stats[1:n]
+                    if w >= largo_min and h <= 12)
+    lineas = []
+    for fila, x0, x1 in crudas:          # los dos bordes de una línea gruesa = una
+        if lineas and fila - lineas[-1][0] <= 3:
+            f, a, b = lineas[-1]
+            lineas[-1] = ((f + fila) / 2, min(a, x0), max(b, x1))
+        else:
+            lineas.append((fila, x0, x1))
+    return lineas
+
+
+def _monotonos(valores):
+    return len(set(valores)) == len(valores) and (
+        all(a < b for a, b in zip(valores, valores[1:]))
+        or all(a > b for a, b in zip(valores, valores[1:])))
+
+
+def _columna_numerica(numeros, h_med):
+    """Los números del eje Y: 3 o más alineados a la derecha (uno debajo
+    del otro) y en orden. Si hay varias columnas así (eje Y doble), la de
+    más números y, a igualdad, la de la izquierda."""
+    tol = max(4.0, 0.8 * h_med)
+    grupos = []
+    for tk in sorted(numeros, key=lambda z: z["px"] + z["pw"]):
+        borde = tk["px"] + tk["pw"]
+        if grupos and borde - grupos[-1][-1]["px"] - grupos[-1][-1]["pw"] <= tol:
+            grupos[-1].append(tk)
+        else:
+            grupos.append([tk])
+    buenos = []
+    for g in grupos:
+        g = sorted(g, key=lambda z: z["centro_y"])
+        if (len(g) >= 3 and g[-1]["centro_y"] - g[0]["centro_y"] >= 3 * h_med
+                and _monotonos([z["valor"] for z in g])):
+            buenos.append(g)
+    if not buenos:
+        return []
+    return max(buenos, key=lambda g: (len(g), -g[0]["px"]))
+
+
+def _fila_numerica(numeros, h_med):
+    """Los números del eje X: 3 o más en una misma fila y en orden. Si hay
+    varias filas así, la de más números y, a igualdad, la de más abajo."""
+    tol = max(3.0, 0.5 * h_med)
+    grupos = []
+    for tk in sorted(numeros, key=lambda z: z["centro_y"]):
+        if grupos and tk["centro_y"] - grupos[-1][-1]["centro_y"] <= tol:
+            grupos[-1].append(tk)
+        else:
+            grupos.append([tk])
+    buenos = []
+    for g in grupos:
+        g = sorted(g, key=lambda z: z["centro_x"])
+        if (len(g) >= 3 and g[-1]["centro_x"] - g[0]["centro_x"] >= 4 * h_med
+                and _monotonos([z["valor"] for z in g])):
+            buenos.append(g)
+    if not buenos:
+        return []
+    return max(buenos, key=lambda g: (len(g), g[0]["centro_y"]))
+
+
+def inferir_ejes(gris, eje_x, eje_y, tokens, tol=None):
+    """Ubica el eje que no está dibujado como línea, por los números de los
+    ejes y la rejilla. Pasa con estilos muy comunes:
+      - Excel: línea del eje X, pero el eje Y es solo una columna de números
+        junto a una rejilla gris claro;
+      - R/ggplot: ninguna línea de eje, panel gris con rejilla blanca.
+    La calibración no necesita la línea (usa la posición de cada número):
+    el eje sirve para saber qué números son de qué eje y dónde está el área
+    del gráfico. Devuelve (eje_x, eje_y, se_infirio_alguno)."""
+    if eje_x is not None and eje_y is not None:
+        return eje_x, eje_y, False
+    alto, ancho = gris.shape[:2]
+    numeros = [tk for tk in tokens or [] if tk.get("valor") is not None]
+    if len(numeros) < 3:
+        return eje_x, eje_y, False
+    h_med = float(np.median([tk["ph"] for tk in numeros])) or 8.0
+    col_y = _columna_numerica(numeros, h_med)
+    fila_x = _fila_numerica([tk for tk in numeros if not any(tk is c for c in col_y)], h_med)
+    lineas = _lineas_horizontales_largas(gris, 0.3 * ancho)
+
+    # Sin eje Y dibujado, el "eje X" que se haya detectado tiene que estar a
+    # la altura del número más bajo del eje Y o más abajo, y empezar cerca de
+    # esa columna; si no, era una línea de la rejilla (ggplot) y se descarta.
+    if eje_y is None and eje_x is not None and col_y:
+        borde = max(tk["px"] + tk["pw"] for tk in col_y)
+        if (eje_x[1] < max(tk["centro_y"] for tk in col_y) - 1.5 * h_med
+                or min(eje_x[0], eje_x[2]) > borde + 8 * h_med):
+            eje_x = None
+
+    # --- columna del eje Y ---
+    x_eje = None
+    if eje_y is not None:
+        x_eje = (eje_y[0] + eje_y[2]) / 2.0
+    elif col_y:
+        borde = max(tk["px"] + tk["pw"] for tk in col_y)
+        inicios = [x0 for _, x0, _ in lineas if borde - h_med < x0 < borde + 6 * h_med]
+        if eje_x is not None and min(eje_x[0], eje_x[2]) > borde - h_med:
+            x_eje = float(min(eje_x[0], eje_x[2]))      # donde empieza la línea del eje X
+        elif inicios:
+            x_eje = float(np.median(inicios))          # donde empieza la rejilla
+        else:
+            x_eje = borde + 0.6 * h_med
+    # líneas de la rejilla que empiezan en el borde izquierdo del gráfico
+    rejilla = [(f, a, b) for f, a, b in lineas if x_eje is not None and abs(a - x_eje) <= 3 * h_med]
+
+    # --- fila del eje X ---
+    y_eje = None
+    if eje_x is not None:
+        y_eje = (eje_x[1] + eje_x[3]) / 2.0
+    elif eje_y is not None:
+        y_eje = float(max(eje_y[1], eje_y[3]))
+    elif fila_x:
+        techo = min(tk["py"] for tk in fila_x)
+        cerca = [f for f, _, _ in lineas if techo - 4 * h_med < f < techo]
+        y_eje = max(cerca) if cerca else techo - 0.6 * h_med
+    elif col_y:
+        # sin números abajo (categorías): la línea más baja que arranca en el
+        # borde del gráfico (rejilla, o el borde del panel en ggplot)
+        abajo = max(tk["centro_y"] for tk in col_y)
+        debajo = [f for f, _, _ in rejilla if f >= abajo - 2 * h_med]
+        y_eje = max(debajo) if debajo else abajo
+
+    if x_eje is None or y_eje is None:
+        return eje_x, eje_y, False
+
+    # --- extremos: arriba (eje Y) y a la derecha (eje X) ---
+    # Un gráfico siempre deja algo de lugar más allá de su última marca (una
+    # curva que llega a 31 con la última marca en 30): sin una línea que
+    # marque el borde, se deja medio paso entre marcas de margen.
+    def _paso(valores):
+        valores = sorted(valores)
+        return float(np.median(np.diff(valores))) if len(valores) >= 2 else 2 * h_med
+
+    arriba = [tk["centro_y"] for tk in col_y] + [f for f, _, _ in rejilla if f < y_eje]
+    y_tope = min(arriba) if arriba else 0.0
+    if col_y:
+        y_tope -= 0.5 * _paso([tk["centro_y"] for tk in col_y])
+    y_tope = max(0.0, y_tope)
+    derechas = [b for _, _, b in rejilla]
+    if eje_x is not None:
+        derechas.append(max(eje_x[0], eje_x[2]))
+    if fila_x:
+        derechas.append(max(tk["centro_x"] for tk in fila_x)
+                        + (0.0 if rejilla else 0.5 * _paso([tk["centro_x"] for tk in fila_x])))
+    x_fin = min(ancho - 1.0, max(derechas) if derechas else ancho - 1.0)
+    if x_fin - x_eje < 0.2 * ancho or y_eje - y_tope < 0.15 * alto:
+        return eje_x, eje_y, False
+
+    nuevo_x = eje_x if eje_x is not None else (int(round(x_eje)), int(round(y_eje)),
+                                                 int(round(x_fin)), int(round(y_eje)))
+    nuevo_y = eje_y if eje_y is not None else (int(round(x_eje)), int(round(y_tope)),
+                                                 int(round(x_eje)), int(round(y_eje)))
+    return nuevo_x, nuevo_y, True
+
+
 def area_de_dibujo(eje_x, eje_y, forma):
     """Rectángulo (x0, y0, x1, y1) delimitado por los ejes."""
     alto, ancho = forma[:2]
@@ -499,13 +667,29 @@ def _categorias_en_linea(tokens, x0, x1, margen):
     # línea de texto y van una a continuación de la otra. Antes se juntaba
     # todo lo cercano, y rótulos inclinados (recuadros anchos) o fechas que
     # se pisan entre sí ("2023-01" "2023-02"...) quedaban en un único rótulo.
+    # Cuánto hueco separa dos palabras de un mismo rótulo: en una fila de
+    # categorías los huecos ENTRE rótulos son todos parecidos; solo si hay
+    # dos tamaños bien distintos (chicos y grandes), los chicos son espacios
+    # dentro de un rótulo. Antes se usaba un 60 % del alto del texto, y con
+    # recuadros altos (texto del PDF) "Ene Feb Mar" quedaban en un solo rótulo.
+    def _hueco(a, b):
+        return b["px"] - (a["px"] + a["pw"])
+    # (todos los huecos de la fila, aunque el OCR ponga cada rótulo en su
+    # propio bloque: "Mi" "e" de un "Mié" mal leído junto a "Jue" "Vie"...)
+    huecos = sorted(h for a, b in zip(linea, linea[1:]) if (h := _hueco(a, b)) >= -0.1 * h_med)
+    umbral = -0.1 * h_med          # sin huecos "chicos": cada palabra es un rótulo
+    saltos = [(huecos[i + 1] / max(huecos[i], 0.5), i) for i in range(len(huecos) - 1)]
+    if saltos:
+        relacion, i = max(saltos)
+        if relacion >= 2:
+            umbral = min(0.6 * h_med, math.sqrt(max(huecos[i], 0.5) * huecos[i + 1]))
     grupos = []
     for z in linea:
         if grupos:
             prev = grupos[-1][-1]
-            hueco = z["px"] - (prev["px"] + prev["pw"])
+            hueco = _hueco(prev, z)
             misma_linea = tuple(z["orden"][:-1]) == tuple(prev["orden"][:-1])
-            if misma_linea and -0.1 * h_med <= hueco <= 0.6 * h_med:
+            if misma_linea and -0.1 * h_med <= hueco <= umbral:
                 grupos[-1].append(z)
                 continue
         grupos.append([z])
@@ -570,35 +754,21 @@ def titulo_vertical_de_palabras(palabras, x_limite):
     return texto, bbox
 
 
-def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
-                    tol=None, escala_ocr=2.0, lang=None, excluir=None, tokens_pdf=None):
-    """OCR global de la imagen y clasificación de cada texto (ejes, títulos, leyenda, datos).
-
-    `tokens_pdf`: si viene (texto real del PDF, ver tokens_de_palabras_pdf),
-    se clasifica eso en vez de correr el OCR: es exacto y no depende de
-    Tesseract."""
-    t = tol or _tolerancias(gris.shape)
-    margen = t["margen_texto"]
-    radio_dato = t["radio_dato"]
-    mapa_dist = _mapa_distancia_curva(mascaras_curva)
-
-    if tokens_pdf is not None:
-        datos = {"text": []}
-        tokens = list(tokens_pdf)
+def _tokens_ocr(gris, escala_ocr=2.0, lang=None):
+    """Palabras que lee Tesseract en toda la imagen, con su recuadro en
+    píxeles de la imagen (el mismo formato que tokens_de_palabras_pdf)."""
+    if escala_ocr and escala_ocr != 1:
+        gris_ocr = cv2.resize(gris, None, fx=escala_ocr, fy=escala_ocr,
+                              interpolation=cv2.INTER_CUBIC)
     else:
-        if escala_ocr and escala_ocr != 1:
-            gris_ocr = cv2.resize(gris, None, fx=escala_ocr, fy=escala_ocr,
-                                  interpolation=cv2.INTER_CUBIC)
-        else:
-            gris_ocr = gris
-            escala_ocr = 1.0
+        gris_ocr = gris
+        escala_ocr = 1.0
 
-        datos = pytesseract.image_to_data(
-            gris_ocr, output_type=Output.DICT,
-            config="--psm 11", lang=_idioma_ocr(lang),
-        )
-        tokens = []
-
+    datos = pytesseract.image_to_data(
+        gris_ocr, output_type=Output.DICT,
+        config="--psm 11", lang=_idioma_ocr(lang),
+    )
+    tokens = []
     for i in range(len(datos["text"])):
         texto = datos["text"][i].strip()
         if not texto:
@@ -623,6 +793,22 @@ def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
             "orden": (datos["block_num"][i], datos["par_num"][i],
                       datos["line_num"][i], datos["word_num"][i]),
         })
+    return tokens
+
+
+def detectar_textos(gris, eje_x_fila, eje_y_col, rect=None, mascaras_curva=None,
+                    tol=None, escala_ocr=2.0, lang=None, excluir=None, tokens_pdf=None):
+    """OCR global de la imagen y clasificación de cada texto (ejes, títulos, leyenda, datos).
+
+    `tokens_pdf`: si viene (texto real del PDF, ver tokens_de_palabras_pdf),
+    se clasifica eso en vez de correr el OCR: es exacto y no depende de
+    Tesseract."""
+    t = tol or _tolerancias(gris.shape)
+    margen = t["margen_texto"]
+    radio_dato = t["radio_dato"]
+    mapa_dist = _mapa_distancia_curva(mascaras_curva)
+
+    tokens = list(tokens_pdf) if tokens_pdf is not None else _tokens_ocr(gris, escala_ocr, lang)
 
     if excluir:
         def _dentro(tk):
@@ -2238,6 +2424,19 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
     eje_x, eje_y = detectar_ejes(gris, tol=t)
+    # Un eje sin línea dibujada (Excel, ggplot): se ubica por sus números y
+    # la rejilla. Si para eso hubo que correr el OCR, se reusa más abajo.
+    tokens_ocr_previos = None
+    if eje_x is None or eje_y is None:
+        tokens_ejes = tokens_de_palabras_pdf(palabras)
+        if sum(tk["valor"] is not None for tk in tokens_ejes) < 2 and ocr_disponible():
+            tokens_ejes = tokens_ocr_previos = _tokens_ocr(gris, lang=lang)
+        eje_x, eje_y, inferido = inferir_ejes(gris, eje_x, eje_y, tokens_ejes, tol=t)
+        if inferido:
+            advertencias.append(
+                "La gráfica no tiene dibujada la línea de un eje: se ubicó por sus números "
+                "y la rejilla. Verificar el overlay."
+            )
     if eje_x is None:
         advertencias.append("No se detectó el eje X: no habrá calibración horizontal.")
     if eje_y is None:
@@ -2285,8 +2484,8 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     excluir = (reg_x if usa_reg_x else []) + (reg_y if usa_reg_y else [])
 
     txt = detectar_textos(gris, eje_x_fila, eje_y_col, rect=rect,
-                          mascaras_curva=mascaras, tol=t, lang=lang,
-                          excluir=excluir, tokens_pdf=tokens_pdf)
+                          mascaras_curva=mascaras, tol=t, lang=lang, excluir=excluir,
+                          tokens_pdf=tokens_pdf if tokens_pdf is not None else tokens_ocr_previos)
     etiquetas_x = reg_x if usa_reg_x else max(reg_x, txt["etiquetas_x"], key=len)
     etiquetas_y = reg_y if usa_reg_y else max(reg_y, txt["etiquetas_y"], key=len)
     etiquetas_dato = txt["etiquetas_dato"]
@@ -2334,7 +2533,8 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
     # 0, 1, 2...; la lámina y la narración usan el nombre ---
     if len(etiquetas_x) < 2 and txt.get("categorias_x"):
         etiquetas_x = [{"centro_x": c["centro_x"], "valor": float(i), "px": int(c["px"]),
-                        "py": int(c["py"]), "pw": int(c["pw"]), "ph": int(c["ph"])}
+                        "py": int(c["py"]), "pw": int(c["pw"]), "ph": int(c["ph"]),
+                        "texto": c["texto"], "categoria": True}
                        for i, c in enumerate(txt["categorias_x"])]
 
     # --- Título del eje Y (vertical) ---
@@ -2410,6 +2610,8 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
 
     for nombre, etqs, clave in (("X", etiquetas_x, lambda e: e["centro_x"]),
                                 ("Y", etiquetas_y, lambda e: e["centro_y"])):
+        if any(e.get("categoria") for e in etqs):
+            continue      # el valor de una categoría es su posición, no algo leído
         for antes, despues in rescatar_etiquetas(etqs, clave):
             advertencias.append(
                 f"Eje {nombre}: la etiqueta leída como '{antes}' se corrigió a '{despues}' "
