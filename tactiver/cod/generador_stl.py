@@ -22,7 +22,8 @@ como arreglos de triángulos (numpy) y escrito con `numpy-stl` midió <50MB de
 pico y ~2s — la sobrecarga era enteramente del kernel CAD, no de la
 geometría en sí.
 """
-
+import qrcode
+from qrcode.constants import ERROR_CORRECT_L
 import copy
 import math
 import re
@@ -46,7 +47,11 @@ CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
 RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
-
+# QR táctil
+QR_LADO = 25.0
+QR_ALTURA = 1.6
+QR_MARGEN = 4.0
+QR_ERROR_CORRECTION = ERROR_CORRECT_L
 # Una fila de texto Braille ocupa esto de alto (dos filas de puntos + su
 # diámetro), y la separación de BANA entre elementos Braille no relacionados
 # es CLEARANCE_BRAILLE. Se usan para reservar espacio para títulos.
@@ -120,7 +125,62 @@ def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
         (3, 0, 4), (3, 4, 7),  # izquierda(normal -X)
     )
     return v[np.array(caras)]
+def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
+    """Agrega un QR cuadrado en relieve a la lista de primitivas.
 
+    x0, y0 corresponden a la esquina inferior izquierda del QR.
+    El QR se genera como una matriz de pequeños cuadrados en relieve.
+    """
+    matriz = _crear_matriz_qr(url)
+
+    n = len(matriz)
+
+    if n == 0:
+        return None
+
+    modulo = lado / n
+
+    for fila, fila_qr in enumerate(matriz):
+        for columna, activo in enumerate(fila_qr):
+            if not activo:
+                continue
+
+            cx = x0 + (columna + 0.5) * modulo
+            cy = y0 + (n - fila - 0.5) * modulo
+
+            piezas.append({
+                "t": "q",
+                "x": float(cx),
+                "y": float(cy),
+                "d": float(modulo),
+                "h": float(altura),
+            })
+
+    return {
+        "x": float(x0),
+        "y": float(y0),
+        "lado": float(lado),
+        "modulo": float(modulo),
+        "filas": n,
+        "url": url,
+    }
+def _crear_matriz_qr(url):
+    """Genera la matriz binaria del QR.
+
+    El QR contiene únicamente la URL del CSV. No contiene los datos de la
+    gráfica ni el CSV completo.
+    """
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=QR_ERROR_CORRECTION,
+        box_size=1,
+        border=QR_MARGEN,
+    )
+
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    return qr.get_matrix()
 
 def _malla_prisma(poligono, altura, z0=0.0):
     """Un polígono CONVEXO (vértices en sentido antihorario, en mm) extruido
@@ -388,24 +448,74 @@ def _malla_de(pieza):
     armada pasa tal cual."""
     if not isinstance(pieza, dict):
         return pieza
+
     if pieza["t"] == "p":
-        return _malla_esfera(DIAM_PUNTO_BRAILLE / 2, cx=pieza["x"], cy=pieza["y"], cz=BASE_THICKNESS)
+        return _malla_esfera(
+            DIAM_PUNTO_BRAILLE / 2,
+            cx=pieza["x"],
+            cy=pieza["y"],
+            cz=BASE_THICKNESS
+        )
+
     if pieza["t"] == "s":
-        return _malla_segmento(pieza["a"], pieza["b"], pieza["d"], pieza["h"])
-    return _malla_cilindro(pieza["d"] / 2, pieza["h"] + SOLAPE,
-                           cx=pieza["x"], cy=pieza["y"], z0=BASE_THICKNESS - SOLAPE)
+        return _malla_segmento(
+            pieza["a"],
+            pieza["b"],
+            pieza["d"],
+            pieza["h"]
+        )
 
+    if pieza["t"] == "q":
+        return _malla_caja(
+            pieza["d"],
+            pieza["d"],
+            pieza["h"] + SOLAPE,
+            cx=pieza["x"],
+            cy=pieza["y"],
+            z0=BASE_THICKNESS - SOLAPE
+        )
 
+    return _malla_cilindro(
+        pieza["d"] / 2,
+        pieza["h"] + SOLAPE,
+        cx=pieza["x"],
+        cy=pieza["y"],
+        z0=BASE_THICKNESS - SOLAPE
+    )
 def _primitiva_json(pieza):
     """Primitiva para la vista previa del navegador (mm, 2 decimales)."""
-    r = lambda v: round(float(v), 2)  # noqa: E731
-    if pieza["t"] == "s":
-        return {"t": "s", "a": [r(pieza["a"][0]), r(pieza["a"][1])],
-                "b": [r(pieza["b"][0]), r(pieza["b"][1])], "d": r(pieza["d"])}
-    if pieza["t"] == "b":
-        return {"t": "b", "x": r(pieza["x"]), "y": r(pieza["y"]), "d": r(pieza["d"])}
-    return {"t": "p", "x": r(pieza["x"]), "y": r(pieza["y"])}
+    r = lambda v: round(float(v), 2)
 
+    if pieza["t"] == "s":
+        return {
+            "t": "s",
+            "a": [r(pieza["a"][0]), r(pieza["a"][1])],
+            "b": [r(pieza["b"][0]), r(pieza["b"][1])],
+            "d": r(pieza["d"])
+        }
+
+    if pieza["t"] == "b":
+        return {
+            "t": "b",
+            "x": r(pieza["x"]),
+            "y": r(pieza["y"]),
+            "d": r(pieza["d"])
+        }
+
+    if pieza["t"] == "q":
+        return {
+            "t": "q",
+            "x": r(pieza["x"]),
+            "y": r(pieza["y"]),
+            "d": r(pieza["d"]),
+            "h": r(pieza["h"])
+        }
+
+    return {
+        "t": "p",
+        "x": r(pieza["x"]),
+        "y": r(pieza["y"])
+    }
 
 def _puntos_espaciados(puntos, distancia_min):
     """Filtra una polilínea para que sus puntos queden separados al menos
@@ -961,6 +1071,7 @@ def generar_modelo_desde_recta(
     incluir_leyenda=True,
     diseno=None,
     ajustes=None,
+    url_qr=None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
