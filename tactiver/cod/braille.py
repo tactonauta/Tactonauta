@@ -348,14 +348,29 @@ class Abreviador:
     def __init__(self):
         self.leyenda = []
         self._por_texto = {}
+        # dos series de letras: MAYÚSCULAS para textos (A, B...) y
+        # minúsculas para valores de los ejes (a, b...), ver procesar()
+        self._cuenta = {True: 0, False: 0}
 
-    def procesar(self, texto, ancho_disponible, donde=None, clave=None):
+    def procesar(self, texto, ancho_disponible, donde=None, clave=None, celdas=None,
+                 minuscula=False):
         """Dict con lo que va físicamente en la gráfica (ver
         procesar_etiquetas). `donde` (opcional) dice qué es la etiqueta
         ("título del eje X"...), para la leyenda y la narración; `clave`
-        (opcional) identifica el elemento de la lámina de donde salió."""
+        (opcional) identifica el elemento de la lámina de donde salió.
 
-        celdas = texto_a_celdas(texto)
+        `celdas`: las celdas Braille del texto completo, si ya vienen
+        armadas (un número con su signo menos y su coma decimal); si no, se
+        arman con texto_a_celdas. Con `ancho_disponible` negativo la etiqueta
+        va siempre con letra.
+
+        `minuscula=True`: la letra va en minúscula (a, b...: 1 celda, sin el
+        signo de mayúscula). Se usa para los valores de los ejes, donde el
+        espacio entre marcas es poco; sin signo numeral delante una letra
+        sola no se confunde con un número. Las minúsculas llevan su propia
+        cuenta: "A" (un texto) y "a" (un valor) son cosas distintas."""
+
+        celdas = texto_a_celdas(texto) if celdas is None else list(celdas)
 
         ancho = ancho_braille(celdas)
 
@@ -389,15 +404,19 @@ class Abreviador:
         # CASO 2: EL TEXTO NO CABE
         # ========================================
 
-        clave = " ".join(str(texto).split())
+        # el mismo texto en el mismo lugar ("2020" en el eje X) usa la misma letra
+        repetido = (donde, " ".join(str(texto).split()))
 
-        if clave in self._por_texto:
+        if repetido in self._por_texto:
 
-            entrada = self._por_texto[clave]
+            entrada = self._por_texto[repetido]
 
         else:
 
-            identificador = crear_identificador(len(self.leyenda))
+            identificador = crear_identificador(self._cuenta[minuscula])
+            self._cuenta[minuscula] += 1
+            if minuscula:
+                identificador = identificador.lower()
 
             # Convertimos también el identificador a Braille:
             # "A" -> ["mayuscula", "a"]
@@ -425,7 +444,7 @@ class Abreviador:
             }
 
             self.leyenda.append(entrada)
-            self._por_texto[clave] = entrada
+            self._por_texto[repetido] = entrada
 
 
         # Lo que irá físicamente en la gráfica

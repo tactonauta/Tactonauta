@@ -276,10 +276,19 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
     # Textos que en la lámina van con una letra (no entraban en su lugar).
     abreviaturas = (diseno or {}).get("abreviaturas") or []
     if abreviaturas:
-        frases.append(
-            "En la lámina, algunos textos van con una letra y se explican en la leyenda de abajo: "
-            + "; ".join(f"{a['identificador']}, {a['donde'] or 'texto'}: «{a['texto']}»"
-                        for a in abreviaturas) + ".")
+        # agrupadas por lugar: "números del eje X: A es 2015, B es 2016..."
+        grupos = {}
+        for a in abreviaturas:
+            grupos.setdefault(a["donde"] or "texto", []).append(a)
+        partes = []
+        for donde, lista in grupos.items():
+            if donde.startswith("número del eje"):
+                partes.append(donde.replace("número", "números") + ": "
+                              + ", ".join(f"{a['identificador']} es {a['texto']}" for a in lista))
+            else:
+                partes += [f"{a['identificador']}, {donde}: «{a['texto']}»" for a in lista]
+        frases.append("En la lámina, algunos textos van con una letra que se explica en la "
+                      "leyenda de abajo. " + "; ".join(partes) + ".")
     return " ".join(frases)
 
 
