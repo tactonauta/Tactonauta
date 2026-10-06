@@ -2123,7 +2123,17 @@ def generar_modelo_desde_recta(
         print(f"[STL] Leyenda abajo: {len(leyenda_diseno)} textura(s), "
               f"{len(abreviaturas_diseno)} texto(s) abreviado(s), {len(renglones_leyenda)} renglón(es).",
               flush=True)
-
+    if url_qr:
+      qr_info = agregar_qr(
+          piezas,
+          url_qr,
+          qr_x,
+          qr_y,
+          lado=QR_LADO,
+          altura=QR_ALTURA,
+        )
+    else:
+      qr_info = None
     if diseno is not None:
         diseno.update({
             "placa": {"ancho_mm": dim_x, "alto_mm": dim_y, "chaflan_mm": chaflan,
