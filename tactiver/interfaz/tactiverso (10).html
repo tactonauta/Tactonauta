@@ -314,7 +314,7 @@
   .request-card .fig-thumbs details.descripcion { margin: 0.6rem 0 0; font-size: 0.9rem; }
   /* Original del PDF y lectura del programa, lado a lado */
   .request-card .fig-thumbs .comparacion {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin-top: 0.5rem;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.7rem; margin-top: 0.5rem;
   }
   .request-card .fig-thumbs .comparacion figure { margin: 0; min-width: 0; }
   .request-card .fig-thumbs .comparacion figcaption { font-size: 0.82rem; font-weight: 700; color: #3a362e; }
@@ -486,6 +486,26 @@
     cursor: pointer; padding: 0.2em 0.3em; flex-shrink: 0;
   }
   button.mini-del:hover { color: var(--error); }
+
+  /* Títulos de los ejes (texto libre, admite símbolos como Ω, μ, λ) */
+  .titulo-fila { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+  .titulo-fila label {
+    display: inline-flex; align-items: center; gap: 0.35em;
+    font-size: 0.82rem; min-width: 4.2em; color: #3a362e;
+  }
+  .titulo-fila label .dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .titulo-fila input {
+    flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 4px;
+    padding: 0.3em 0.5em; font: inherit; font-size: 0.9rem; background: #fff;
+  }
+  .titulo-fila input.sin-posicion { border-style: dashed; }
+  .simbolos { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+  .simbolos button {
+    min-width: 1.9em; padding: 0.15em 0.35em; font: inherit; font-size: 0.85rem;
+    background: #fffdf8; border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+  }
+  .simbolos button:hover { border-color: var(--ink); background: var(--gold-soft); }
+  .editor-ayuda { margin: 0.4rem 0 0; font-size: 0.75rem; color: #6b6659; line-height: 1.4; }
 
   #editor-series-toolbar .tool-btn.nueva-serie {
     border-style: dashed; color: #3a362e;
@@ -722,6 +742,36 @@
   .fig-acciones-edicion { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
   .fig-marcas { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: 0.3rem; }
   .comparacion img { cursor: zoom-in; }
+
+  /* Vista previa de la lámina 3D (antes de generar el STL) */
+  .lamina-wrap { line-height: 0; border: 1px solid var(--line); border-radius: 8px; background: #f3efe6; margin-top: 0.3rem; }
+  .lamina-svg { display: block; width: 100%; height: auto; touch-action: none; }
+  .lamina-svg:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .lamina-svg .lam-placa { fill: #fffdf8; stroke: #8a8475; stroke-width: 0.6; }
+  .lamina-svg .lam-zona { fill: none; stroke: #c9c2b0; stroke-width: 0.35; stroke-dasharray: 2 1.5; }
+  .lamina-svg .lam-punto { fill: #1d1d1f; }
+  .lamina-svg .lam-tramo { stroke-linecap: round; }
+  .lamina-svg .lam-hit { fill: transparent; }
+  .lamina-svg .lam-hit-linea { stroke: transparent; stroke-width: 4; stroke-linecap: round; }
+  .lamina-svg.interactiva .lam-el { cursor: pointer; }
+  .lamina-svg.interactiva .lam-el.movible { cursor: grab; }
+  .lamina-svg.interactiva .lam-el:hover .lam-hit { fill: rgba(232, 196, 0, 0.18); }
+  .lamina-svg .lam-el.sel .lam-hit { fill: rgba(255, 140, 0, 0.22); stroke: #ff8c00; stroke-width: 0.5; }
+  .lamina-svg .lam-el.sel .lam-hit-linea { stroke: rgba(255, 140, 0, 0.35); }
+  .lamina-svg .lam-tinta text { font: 3.3px sans-serif; fill: #1f4fbf; pointer-events: none; }
+  .lamina-barra { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; }
+  .lamina-barra label { display: inline-flex; gap: 0.3em; align-items: center; }
+  .lamina-estado { color: #6b6659; }
+  .lamina-sel h4 { margin: 0 0 0.3rem; font-size: 0.9rem; }
+  .lamina-sel p { margin: 0 0 0.4rem; font-size: 0.85rem; }
+  .lamina-sel .fila { display: flex; gap: 0.3rem; margin-bottom: 0.4rem; }
+  .lamina-sel .fila input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; font: inherit; font-size: 0.9rem; }
+  .lamina-sel .acciones { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .lamina-quitados { margin-top: 0.6rem; }
+  .lamina-panel { margin-top: 0.6rem; }
+  .lamina-quitados h4 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+  .lamina-quitados ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+  .lamina-quitados li { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; font-size: 0.82rem; }
 </style>
 </head>
 <body>
@@ -1176,6 +1226,12 @@
           <button type="button" class="tool-btn" data-modo="etiqueta-y">
             <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje Y
           </button>
+          <button type="button" class="tool-btn" data-modo="titulo-x">
+            <span class="dot cuadrado" style="background:#ff8c00"></span> Agregar título eje X
+          </button>
+          <button type="button" class="tool-btn" data-modo="titulo-y">
+            <span class="dot cuadrado" style="background:#c040c0"></span> Agregar título eje Y
+          </button>
           <button type="button" class="tool-btn" data-modo="borrar">
             <span class="dot" style="background:#8c2a09"></span> Borrar punto
           </button>
@@ -1190,9 +1246,20 @@
             </div>
           </div>
           <div>
-            <p class="editor-rotulo">Gráfica original (del PDF)</p>
-            <div class="editor-original-wrap">
-              <img id="editor-original" alt="Gráfica original tal como aparece en el PDF, sin marcas">
+            <p class="editor-rotulo">Vista previa de la impresión 3D (lo que se va a imprimir)</p>
+            <div class="lamina-barra">
+              <label><input type="checkbox" id="lamina-tinta" checked> Mostrar el texto en tinta</label>
+              <span class="lamina-estado" id="lamina-estado" role="status" aria-live="polite"></span>
+            </div>
+            <div class="lamina-wrap">
+              <svg id="lamina-svg" class="lamina-svg interactiva" role="img" tabindex="0"
+                   aria-label="Vista previa de la lámina táctil: haz clic en un elemento para editarlo"></svg>
+            </div>
+            <!-- lo elegido en la vista previa, justo debajo: sin ir y volver con el scroll -->
+            <div class="editor-block lamina-panel">
+              <div class="lamina-sel" id="lamina-seleccion"></div>
+              <div class="lamina-quitados" id="lamina-quitados"></div>
+              <ul class="editor-advertencias" id="lamina-avisos"></ul>
             </div>
           </div>
         </div>
@@ -1205,6 +1272,13 @@
           <strong>Etiquetas:</strong> si un número del eje no se leyó, usa "Agregar etiqueta" y haz
           clic justo sobre ese número en la imagen — aparece un cuadrado amarillo ahí y una casilla
           abajo para que escribas tú el valor.
+          <strong>Títulos:</strong> usa "Agregar título eje X/Y" y haz clic sobre el título en la
+          imagen (o donde debería ir); luego escríbelo en "Títulos de los ejes". Los botones de
+          símbolos insertan Ω, μ, λ, etc. Los marcadores se pueden arrastrar en "Mover puntos".
+          <strong>Lámina 3D (derecha):</strong> es lo que se va a imprimir, en su tamaño real
+          (22 × 22 cm). Haz clic en un texto, una curva o una entrada de la leyenda para cambiar
+          su texto o quitarlo; arrastra los textos para moverlos (o usa las flechas del teclado,
+          con Mayús de a 5 mm). El STL se genera recién al autorizar, con lo que ves acá.
         </p>
       </div>
       <div class="editor-side">
@@ -1226,6 +1300,23 @@
             <button type="button" class="mini-add" id="editor-add-etiqueta-y" title="Agregar etiqueta al centro del eje Y">+ Agregar</button>
           </div>
           <table class="editor-tabla"><tbody id="editor-tabla-y"></tbody></table>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Títulos de los ejes</h3>
+          </div>
+          <div class="titulo-fila">
+            <label for="editor-titulo-x"><span class="dot" style="background:#ff8c00"></span> Eje X</label>
+            <input type="text" id="editor-titulo-x" placeholder="sin título" autocomplete="off">
+            <button type="button" class="mini-del" id="editor-quitar-titulo-x" title="Quitar el título del eje X" aria-label="Quitar el título del eje X">✕</button>
+          </div>
+          <div class="titulo-fila">
+            <label for="editor-titulo-y"><span class="dot" style="background:#c040c0"></span> Eje Y</label>
+            <input type="text" id="editor-titulo-y" placeholder="sin título" autocomplete="off">
+            <button type="button" class="mini-del" id="editor-quitar-titulo-y" title="Quitar el título del eje Y" aria-label="Quitar el título del eje Y">✕</button>
+          </div>
+          <div class="simbolos" id="editor-simbolos" role="group" aria-label="Insertar símbolo en el título"></div>
+          <p class="editor-ayuda">Los símbolos se insertan en la última casilla de título que usaste.</p>
         </div>
         <div class="editor-block editor-acciones">
           <button type="button" class="primary" id="editor-recalcular">Recalcular con mis correcciones</button>
@@ -2035,6 +2126,11 @@
         'Lo que leyó el programa',
         'Lectura del programa sobre la gráfica: eje X en rojo, eje Y en azul, curvas en color, textos en recuadros'));
     }
+    // Lo que se va a imprimir, antes de generar el STL (y con los ajustes
+    // que el supervisor haya hecho en la pizarra).
+    if (f.correccion_id && !f.error && (modo.revision || modo.corregible)) {
+      comparacion.appendChild(Lamina.crearMiniatura(f));
+    }
     li.appendChild(comparacion);
 
     if (f.advertencias && f.advertencias.length) {
@@ -2566,10 +2662,113 @@
   // (/api/solicitudes/<id>/figuras/<i>/corregir): en revisión la gráfica
   // queda con visto bueno; si ya estaba autorizada, se regenera su STL.
   // ------------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // Vista previa de la lámina 3D: la misma distribución que tendrá el STL
+  // (POST /api/lamina/vista), dibujada en SVG a escala real (mm). Se usa en
+  // la tarjeta de revisión (solo mirar) y en la pizarra (editable).
+  // ---------------------------------------------------------------
+  const Lamina = (() => {
+    const NS = 'http://www.w3.org/2000/svg';
+    // mismo orden que la paleta de la pizarra, más oscuros para leerse sobre la placa
+    const COLORES_SERIE = ['#1e9e3a', '#c99700', '#0098c8', '#d0457a', '#7a4fd0', '#d07a00'];
+    const NOMBRES = {
+      titulo: 'Título del gráfico', titulo_eje: 'Título de eje', numero_eje: 'Número del eje',
+      categoria: 'Categoría del eje X', dato: 'Valor anotado junto a la curva', serie: 'Curva',
+      leyenda: 'Entrada de la leyenda', eje: 'Eje',
+    };
+
+    function el(tag, attrs, padre) {
+      const n = document.createElementNS(NS, tag);
+      Object.entries(attrs || {}).forEach(([k, v]) => n.setAttribute(k, v));
+      if (padre) padre.appendChild(n);
+      return n;
+    }
+
+    function colorDe(id) {
+      const m = /^(?:leyenda_)?serie_(\d+)$/.exec(id);
+      return m ? COLORES_SERIE[Number(m[1]) % COLORES_SERIE.length] : '#6b6659';
+    }
+
+    async function pedir(correccionId, ajustes) {
+      const { resp, datos } = await postJson('/api/lamina/vista',
+        { correccion_id: correccionId, ajustes: ajustes || {} });
+      if (!resp.ok || !datos.ok) throw new Error(datos.error || 'No se pudo armar la vista previa.');
+      return datos;
+    }
+
+    function dibujar(svg, vista, op) {
+      op = op || {};
+      svg.textContent = '';
+      const W = vista.placa.ancho_mm, H = vista.placa.alto_mm;
+      svg.setAttribute('viewBox', `-3 -3 ${W + 6} ${H + 6}`);
+      // geometría con el origen abajo a la izquierda, como el generador
+      const geo = el('g', { transform: `translate(0 ${H}) scale(1 -1)` }, svg);
+      el('polygon', { class: 'lam-placa', points: vista.placa.contorno.map(p => p.join(',')).join(' ') }, geo);
+      Object.values(vista.zonas || {}).forEach(z => {
+        if (z[3] - z[1] > 1) el('rect', { class: 'lam-zona', x: z[0], y: z[1], width: z[2] - z[0], height: z[3] - z[1] }, geo);
+      });
+      vista.elementos.forEach(e => {
+        const g = el('g', {
+          class: 'lam-el lam-' + e.clase + (e.movible ? ' movible' : '') + (e.id === op.seleccionado ? ' sel' : ''),
+          'data-id': e.id,
+        }, geo);
+        const color = colorDe(e.id);
+        e.primitivas.forEach(p => {
+          if (p.t === 'p') el('circle', { class: 'lam-punto', cx: p.x, cy: p.y, r: 0.75 }, g);
+          else if (p.t === 'b') el('circle', { cx: p.x, cy: p.y, r: p.d / 2, fill: color }, g);
+          else el('line', { class: 'lam-tramo', x1: p.a[0], y1: p.a[1], x2: p.b[0], y2: p.b[1],
+                            stroke: color, 'stroke-width': p.d }, g);
+        });
+        // zona para hacer clic: el recuadro de un texto, o la línea misma
+        if (e.recuadro) {
+          const r = e.recuadro;
+          el('rect', { class: 'lam-hit', x: r[0] - 1, y: r[1] - 1, width: r[2] - r[0] + 2, height: r[3] - r[1] + 2, rx: 1 }, g);
+        } else {
+          e.primitivas.forEach(p => {
+            if (p.t === 's') el('line', { class: 'lam-hit-linea', x1: p.a[0], y1: p.a[1], x2: p.b[0], y2: p.b[1] }, g);
+            else if (p.t === 'b') el('circle', { class: 'lam-hit', cx: p.x, cy: p.y, r: 2 }, g);
+          });
+        }
+        const titulo = el('title', {}, g);
+        titulo.textContent = (NOMBRES[e.clase] || 'Elemento') + ': ' + e.texto;
+      });
+      if (op.tinta) {
+        const capa = el('g', { class: 'lam-tinta' }, svg);
+        vista.elementos.forEach(e => {
+          if (!e.recuadro) return;
+          const texto = el('text', { x: e.recuadro[0], y: H - e.recuadro[3] - 0.8 }, capa);
+          texto.textContent = e.texto;
+        });
+      }
+    }
+
+    // Vista previa (solo mirar) para la tarjeta de revisión
+    function crearMiniatura(f) {
+      const fig = crearEl('figure');
+      fig.appendChild(crearEl('figcaption', null, 'Vista previa de la lámina (impresión 3D)'));
+      const wrap = crearEl('div', 'lamina-wrap');
+      const svg = el('svg', { class: 'lamina-svg', role: 'img',
+                              'aria-label': 'Vista previa de la lámina táctil de esta gráfica' });
+      wrap.appendChild(svg);
+      fig.appendChild(wrap);
+      pedir(f.correccion_id, f.ajustes_lamina)
+        .then(vista => dibujar(svg, vista, { tinta: true }))
+        .catch(err => { wrap.replaceWith(crearEl('p', 'status error', err.message)); });
+      return fig;
+    }
+
+    return { pedir, dibujar, crearMiniatura, NOMBRES };
+  })();
+
   const Editor = (() => {
     const overlayEl = document.getElementById('editor-overlay');
     const imgEl = document.getElementById('editor-img');
-    const imgOriginal = document.getElementById('editor-original');
+    const laminaSvg = document.getElementById('lamina-svg');
+    const laminaTinta = document.getElementById('lamina-tinta');
+    const laminaEstado = document.getElementById('lamina-estado');
+    const laminaSeleccion = document.getElementById('lamina-seleccion');
+    const laminaQuitados = document.getElementById('lamina-quitados');
+    const laminaAvisos = document.getElementById('lamina-avisos');
     const canvas = document.getElementById('editor-canvas');
     const closeBtn = document.getElementById('editor-close');
     const estadoEl = document.getElementById('editor-estado');
@@ -2581,6 +2780,12 @@
     const btnDeshacer = document.getElementById('editor-deshacer');
     const btnConfirmar = document.getElementById('editor-confirmar');
     const statusEl = document.getElementById('editor-status');
+    const inputTituloX = document.getElementById('editor-titulo-x');
+    const inputTituloY = document.getElementById('editor-titulo-y');
+    const simbolosEl = document.getElementById('editor-simbolos');
+    const COLOR_TITULO = { x: '#ff8c00', y: '#c040c0' };
+    const SIMBOLOS = ['Ω', 'μ', 'λ', 'Δ', 'θ', 'α', 'β', 'π', 'σ', 'ω', 'φ', '°', '²', '³', '·', '±'];
+    let ultimoInputTitulo = inputTituloX;
 
     // Misma paleta que _calibrar_y_exportar() en segmentador.py (colores BGR
     // (0,255,0)/(0,200,255)/(255,200,0) -> aquí en RGB), así el color de cada
@@ -2592,16 +2797,64 @@
     let botonOrigen = null; // botón "Corregir en la pizarra" (recupera el foco al cerrar)
     let enRevision = false; // true: guardar no genera STL (todavía no se autorizó)
     let urlOriginal = '';   // la gráfica del PDF, sin marcas: fondo de la pizarra
-    let modo = 'mover';     // mover | agregar | borrar
+    let modo = 'mover';     // mover | agregar | etiqueta-x | etiqueta-y | titulo-x | titulo-y | borrar
     let serieActiva = 0;    // a qué serie se le agregan puntos nuevos en modo "agregar"
     let arrastrando = null;
 
     let estado = { correccionId: null, ejeX: null, ejeY: null, series: [],
-                   etiquetasX: [], etiquetasY: [], ancho: 0, alto: 0 };
+                   etiquetasX: [], etiquetasY: [], ancho: 0, alto: 0,
+                   // títulos: { texto, px, py } (px/py = centro del marcador) o null
+                   tituloX: null, tituloY: null };
     let estadoOriginal = null;
     let ultimasCorrecciones = null; // lo último que se recalculó sin errores
+    let pendienteRecalculo = false; // la lectura cambió y todavía no se recalculó
+
+    // Lámina: lo que el supervisor cambió en la vista previa (se guarda con
+    // la figura y se aplica al generar el STL, al autorizar).
+    const ajustesVacios = () => ({ textos: {}, ocultar: [], mover: {} });
+    let ajustes = ajustesVacios();
+    let ajustesGuardados = ajustesVacios();
+    let ajustesCambiados = false;
+    let vista = null;         // última respuesta de /api/lamina/vista
+    let seleccion = null;     // id del elemento elegido en la vista previa
+    let pedidoVista = 0;      // descarta respuestas viejas si se pide otra antes
+    let arrastreLamina = null;
 
     function radioPunto() { return Math.max(5, estado.ancho * 0.008); }
+
+    // Mismo criterio que tolerancia_simplificacion() en segmentador.py
+    function toleranciaSimplificacion(rect) {
+      const diag = rect
+        ? Math.hypot(rect[2] - rect[0], rect[3] - rect[1])
+        : Math.hypot(estado.ancho, estado.alto);
+      return Math.max(1.5, 0.006 * diag);
+    }
+
+    // Ramer–Douglas–Peucker: deja 2 puntos en un tramo recto y más puntos
+    // donde cambia la pendiente (quiebres, picos, curvas cerradas).
+    function simplificarPolilinea(puntos, tol) {
+      if (puntos.length <= 2) return puntos.slice();
+      const conservar = new Array(puntos.length).fill(false);
+      conservar[0] = conservar[puntos.length - 1] = true;
+      const pila = [[0, puntos.length - 1]];
+      while (pila.length) {
+        const [i, j] = pila.pop();
+        if (j - i < 2) continue;
+        const a = puntos[i], b = puntos[j];
+        const dx = b.px - a.px, dy = b.py - a.py;
+        const largo = Math.hypot(dx, dy);
+        let maxD = -1, maxK = -1;
+        for (let k = i + 1; k < j; k++) {
+          const p = puntos[k];
+          const d = largo === 0
+            ? Math.hypot(p.px - a.px, p.py - a.py)
+            : Math.abs(dx * (p.py - a.py) - dy * (p.px - a.px)) / largo;
+          if (d > maxD) { maxD = d; maxK = k; }
+        }
+        if (maxD > tol) { conservar[maxK] = true; pila.push([i, maxK], [maxK, j]); }
+      }
+      return puntos.filter((_, k) => conservar[k]);
+    }
 
     async function abrir(idSolicitud, indice, figura, boton, revision) {
       solicitudId = idSolicitud;
@@ -2609,18 +2862,29 @@
       botonOrigen = boton;
       enRevision = Boolean(revision);
       urlOriginal = urlDeResultado(figura.imagen_url) || '';
-      imgOriginal.src = urlOriginal;
       btnConfirmar.textContent = enRevision ? 'Guardar corrección (queda revisada)' : 'Guardar y regenerar STL';
       ultimasCorrecciones = null;
+      pendienteRecalculo = false;
+      ajustesGuardados = { ...ajustesVacios(), ...JSON.parse(JSON.stringify(figura.ajustes_lamina || {})) };
+      ajustes = JSON.parse(JSON.stringify(ajustesGuardados));
+      ajustesCambiados = false;
+      seleccion = null;
+      vista = null;
+      laminaSvg.textContent = '';
       serieActiva = 0;
       overlayEl.hidden = false;
       document.body.style.overflow = 'hidden';
       statusEl.textContent = '';
       statusEl.className = 'status';
       btnConfirmar.disabled = true;
+      // Sin la lectura cargada no se puede recalcular: mandaría una gráfica vacía.
+      btnRecalcular.disabled = true;
+      statusEl.textContent = 'Cargando la gráfica…';
       closeBtn.focus();
       try {
         await cargarDesde(figura);
+        btnRecalcular.disabled = false;
+        statusEl.textContent = '';
       } catch (err) {
         statusEl.className = 'status error';
         statusEl.textContent = 'No se pudo abrir la segmentación de esta figura (puede que sus ' +
@@ -2655,14 +2919,19 @@
       estado.categoriasX = j.textos.categorias_x || [];
       estado.etiquetasY = (j.textos.etiquetas_eje_y || []).map(e => ({ centro_y: e.py, valor: e.valor }));
 
+      estado.tituloX = tituloDesdeJson(j.textos.titulo_eje_x, j.textos.titulo_eje_x_bbox, 'x');
+      estado.tituloY = tituloDesdeJson(j.textos.titulo_eje_y, j.textos.titulo_eje_y_bbox, 'y');
+
+      // El JSON trae la curva densa (~300 puntos, lo que se exporta). En la
+      // pizarra solo se muestran los vértices donde cambia la pendiente, para
+      // no tener que arrastrar decenas de puntos en un tramo recto. Al
+      // recalcular, segmentador.py vuelve a rellenar los tramos entre ellos.
+      const tolPx = toleranciaSimplificacion(j.ejes.rect_grafico);
       const seriesJson = j.series || [];
       estado.series = seriesJson.map((s, i) => {
-        const puntos = s.puntos || [];
-        const paso = Math.max(1, Math.floor(puntos.length / 35));
-        return {
-          color: PALETA[i % PALETA.length],
-          puntos: puntos.filter((_, k) => k % paso === 0).map(p => ({ px: p.px, py: p.py })),
-        };
+        let puntos = (s.puntos || []).map(p => ({ px: p.px, py: p.py }));
+        puntos = simplificarPolilinea(puntos, tolPx);
+        return { color: PALETA[i % PALETA.length], puntos };
       });
       if (estado.series.length === 0) estado.series = [{ color: PALETA[0], puntos: [] }];
       serieActiva = Math.min(serieActiva, estado.series.length - 1);
@@ -2672,12 +2941,305 @@
       pintarEstado(info.resumen, info.advertencias || []);
       refrescarTablaX();
       refrescarTablaY();
+      refrescarTitulos();
       pintarSelectorSeries();
 
       await new Promise(r => { imgEl.onload = r; if (imgEl.complete) r(); });
       canvas.width = estado.ancho;
       canvas.height = estado.alto;
       dibujar();
+      refrescarVista();
+    }
+
+    // ---------- Lámina 3D (vista previa editable) ----------
+    function actualizarConfirmar() {
+      btnConfirmar.disabled = pendienteRecalculo || !(ultimasCorrecciones || ajustesCambiados);
+    }
+
+    async function refrescarVista() {
+      if (!estado.correccionId) return;
+      const pedido = ++pedidoVista;
+      laminaEstado.textContent = 'Actualizando…';
+      try {
+        const nueva = await Lamina.pedir(estado.correccionId, ajustes);
+        if (pedido !== pedidoVista) return;
+        vista = nueva;
+        if (seleccion && !vista.elementos.some(e => e.id === seleccion)) seleccion = null;
+        laminaEstado.textContent = pendienteRecalculo
+          ? 'Muestra la última lectura calculada: recalcula para ver tus cambios de la izquierda.'
+          : '';
+        pintarVista();
+      } catch (err) {
+        if (pedido !== pedidoVista) return;
+        laminaEstado.textContent = err.message;
+      }
+    }
+
+    function pintarVista() {
+      if (!vista) return;
+      Lamina.dibujar(laminaSvg, vista, { tinta: laminaTinta.checked, seleccionado: seleccion });
+      pintarSeleccion();
+      pintarQuitados();
+      laminaAvisos.textContent = '';
+      (vista.avisos || []).forEach(a => laminaAvisos.appendChild(crearEl('li', null, a)));
+    }
+
+    function cambiarAjustes(cambio) {
+      cambio(ajustes);
+      ajustesCambiados = true;
+      actualizarConfirmar();
+      statusEl.className = 'status';
+      statusEl.textContent = 'Cambiaste la lámina: guarda cuando esté bien.';
+      refrescarVista();
+    }
+
+    function elementoSeleccionado() {
+      return vista && seleccion ? vista.elementos.find(e => e.id === seleccion) : null;
+    }
+
+    function seleccionar(id) {
+      seleccion = id;
+      laminaSvg.querySelectorAll('.lam-el').forEach(g => g.classList.toggle('sel', g.dataset.id === id));
+      pintarSeleccion();
+    }
+
+    function pintarSeleccion() {
+      laminaSeleccion.textContent = '';
+      const e = elementoSeleccionado();
+      if (!e) {
+        laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda',
+          'Haz clic en algo de la vista previa (un texto, una curva, la leyenda) para cambiarlo o quitarlo.'));
+        return;
+      }
+      laminaSeleccion.appendChild(crearEl('h4', null, Lamina.NOMBRES[e.clase] || 'Elemento'));
+      laminaSeleccion.appendChild(crearEl('p', null, 'En la lámina dice: «' + e.texto + '»'));
+      if (e.editable && e.clave_edicion) {
+        const fila = crearEl('div', 'fila');
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        if (e.editable === 'numero') inp.inputMode = 'decimal';
+        inp.id = 'lamina-texto';
+        inp.setAttribute('aria-label', e.editable === 'numero' ? 'Valor en la lámina' : 'Texto en la lámina');
+        const clave = e.clave_edicion;
+        inp.value = ajustes.textos[clave] !== undefined ? ajustes.textos[clave] : (e.valor_edicion || '');
+        const aplicar = crearBtn('secondary small', 'Aplicar');
+        const hacer = () => {
+          const valor = inp.value.trim();
+          if (e.editable === 'numero' && !Number.isFinite(parseFloat(valor.replace(',', '.')))) {
+            laminaEstado.textContent = 'Escribe un número (por ejemplo 12,5).';
+            return;
+          }
+          cambiarAjustes(a => { a.textos[clave] = valor; });
+        };
+        aplicar.addEventListener('click', hacer);
+        inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); hacer(); } });
+        fila.append(inp, aplicar);
+        laminaSeleccion.appendChild(fila);
+      }
+      const acciones = crearEl('div', 'acciones');
+      if (e.editable && e.clave_edicion && ajustes.textos[e.clave_edicion] !== undefined) {
+        const volverTexto = crearBtn('secondary small', 'Volver al texto leído');
+        volverTexto.addEventListener('click', () => cambiarAjustes(a => { delete a.textos[e.clave_edicion]; }));
+        acciones.appendChild(volverTexto);
+      }
+      if (e.movido) {
+        const volver = crearBtn('secondary small', 'Volver a su lugar');
+        volver.addEventListener('click', () => cambiarAjustes(a => { delete a.mover[e.id]; }));
+        acciones.appendChild(volver);
+      }
+      if (e.ocultable) {
+        const quitar = crearBtn('danger small', 'Quitar de la lámina');
+        quitar.addEventListener('click', () => {
+          const id = e.id;
+          seleccion = null;
+          cambiarAjustes(a => { if (!a.ocultar.includes(id)) a.ocultar.push(id); });
+        });
+        acciones.appendChild(quitar);
+      }
+      if (acciones.childNodes.length) laminaSeleccion.appendChild(acciones);
+      if (e.movible) {
+        laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda',
+          'Arrástralo en la vista previa para moverlo, o usa las flechas del teclado (con Mayús, de a 5 mm).'));
+      } else if (e.clase === 'leyenda' && !e.ocultable) {
+        laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda',
+          'Explica una letra de la lámina: para quitarla, quita o acorta el texto que usa esa letra.'));
+      }
+    }
+
+    function pintarQuitados() {
+      laminaQuitados.textContent = '';
+      const ocultos = (vista && vista.ocultos) || [];
+      if (!ocultos.length) return;
+      laminaQuitados.appendChild(crearEl('h4', null, `Quitados de la lámina (${ocultos.length})`));
+      const ul = crearEl('ul');
+      ocultos.forEach(o => {
+        const li = crearEl('li');
+        li.appendChild(crearEl('span', null, (Lamina.NOMBRES[o.clase] || 'Elemento') + ': ' + o.texto));
+        const restaurar = crearBtn('secondary small', 'Restaurar', 'Restaurar ' + o.texto);
+        restaurar.addEventListener('click', () => cambiarAjustes(a => { a.ocultar = a.ocultar.filter(x => x !== o.id); }));
+        li.appendChild(restaurar);
+        ul.appendChild(li);
+      });
+      laminaQuitados.appendChild(ul);
+    }
+
+    function aPlaca(ev) {
+      const pt = laminaSvg.createSVGPoint();
+      pt.x = ev.clientX; pt.y = ev.clientY;
+      const p = pt.matrixTransform(laminaSvg.getScreenCTM().inverse());
+      return { x: p.x, y: vista.placa.alto_mm - p.y };
+    }
+
+    function mover(id, dx, dy) {
+      cambiarAjustes(a => {
+        const previo = a.mover[id] || [0, 0];
+        const nx = Math.round((previo[0] + dx) * 10) / 10, ny = Math.round((previo[1] + dy) * 10) / 10;
+        if (nx || ny) a.mover[id] = [nx, ny]; else delete a.mover[id];
+      });
+    }
+
+    laminaSvg.addEventListener('pointerdown', ev => {
+      if (!vista) return;
+      const g = ev.target.closest('.lam-el');
+      if (!g) { seleccionar(null); return; }
+      const e = vista.elementos.find(x => x.id === g.dataset.id);
+      seleccionar(e.id);
+      laminaSvg.focus({ preventScroll: true });
+      if (e.movible) {
+        ev.preventDefault();
+        arrastreLamina = { id: e.id, g, inicio: aPlaca(ev), dx: 0, dy: 0 };
+        laminaSvg.setPointerCapture(ev.pointerId);
+      }
+    });
+    laminaSvg.addEventListener('pointermove', ev => {
+      if (!arrastreLamina) return;
+      const p = aPlaca(ev);
+      arrastreLamina.dx = p.x - arrastreLamina.inicio.x;
+      arrastreLamina.dy = p.y - arrastreLamina.inicio.y;
+      arrastreLamina.g.setAttribute('transform', `translate(${arrastreLamina.dx} ${arrastreLamina.dy})`);
+    });
+    const soltar = () => {
+      if (!arrastreLamina) return;
+      const { id, dx, dy } = arrastreLamina;
+      arrastreLamina = null;
+      if (Math.hypot(dx, dy) > 0.3) mover(id, dx, dy);
+    };
+    laminaSvg.addEventListener('pointerup', soltar);
+    laminaSvg.addEventListener('pointercancel', soltar);
+    laminaSvg.addEventListener('keydown', ev => {
+      const e = elementoSeleccionado();
+      const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[ev.key];
+      if (!e || !e.movible || !dir) return;
+      ev.preventDefault();
+      const paso = ev.shiftKey ? 5 : 1;
+      mover(e.id, dir[0] * paso, dir[1] * paso);
+    });
+    laminaTinta.addEventListener('change', pintarVista);
+
+    // ---------- Títulos de los ejes ----------
+    function posicionTituloPorDefecto(eje) {
+      if (eje === 'x') {
+        const x = estado.ejeX ? (estado.ejeX[0] + estado.ejeX[2]) / 2 : estado.ancho / 2;
+        const y0 = estado.ejeX ? estado.ejeX[1] : estado.alto * 0.85;
+        return { px: x, py: Math.min(estado.alto - 6, y0 + estado.alto * 0.14) };
+      }
+      const y = estado.ejeY ? (estado.ejeY[1] + estado.ejeY[3]) / 2 : estado.alto / 2;
+      const x0 = estado.ejeY ? estado.ejeY[0] : estado.ancho * 0.1;
+      return { px: Math.max(6, x0 - estado.ancho * 0.08), py: y };
+    }
+
+    function tituloDesdeJson(texto, bbox, eje) {
+      if (!texto && !bbox) return null;
+      const pos = bbox
+        ? { px: bbox.px + (bbox.pw || 0) / 2, py: bbox.py + (bbox.ph || 0) / 2 }
+        : posicionTituloPorDefecto(eje);
+      return { texto: texto || '', ...pos };
+    }
+
+    function tituloDe(eje) { return eje === 'x' ? estado.tituloX : estado.tituloY; }
+    function fijarTitulo(eje, t) { if (eje === 'x') estado.tituloX = t; else estado.tituloY = t; }
+
+    function refrescarTitulos() {
+      [['x', inputTituloX], ['y', inputTituloY]].forEach(([eje, inp]) => {
+        const t = tituloDe(eje);
+        if (document.activeElement !== inp) inp.value = t ? t.texto : '';
+      });
+    }
+
+    function colocarTitulo(eje, x, y) {
+      const t = tituloDe(eje);
+      if (t) { t.px = x; t.py = y; }
+      else fijarTitulo(eje, { texto: '', px: x, py: y });
+      marcarPendiente(); dibujar(); refrescarTitulos();
+      const inp = eje === 'x' ? inputTituloX : inputTituloY;
+      ultimoInputTitulo = inp;
+      inp.focus(); inp.select();
+    }
+
+    function quitarTitulo(eje) {
+      fijarTitulo(eje, null);
+      marcarPendiente(); dibujar(); refrescarTitulos();
+    }
+
+    [['x', inputTituloX], ['y', inputTituloY]].forEach(([eje, inp]) => {
+      inp.addEventListener('focus', () => { ultimoInputTitulo = inp; });
+      inp.addEventListener('input', () => {
+        let t = tituloDe(eje);
+        if (!t) {                         // se escribió sin marcar la posición: va a la de por defecto
+          t = { texto: '', ...posicionTituloPorDefecto(eje) };
+          fijarTitulo(eje, t);
+        }
+        t.texto = inp.value;
+        marcarPendiente(); dibujar();
+      });
+    });
+    document.getElementById('editor-quitar-titulo-x').addEventListener('click', () => quitarTitulo('x'));
+    document.getElementById('editor-quitar-titulo-y').addEventListener('click', () => quitarTitulo('y'));
+
+    SIMBOLOS.forEach(simbolo => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = simbolo;
+      b.title = `Insertar ${simbolo}`;
+      b.setAttribute('aria-label', `Insertar ${simbolo}`);
+      // mousedown + preventDefault: el foco (y el cursor) se quedan en la casilla del título
+      b.addEventListener('mousedown', (ev) => ev.preventDefault());
+      b.addEventListener('click', () => {
+        const inp = ultimoInputTitulo;
+        const ini = inp.selectionStart ?? inp.value.length;
+        const fin = inp.selectionEnd ?? inp.value.length;
+        inp.value = inp.value.slice(0, ini) + simbolo + inp.value.slice(fin);
+        inp.focus();
+        inp.setSelectionRange(ini + simbolo.length, ini + simbolo.length);
+        inp.dispatchEvent(new Event('input'));
+      });
+      simbolosEl.appendChild(b);
+    });
+
+    function dibujarTitulo(ctx, t, color, letra) {
+      const r = radioPunto();
+      ctx.fillStyle = color;
+      ctx.fillRect(t.px - r, t.py - r, r * 2, r * 2);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#101114';
+      ctx.strokeRect(t.px - r, t.py - r, r * 2, r * 2);
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(r * 1.5)}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(letra, t.px, t.py + 0.5);
+
+      const texto = t.texto ? t.texto : '(sin escribir)';
+      const fs = Math.max(10, Math.round(estado.alto * 0.045));
+      ctx.font = `${t.texto ? 'bold ' : 'italic '}${fs}px sans-serif`;
+      ctx.textAlign = 'left';
+      const w = ctx.measureText(texto).width;
+      let x = t.px + r + 3;
+      if (x + w + 4 > estado.ancho) x = t.px - r - 3 - w - 4;   // no salirse por la derecha
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillRect(x, t.py - fs * 0.65, w + 4, fs * 1.3);
+      ctx.strokeStyle = color; ctx.lineWidth = 1;
+      ctx.strokeRect(x, t.py - fs * 0.65, w + 4, fs * 1.3);
+      ctx.fillStyle = t.texto ? '#101114' : '#8c2a09';
+      ctx.fillText(texto, x + 2, t.py + 0.5);
     }
 
     function pintarSelectorSeries() {
@@ -2794,6 +3356,7 @@
     }
 
     function marcarPendiente() {
+      pendienteRecalculo = true;
       btnConfirmar.disabled = true;
       statusEl.className = 'status';
       statusEl.textContent = 'Hay cambios sin recalcular todavía.';
@@ -2825,6 +3388,8 @@
         const x = estado.ejeY ? estado.ejeY[0] : 10;
         cuadrado(ctx, x, e.centro_y, r, Number.isFinite(e.valor) ? '#e8c400' : '#ff9900');
       });
+      if (estado.tituloX) dibujarTitulo(ctx, estado.tituloX, COLOR_TITULO.x, 'X');
+      if (estado.tituloY) dibujarTitulo(ctx, estado.tituloY, COLOR_TITULO.y, 'Y');
     }
 
     function cuadrado(ctx, x, y, r, color) {
@@ -2879,6 +3444,9 @@
         const x = estado.ejeY ? estado.ejeY[0] : 10;
         lista.push({ x, y: e.centro_y, set: (_, y) => { e.centro_y = y; }, esEtiquetaY: true, ref: e });
       });
+      [['x', estado.tituloX], ['y', estado.tituloY]].forEach(([eje, t]) => {
+        if (t) lista.push({ x: t.px, y: t.py, set: (x, y) => { t.px = x; t.py = y; }, esTitulo: eje });
+      });
       return lista;
     }
 
@@ -2917,6 +3485,12 @@
         enfocarUltimoInput(tablaY);
         return;
       }
+      if (modo === 'titulo-x' || modo === 'titulo-y') {
+        // un solo título por eje: el clic lo coloca (o lo mueve) y se vuelve a "Mover"
+        colocarTitulo(modo === 'titulo-x' ? 'x' : 'y', x, y);
+        seleccionarModo('mover');
+        return;
+      }
       if (modo === 'borrar') {
         const cercano = puntoMasCercano(x, y);
         if (cercano) {
@@ -2929,6 +3503,9 @@
           } else if (cercano.esEtiquetaY) {
             estado.etiquetasY = estado.etiquetasY.filter(e => e !== cercano.ref);
             refrescarTablaY();
+          } else if (cercano.esTitulo) {
+            fijarTitulo(cercano.esTitulo, null);
+            refrescarTitulos();
           }
           marcarPendiente(); dibujar();
         }
@@ -2992,7 +3569,13 @@
       dibujar();
       refrescarTablaX();
       refrescarTablaY();
+      refrescarTitulos();
       pintarSelectorSeries();
+      pendienteRecalculo = false;
+      ajustes = JSON.parse(JSON.stringify(ajustesGuardados));
+      ajustesCambiados = false;
+      actualizarConfirmar();
+      refrescarVista();
       statusEl.className = 'status'; statusEl.textContent = 'Cambios deshechos.';
     });
 
@@ -3010,14 +3593,21 @@
           eje_x: estado.ejeX, eje_y: estado.ejeY,
           etiquetas_x: etiquetasXValidas, etiquetas_y: etiquetasYValidas,
           series: estado.series.map(s => ({ puntos_px: s.puntos.map(p => [p.px, p.py]) })),
+          titulo_eje_x: estado.tituloX ? estado.tituloX.texto.trim() : '',
+          titulo_eje_y: estado.tituloY ? estado.tituloY.texto.trim() : '',
+          titulo_eje_x_pos: estado.tituloX && estado.tituloX.texto.trim()
+            ? [estado.tituloX.px, estado.tituloX.py] : null,
+          titulo_eje_y_pos: estado.tituloY && estado.tituloY.texto.trim()
+            ? [estado.tituloY.px, estado.tituloY.py] : null,
         };
         const { resp, datos: data } = await postJson(
           '/api/corregir/' + encodeURIComponent(estado.correccionId), correcciones);
         if (!resp.ok || !data.ok) throw new Error(data.error || 'Error desconocido.');
 
+        pendienteRecalculo = false;
         await cargarDesde(data);
         ultimasCorrecciones = correcciones;
-        btnConfirmar.disabled = false;
+        actualizarConfirmar();
         statusEl.className = 'status ok';
         statusEl.textContent = faltantes > 0
           ? `Recalculado (se ignoraron ${faltantes} etiqueta(s) sin valor escrito). Revisa el overlay y guarda cuando esté bien.`
@@ -3032,7 +3622,7 @@
     });
 
     btnConfirmar.addEventListener('click', async () => {
-      if (!ultimasCorrecciones) return;
+      if (!ultimasCorrecciones && !ajustesCambiados) return;
       btnConfirmar.disabled = true;
       btnRecalcular.disabled = true;
       statusEl.className = 'status';
@@ -3040,9 +3630,10 @@
         ? 'Guardando la corrección…'
         : 'Guardando y regenerando la lámina STL… puede tardar un rato.';
 
+      // la lectura corregida (si se recalculó) y lo que se cambió de la lámina
       const { resp, datos } = await postJson(
         '/api/solicitudes/' + solicitudId + '/figuras/' + indiceFigura + '/corregir',
-        ultimasCorrecciones);
+        { ...(ultimasCorrecciones || {}), ajustes_lamina: ajustes });
       btnRecalcular.disabled = false;
       if (!resp.ok || !datos.ok) {
         statusEl.className = 'status error';

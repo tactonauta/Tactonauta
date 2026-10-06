@@ -238,7 +238,7 @@ def cargar_narracion_csv(ruta):
                     "valor_x": num(fila["valor_x"]), "valor_y": num(fila["valor_y"]),
                     "texto": fila["texto"],
                 })
-            elif tipo in ("curva", "eje", "leyenda"):
+            elif tipo in ("curva", "eje", "leyenda", "texto"):
                 datos["segmentos"].append({
                     "id": fila["id"], "tipo": tipo, "serie": fila["serie"] or None,
                     "x1": num(fila["x1_mm"]), "y1": num(fila["y1_mm"]),

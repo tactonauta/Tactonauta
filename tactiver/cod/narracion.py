@@ -272,6 +272,14 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
             continue
         vals.sort()
         frases.append(f"{sujeto} {_forma(vals, (ry[1] - ry[0]) if ry else None, eje, fmt_y)}")
+
+    # Textos que en la lámina van con una letra (no entraban en su lugar).
+    abreviaturas = (diseno or {}).get("abreviaturas") or []
+    if abreviaturas:
+        frases.append(
+            "En la lámina, algunos textos van con una letra y se explican en la leyenda de abajo: "
+            + "; ".join(f"{a['identificador']}, {a['donde'] or 'texto'}: «{a['texto']}»"
+                        for a in abreviaturas) + ".")
     return " ".join(frases)
 
 
@@ -393,6 +401,37 @@ def exportar_hand_tracking(datos, diseno, descripcion):
             "texto": f"Leyenda: la textura {entrada['textura']} es {entrada['nombre']}.",
         })
 
+    # Textos escritos en la lámina (títulos, categorías, números de los ejes,
+    # valores anotados) y los que van con una letra: al tocar la "A" se
+    # narra el texto completo; al tocar un número del eje, ese número.
+    def _eje(nombre, tit):
+        tit = (tit or "").strip()
+        return f"Eje {nombre} ({tit})" if tit else f"Eje {nombre}"
+
+    for k, txt in enumerate(diseno.get("textos") or [], start=1):
+        x0, y0, x1, y1 = txt["recuadro"]
+        (ax, ay), (bx, by) = a_hoja(x0, (y0 + y1) / 2), a_hoja(x1, (y0 + y1) / 2)
+        que = {"titulo": "Título", "titulo_eje_x": "Título del eje X",
+               "titulo_eje_y": "Título del eje Y", "categoria": "Categoría",
+               "numero_x": _eje("horizontal", textos.get("titulo_eje_x")),
+               "numero_y": _eje("vertical", textos.get("titulo_eje_y")),
+               "dato": "Valor anotado junto a la curva"}.get(txt["tipo"], "Texto")
+        texto = f"{que}: {txt['texto_completo']}."
+        if txt.get("identificador"):
+            texto = f"{que}, abreviado con la letra {txt['identificador']}: {txt['texto_completo']}."
+        segmentos.append({"id": f"texto_{k}", "tipo": "texto", "serie": None,
+                          "x1": ax, "y1": ay, "x2": bx, "y2": by, "texto": texto})
+    for a in diseno.get("abreviaturas") or []:
+        if not a.get("recuadro"):
+            continue
+        x0, y0, x1, y1 = a["recuadro"]
+        (ax, ay), (bx, by) = a_hoja(x0, y1), a_hoja(x1, y0)
+        segmentos.append({
+            "id": f"leyenda_{a['identificador']}", "tipo": "leyenda", "serie": None,
+            "x1": ax, "y1": ay, "x2": bx, "y2": by,
+            "texto": f"Leyenda: {a['identificador']} es {a['texto']}.",
+        })
+
     for clave_eje, nombre_eje, tit, d0, d1, dec in (
             ("x", "horizontal", textos.get("titulo_eje_x"), dom["x_min"], dom["x_max"], dec_x),
             ("y", "vertical", textos.get("titulo_eje_y"), dom["y_min"], dom["y_max"], dec_y)):
@@ -442,7 +481,7 @@ def exportar_csv_hand_tracking(exportacion, ruta):
     (como la imagen de la cámara). Una fila por elemento, columna "tipo":
 
       placa        x2_mm/y2_mm = ancho y alto de la placa; texto = origen,
-                   esquina recortada y margen superior en blanco.
+                   esquina recortada y distribución.
       descripcion  texto = descripción completa (tecla "d" en Hand_Tracking).
       serie        una por curva: serie = nombre, texto = su textura.
       punto        x1_mm/y1_mm = dónde está; valor_x/valor_y = sus valores;
@@ -450,7 +489,13 @@ def exportar_csv_hand_tracking(exportacion, ruta):
       curva        tramo entre dos puntos de una curva (x1,y1 -> x2,y2),
                    con tendencia (aumento / disminución / estable).
       eje          el eje X o el Y, de punta a punta.
-      leyenda      una entrada de la leyenda (si la lámina la tiene).
+      texto        un texto en Braille (título, categoría, número de un eje,
+                   valor anotado): x1,y1 -> x2,y2 = su renglón; si va con una
+                   letra (A, B...), lo dice.
+      leyenda      una entrada de la leyenda de abajo: la textura de una
+                   serie o qué significa una letra (x1,y1 -> x2,y2 = su
+                   recuadro, de la esquina superior izquierda a la inferior
+                   derecha, si ocupa más de un renglón).
 
     Se guarda en UTF-8 con BOM para que Excel respete las tildes."""
     placa = exportacion["placa"]
@@ -464,7 +509,7 @@ def exportar_csv_hand_tracking(exportacion, ruta):
         w.writerow(COLUMNAS_CSV)
         w.writerow(["placa", "placa", "", 0, 0, placa["ancho_mm"], placa["alto_mm"], "", "", "",
                     f"{placa['origen']}; esquina recortada de {placa.get('chaflan_mm', 0)} mm; "
-                    f"margen superior en blanco de {placa.get('margen_superior_mm', 0)} mm"])
+                    "gráfico arriba y leyenda abajo"])
         w.writerow(["descripcion", "descripcion", "", "", "", "", "", "", "", "",
                     exportacion.get("descripcion", "")])
         for i, s in enumerate(exportacion.get("series") or [], start=1):

@@ -137,6 +137,7 @@ GET /api/salud
 import glob
 import os
 import json
+import math
 import secrets
 import shutil
 import time
@@ -154,7 +155,8 @@ from segmentador import aplicar_correcciones, procesar_imagen
 import narracion
 import pipeline_rapido
 from generador_stl import (
-    PLACA_ALTO, PLACA_ANCHO, generar_modelo_bana, generar_modelo_desde_recta,
+    _RE_AJUSTE, PLACA_ALTO, PLACA_ANCHO, aplicar_ajustes, generar_modelo_bana,
+    generar_modelo_desde_recta,
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -564,8 +566,10 @@ def _campos_figura(resultado, nombre_stl, advertencias, narracion_info):
 
 # Flujo del supervisor (en este orden):
 #   1. "Revisar"      -> /revisar: segmenta cada gráfica (sin STL todavía) y
-#                        la muestra con su descripción; se puede corregir en
-#                        la pizarra (/figuras/<i>/corregir).
+#                        la muestra con su descripción y la vista previa de
+#                        la lámina (/api/lamina/vista); se puede corregir en
+#                        la pizarra (/figuras/<i>/corregir), tanto la lectura
+#                        como lo que se imprime ("ajustes_lamina").
 #   2. Visto bueno    -> /figuras/<i>/visto-bueno, o guardar una corrección.
 #   3. "Autorizar"    -> /autorizar: solo con todas las gráficas revisadas;
 #                        genera el STL y la narración de cada una a partir de
@@ -667,7 +671,8 @@ def autorizar_solicitud(id_solicitud):
             continue
         try:
             nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
-                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
+                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"),
+                ajustes=figura.get("ajustes_lamina"))
             figura_actualizada.update(
                 _campos_figura(resultado, nombre_stl, advertencias, narracion_info))
             algun_exito = True
@@ -708,6 +713,12 @@ def corregir_figura_solicitud(id_solicitud, indice):
     correcciones = request.get_json(silent=True)
     if not isinstance(correcciones, dict):
         return jsonify({"ok": False, "error": "Se esperaba un JSON con las correcciones."}), 400
+    # "ajustes_lamina": lo que el supervisor cambió en la vista previa de la
+    # lámina (quitar, mover, cambiar textos). El resto, si viene, corrige la
+    # lectura de la gráfica y obliga a volver a calcularla.
+    hay_ajustes = "ajustes_lamina" in correcciones
+    ajustes = _ajustes_validos(correcciones.pop("ajustes_lamina", None)) if hay_ajustes \
+        else figura.get("ajustes_lamina")
 
     ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
     ruta_json = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("correccion_id") or ""))
@@ -719,14 +730,22 @@ def corregir_figura_solicitud(id_solicitud, indice):
         }), 404
 
     try:
-        resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
-                                         ruta_json_original=ruta_json)
+        if correcciones:
+            resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
+                                             ruta_json_original=ruta_json)
+        else:
+            # solo cambió la lámina: la lectura guardada sigue valiendo
+            resultado = _resultado_guardado(figura["correccion_id"])
+            if resultado is None:
+                raise ValueError("Los archivos de esta figura ya no están en el servidor.")
         if en_revision:
             campos = {**_campos_revision(resultado, figura.get("pie_figura")), "revisada": True}
         else:
             nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
-                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"))
+                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"), ajustes=ajustes)
             campos = _campos_figura(resultado, nombre_stl, advertencias, narracion_info)
+        if hay_ajustes:
+            campos["ajustes_lamina"] = ajustes
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     except Exception as e:
@@ -801,7 +820,7 @@ def _segmentar_para_revision(figura):
     return figura
 
 
-_CAMPOS_SEGMENTACION = ("resumen", "advertencias", "csv_url", "overlay_url", "json_url",
+_CAMPOS_SEGMENTACION = ("ajustes_lamina", "resumen", "advertencias", "csv_url", "overlay_url", "json_url",
                         "correccion_id", "descripcion", "revisada", "error")
 
 
@@ -1030,7 +1049,7 @@ def _payload_stl(resultado):
 
 def crear_stl_desde_resultado(
     resultado, prefijo="grafica", dim_x=PLACA_ANCHO, dim_y=PLACA_ALTO, incluir_etiquetas=True,
-    pie_figura=None,
+    pie_figura=None, ajustes=None,
 ):
     """Convierte una segmentación ya hecha en una placa táctil STL, y escribe
     al lado su narración para Hand_Tracking (ver narracion.py).
@@ -1041,11 +1060,15 @@ def crear_stl_desde_resultado(
     False sale solo la forma (ejes, marcas y curvas), con el mismo espacio
     reservado.
 
-    Sin leyenda por ahora (en A5 le quitaba demasiado alto al gráfico): qué
-    textura es cada curva lo dice la descripción narrada.
+    Placa de 22 x 22 cm: el gráfico va arriba y la leyenda abajo (la textura
+    de cada curva, con 2 o más, y el texto completo de lo que no entraba en
+    su lugar y se escribió como "A", "B"...).
 
     `pie_figura`: el "Figura N. ..." que /api/clasificar encontró junto a la
     figura en el PDF; abre la descripción narrada.
+
+    `ajustes`: lo que el supervisor cambió en la vista previa de la lámina
+    (ver generador_stl.aplicar_ajustes); la narración usa los mismos textos.
 
     Devuelve (nombre_stl, advertencias, narracion), con narracion =
     {"descripcion": texto, "nombre": archivo JSON para Hand_Tracking}.
@@ -1058,6 +1081,7 @@ def crear_stl_desde_resultado(
             "El segmentador no encontró ninguna curva en la imagen: no hay nada "
             "que llevar a la lámina táctil."
         )
+    payload, _ = aplicar_ajustes(payload, ajustes)
 
     advertencias = list(resultado.get("advertencias") or [])
     if not (resultado.get("resumen") or {}).get("listo_para_stl"):
@@ -1083,6 +1107,7 @@ def crear_stl_desde_resultado(
         archivo_salida=os.path.join(STL_DIR, nombre),
         incluir_etiquetas=incluir_etiquetas,
         diseno=diseno,
+        ajustes=ajustes,
     )
     advertencias.extend(diseno.get("avisos") or [])
 
@@ -1433,6 +1458,65 @@ def procesar():
 # (ejes, etiquetas, puntos de la curva) y se recalcula CSV/JSON/overlay.
 # El id es el nombre del JSON de un resultado anterior (`correccion_id`).
 # ------------------------------------------------------------------
+LARGO_MAX_TEXTO_LAMINA = 300
+
+
+def _ajustes_validos(ajustes):
+    """Ajustes de la lámina que manda el navegador, limpios: solo claves de
+    elementos conocidos, textos acotados y desplazamientos dentro de la placa."""
+    if not isinstance(ajustes, dict):
+        return {}
+    limpio = {"textos": {}, "ocultar": [], "mover": {}}
+    for clave, valor in (ajustes.get("textos") or {}).items() if isinstance(ajustes.get("textos"), dict) else ():
+        if _RE_AJUSTE.fullmatch(str(clave)) and isinstance(valor, (str, int, float)):
+            limpio["textos"][str(clave)] = str(valor).strip()[:LARGO_MAX_TEXTO_LAMINA]
+    for clave in ajustes.get("ocultar") or [] if isinstance(ajustes.get("ocultar"), list) else ():
+        if _RE_AJUSTE.fullmatch(str(clave)) and str(clave) not in limpio["ocultar"]:
+            limpio["ocultar"].append(str(clave))
+    for clave, d in (ajustes.get("mover") or {}).items() if isinstance(ajustes.get("mover"), dict) else ():
+        try:
+            dx, dy = float(d[0]), float(d[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
+        if _RE_AJUSTE.fullmatch(str(clave)) and math.isfinite(dx) and math.isfinite(dy) and (dx or dy):
+            limite = max(PLACA_ANCHO, PLACA_ALTO)
+            limpio["mover"][str(clave)] = [max(-limite, min(limite, dx)), max(-limite, min(limite, dy))]
+    return limpio
+
+
+# Vista previa de la lámina ANTES de generar el STL: la misma distribución
+# que tendrá la impresión (generador_stl en modo vista previa, sin armar las
+# mallas), con los ajustes del supervisor. `correccion_id` es el JSON de la
+# lectura: la guardada en la figura o la recién recalculada en la pizarra.
+@app.route("/api/lamina/vista", methods=["POST"])
+def vista_lamina():
+    if session.get("rol") != "supervisor":
+        return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
+    datos = request.get_json(silent=True) or {}
+    resultado = _resultado_guardado(datos.get("correccion_id"))
+    if resultado is None:
+        return jsonify({"ok": False, "error": "No se encontró la lectura de esta gráfica (pudo "
+                                              "reiniciarse el servidor). Vuelve a revisarla."}), 404
+    ajustes = _ajustes_validos(datos.get("ajustes"))
+    payload, series_ocultas = aplicar_ajustes(_payload_stl(resultado), ajustes)
+    diseno = {}
+    try:
+        generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
+                                   diseno=diseno, ajustes=ajustes)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({
+        "ok": True,
+        "placa": diseno["placa"],
+        "zonas": diseno["zonas"],
+        "area": diseno["area"],
+        "elementos": diseno["elementos"],
+        "ocultos": series_ocultas + diseno["ocultos"],
+        "avisos": diseno["avisos"],
+        "ajustes": ajustes,
+    })
+
+
 @app.route("/api/corregir/<path:correccion_id>", methods=["POST"])
 def corregir(correccion_id):
     correcciones = request.get_json(silent=True)

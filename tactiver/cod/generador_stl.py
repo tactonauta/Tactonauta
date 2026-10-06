@@ -23,20 +23,26 @@ pico y ~2s — la sobrecarga era enteramente del kernel CAD, no de la
 geometría en sí.
 """
 
+import copy
 import math
+import re
 import unicodedata
 from math import atan2, degrees, hypot
 
 import numpy as np
 from stl import mesh
 
+# Tabla y medidas Braille: una sola fuente para todo el proyecto (braille.py,
+# el módulo "braille2" adaptado). Incluye el signo de mayúscula, las letras
+# propias del español (á, é, í, ó, ú, ü, ñ) y el reemplazo de etiquetas
+# largas por identificadores (A, B, C...) explicados en la leyenda.
+from braille import (BRAILLE, CELDA_PITCH, DIAM_PUNTO_BRAILLE, ESPACIADO_BRAILLE,
+                     Abreviador, ancho_braille, partir_en_renglones, texto_a_celdas)
+
 # =============================================================================
 # CONSTANTES
 # =============================================================================
 BASE_THICKNESS = 1.5
-ESPACIADO_BRAILLE = 2.4
-DIAM_PUNTO_BRAILLE = 1.5
-CELDA_PITCH = 6.2
 CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
 RELIEVE_TICK = 1.0
@@ -48,6 +54,9 @@ MARGEN_BORDE = 25.0
 # diámetro), y la separación de BANA entre elementos Braille no relacionados
 # es CLEARANCE_BRAILLE. Se usan para reservar espacio para títulos.
 ALTURA_FILA_BRAILLE = ESPACIADO_BRAILLE * 2 + DIAM_PUNTO_BRAILLE
+# Distancia entre renglones seguidos de un mismo bloque de texto (títulos
+# apilados, renglones de la leyenda): el interlineado Braille habitual.
+INTERLINEA_BRAILLE = 10.0
 
 # Patrón "rayado" (serie 2): largo del tramo dibujado y del hueco, en mm.
 RAYA_LARGO = 6.0
@@ -82,35 +91,6 @@ CILINDRO_LADOS = 16
 # (se resta del punto de partida y se suma a la altura, así que lo que
 # sobresale por encima de la superficie mide exactamente lo mismo).
 SOLAPE = 0.15
-
-LETRAS = {
-    "a": [1], "b": [1, 2], "c": [1, 4], "d": [1, 4, 5], "e": [1, 5],
-    "f": [1, 2, 4], "g": [1, 2, 4, 5], "h": [1, 2, 5], "i": [2, 4],
-    "j": [2, 4, 5], "k": [1, 3], "l": [1, 2, 3], "m": [1, 3, 4],
-    "n": [1, 3, 4, 5], "o": [1, 3, 5], "p": [1, 2, 3, 4],
-    "q": [1, 2, 3, 4, 5], "r": [1, 2, 3, 5], "s": [2, 3, 4],
-    "t": [2, 3, 4, 5], "u": [1, 3, 6], "v": [1, 2, 3, 6],
-    "w": [2, 4, 5, 6], "x": [1, 3, 4, 6], "y": [1, 3, 4, 5, 6],
-    "z": [1, 3, 5, 6],
-}
-_ORDEN_DIGITOS = list("abcdefghij")
-
-BRAILLE = dict(LETRAS)
-BRAILLE["numeral"] = [3, 4, 5, 6]   # signo de número
-BRAILLE["menos"] = [3, 6]
-# Coma decimal del Braille español (punto 2): "12,5" = numeral 1 2 , 5.
-# (La clave se sigue llamando "punto" por compatibilidad con el resto del
-# código.) Antes era el punto decimal Nemeth (puntos 4-6).
-BRAILLE["punto"] = [2]
-# Dígitos del Braille ESPAÑOL (Signografía de la ONCE / CBE, la que se usa en
-# el Perú): el signo de número seguido de las letras a-j en la parte ALTA de
-# la celda (1 = a = punto 1, 2 = b = puntos 1-2, ... 0 = j). Antes se usaban
-# los dígitos Nemeth, que van en la parte BAJA de la celda (1 = punto 2...):
-# impresos se leían "corridos una línea hacia abajo" y no eran los números
-# que un lector de Braille español espera.
-for _n, _letra in enumerate(_ORDEN_DIGITOS, start=1):
-    BRAILLE[str(_n % 10)] = list(LETRAS[_letra])
-
 
 # ============================================================
 # GENERADORES DE MALLA (numpy puro, sin kernel CAD)
@@ -263,8 +243,13 @@ def agregar_punto_braille(piezas, cx, cy):
     nace centrada exactamente en la superficie de la placa (mitad adentro,
     mitad afuera), así que ya queda bien anclada sin necesitar ningún
     boolean.
+
+    Lo que se agrega es la descripción de la pieza (una "primitiva"), no su
+    malla: la malla se arma recién al exportar (`_malla_de`). Así la misma
+    distribución sirve para la vista previa de la lámina sin el costo de
+    triangular todo.
     """
-    piezas.append(_malla_esfera(DIAM_PUNTO_BRAILLE / 2, cx=cx, cy=cy, cz=BASE_THICKNESS))
+    piezas.append({"t": "p", "x": float(cx), "y": float(cy)})
 
 
 def agregar_caracter_braille(piezas, caracter, cx, cy):
@@ -418,7 +403,16 @@ def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
     if largo < 1e-6:
         return
 
-    angulo = degrees(atan2(dy, dx))
+    piezas.append({"t": "s", "a": (x0, y0), "b": (x1, y1),
+                   "d": float(diametro), "h": float(altura)})
+
+
+def _malla_segmento(p0, p1, diametro, altura):
+    """Malla de un tramo en relieve: el cuerpo y las dos tapas redondas."""
+    x0, y0 = p0
+    x1, y1 = p1
+    largo = hypot(x1 - x0, y1 - y0)
+    angulo = degrees(atan2(y1 - y0, x1 - x0))
 
     mx = (x0 + x1) / 2
     my = (y0 + y1) / 2
@@ -431,10 +425,7 @@ def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
 
     tapa0 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x0, cy=y0, z0=z0)
     tapa1 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x1, cy=y1, z0=z0)
-
-    piezas.append(cuerpo)
-    piezas.append(tapa0)
-    piezas.append(tapa1)
+    return np.concatenate([cuerpo, tapa0, tapa1], axis=0)
 
 
 def agregar_punto_relieve(piezas, punto, diametro, altura):
@@ -442,10 +433,31 @@ def agregar_punto_relieve(piezas, punto, diametro, altura):
     "punteado" para distinguir una tercera serie al tacto). Ver `SOLAPE`
     en `agregar_segmento_relieve`."""
     x, y = float(punto[0]), float(punto[1])
-    piezas.append(_malla_cilindro(
-        float(diametro) / 2, float(altura) + SOLAPE,
-        cx=x, cy=y, z0=BASE_THICKNESS - SOLAPE,
-    ))
+    piezas.append({"t": "b", "x": x, "y": y, "d": float(diametro), "h": float(altura)})
+
+
+def _malla_de(pieza):
+    """Malla de una primitiva (ver agregar_punto_braille); una malla ya
+    armada pasa tal cual."""
+    if not isinstance(pieza, dict):
+        return pieza
+    if pieza["t"] == "p":
+        return _malla_esfera(DIAM_PUNTO_BRAILLE / 2, cx=pieza["x"], cy=pieza["y"], cz=BASE_THICKNESS)
+    if pieza["t"] == "s":
+        return _malla_segmento(pieza["a"], pieza["b"], pieza["d"], pieza["h"])
+    return _malla_cilindro(pieza["d"] / 2, pieza["h"] + SOLAPE,
+                           cx=pieza["x"], cy=pieza["y"], z0=BASE_THICKNESS - SOLAPE)
+
+
+def _primitiva_json(pieza):
+    """Primitiva para la vista previa del navegador (mm, 2 decimales)."""
+    r = lambda v: round(float(v), 2)  # noqa: E731
+    if pieza["t"] == "s":
+        return {"t": "s", "a": [r(pieza["a"][0]), r(pieza["a"][1])],
+                "b": [r(pieza["b"][0]), r(pieza["b"][1])], "d": r(pieza["d"])}
+    if pieza["t"] == "b":
+        return {"t": "b", "x": r(pieza["x"]), "y": r(pieza["y"]), "d": r(pieza["d"])}
+    return {"t": "p", "x": r(pieza["x"]), "y": r(pieza["y"])}
 
 
 def _puntos_espaciados(puntos, distancia_min):
@@ -634,12 +646,21 @@ EJE_X_ESTILO = {
 EJE_Y_ESTILO = dict(EJE_X_ESTILO)
 
 
-# Leyenda (solo con 2+ series): cada entrada es una muestra corta de la
-# textura de la serie + su nombre en Braille, en filas arriba del gráfico.
+# Leyenda, en la parte de ABAJO de la placa. Dos clases de entradas:
+#  - con 2+ series, una muestra corta de la textura de cada serie + su nombre;
+#  - cada texto que no entraba en su lugar y se escribió como "A", "B"...:
+#    el identificador + el texto completo.
+# Un texto largo sigue en el renglón de abajo (con sangría), nunca se recorta.
 LEYENDA_MUESTRA = 16.0   # largo de la muestra de textura (mm)
 LEYENDA_HUECO = 4.0      # de la muestra al texto
-LEYENDA_ENTRE = 8.0      # entre dos entradas de la misma fila
-LEYENDA_MARGEN = 8.0     # borde izquierdo/derecho de la placa
+LEYENDA_ENTRE = 15.0     # entre dos entradas del mismo renglón (más que un espacio)
+
+# El área del gráfico conserva la proporción alto/ancho del original (una
+# pendiente se siente igual que se ve), pero nunca más chata que esto.
+PROPORCION_MIN = 0.5
+# Alto mínimo del área del gráfico: si la leyenda no deja tanto, se acorta
+# la leyenda (y se avisa), no el gráfico.
+ALTO_PLOT_MIN = 60.0
 
 
 # Margen libre en los cuatro bordes de la placa. El conjunto (números del
@@ -717,64 +738,140 @@ def nombre_de_serie(nombre, indice):
 
 
 def _celdas_braille_mixto(texto):
-    """Celdas Braille de un texto con letras y números: cada tramo de
-    dígitos lleva delante el signo numeral (a diferencia de
-    `_sanear_texto_braille`, pensada para títulos). Lo que no está en la
-    tabla (puntuación, símbolos) se omite en vez de dejar celdas vacías."""
-    texto = _sanear_texto_braille(texto)
-    celdas = []
-    anterior_digito = False
-    for ch in texto:
-        if ch.isdigit():
-            if not anterior_digito:
-                celdas.append("numeral")
-            celdas.append(ch)
-            anterior_digito = True
-        elif ch in LETRAS or ch == " ":
-            if ch == " " and (not celdas or celdas[-1] == " "):
+    """Celdas Braille de un texto con letras y números (braille.texto_a_celdas:
+    signo numeral delante de cada número, signo de mayúscula, letras con
+    tilde del español). Lo que no está en la tabla se omite."""
+    return texto_a_celdas(texto)
+
+
+def _texto_diseno(tipo, rotulo, recuadro):
+    """Entrada de diseno["textos"]: un texto escrito en la placa."""
+    return {
+        "tipo": tipo,
+        "texto": rotulo["texto_stl"],              # lo que dice el Braille
+        "texto_completo": rotulo["texto_original"],
+        "identificador": rotulo["identificador"],  # None si está completo
+        "recuadro": list(recuadro),
+    }
+
+
+def _rotulo_simple(texto):
+    """Un texto escrito completo (sin letra de la leyenda), como los que
+    devuelve braille.Abreviador.procesar."""
+    return {"texto_stl": texto, "texto_original": texto, "identificador": None}
+
+
+def _texto_numero(valor, decimales):
+    """Cómo se lee en tinta un número tal como queda en Braille ("-1,5")."""
+    es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
+    return ("-" if es_negativo else "") + entero + ("," + frac if frac else "")
+
+
+# Ajustes del supervisor sobre la lámina (vista previa, antes del STL):
+#   {"textos":  {id: texto nuevo},   títulos, categorías, nombres de serie,
+#                                    valores anotados
+#    "ocultar": [id, ...],            lo que no se imprime
+#    "mover":   {id: [dx, dy] mm}}    textos corridos de su lugar
+# Los id son los de diseno["elementos"]: "titulo", "titulo_eje_x",
+# "titulo_eje_y", "num_x_3", "num_y_0", "cat_2", "dato_1", "serie_0",
+# "leyenda_serie_1"... (el número es la posición en el JSON del segmentador,
+# así no cambia aunque se oculte otra cosa).
+_RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie)_\d+)")
+
+
+def aplicar_ajustes(datos, ajustes):
+    """Copia de la entrada del generador con los textos cambiados y sin las
+    series ocultas. Devuelve (datos, ocultas): `ocultas` describe las series
+    que se sacaron, para poder mostrarlas y restaurarlas.
+
+    Los cambios de texto van acá (y no en el generador) para que la
+    narración diga lo mismo que la lámina."""
+    if not ajustes or not isinstance(datos, dict):
+        return datos, []
+    datos = copy.deepcopy(datos)
+    textos = datos["textos"] = dict(datos.get("textos") or {})
+    series = datos.get("series") or []
+    cambios = ajustes.get("textos") or {}
+    for clave, valor in cambios.items():
+        valor = str(valor).strip()
+        if clave in ("titulo", "titulo_eje_x", "titulo_eje_y"):
+            textos[clave] = valor
+            continue
+        m = re.fullmatch(r"(cat|dato|serie)_(\d+)", clave)
+        if not m:
+            continue
+        tipo, i = m.group(1), int(m.group(2))
+        if tipo == "cat" and i < len(textos.get("categorias_x") or []) and valor:
+            cats = list(textos["categorias_x"])
+            cats[i] = valor
+            textos["categorias_x"] = cats
+        elif tipo == "dato" and i < len(textos.get("etiquetas_dato") or []):
+            try:
+                numero = float(valor.replace(",", "."))
+            except ValueError:
                 continue
-            celdas.append(ch)
-            anterior_digito = False
-    while celdas and celdas[-1] == " ":
-        celdas.pop()
-    return celdas
+            if math.isfinite(numero):
+                etiquetas = [dict(e) for e in textos["etiquetas_dato"]]
+                etiquetas[i]["valor"] = numero
+                textos["etiquetas_dato"] = etiquetas
+        elif tipo == "serie" and i < len(series):
+            series[i] = {**series[i], "nombre": valor}
+
+    ocultar = set(ajustes.get("ocultar") or [])
+    ocultas = []
+    if series:
+        visibles = []
+        for i, s in enumerate(series):
+            s = {**s, "_id": i}
+            if f"serie_{i}" in ocultar:
+                ocultas.append({"id": f"serie_{i}", "clase": "serie",
+                                "texto": nombre_de_serie(s.get("nombre"), i)})
+            else:
+                visibles.append(s)
+        if not any(len(s.get("puntos") or []) >= 2 for s in visibles):
+            # no se puede quitar TODAS las curvas: queda la lámina vacía
+            visibles, ocultas = [{**s, "_id": i} for i, s in enumerate(series)], []
+        datos["series"] = visibles
+    return datos, ocultas
 
 
-def _recortar_celdas(celdas, maximo):
-    """Recorta a `maximo` celdas cortando en un espacio si se puede: partir
-    una palabra, y sobre todo un número ("2023" -> "202"), cambia lo que dice."""
-    if len(celdas) <= maximo:
-        return celdas
-    celdas = celdas[:max(0, maximo)]
-    if " " in celdas:
-        celdas = celdas[:len(celdas) - celdas[::-1].index(" ")]
-    while celdas and celdas[-1] in (" ", "numeral"):
-        celdas.pop()
-    return celdas
+def _armar_leyenda(series, abreviaturas, ancho):
+    """Reparte la leyenda en renglones de `ancho` mm.
 
+    `series`: [(índice, nombre)] -> muestra de textura + nombre.
+    `abreviaturas`: entradas de braille.Abreviador.leyenda -> "A texto".
 
-def _ancho_entrada(celdas):
-    return LEYENDA_MUESTRA + LEYENDA_HUECO + len(celdas) * CELDA_PITCH
-
-
-def _distribuir_leyenda(nombres, ancho_disponible):
-    """Reparte las entradas de la leyenda en filas, en orden, pasando a una
-    fila nueva cuando la siguiente no entra completa: se prefiere gastar una
-    fila más que recortar un nombre. Solo se recorta un nombre que no entra
-    ni ocupando una fila entera. Devuelve una lista de filas; cada fila es
-    una lista de (índice de serie, celdas Braille)."""
-    max_celdas = int((ancho_disponible - LEYENDA_MUESTRA - LEYENDA_HUECO) // CELDA_PITCH)
-    filas, ocupado = [], None
-    for i, nombre in enumerate(nombres):
-        celdas = _recortar_celdas(_celdas_braille_mixto(nombre), max_celdas)
-        ancho = _ancho_entrada(celdas)
-        if filas and ocupado + LEYENDA_ENTRE + ancho <= ancho_disponible:
-            filas[-1].append((i, celdas))
-            ocupado += LEYENDA_ENTRE + ancho
-        else:
-            filas.append([(i, celdas)])
-            ocupado = ancho
-    return filas
+    Las entradas que entran en un renglón lo comparten (en orden, separadas
+    por LEYENDA_ENTRE); una que no entra ni en un renglón entero sigue en
+    los de abajo, con sangría. Devuelve una lista de renglones; cada renglón
+    es una lista de piezas {"dx" (desde el borde izquierdo de la zona),
+    "serie" (índice si lleva muestra, si no None), "prefijo" (celdas del
+    identificador o None), "sangria" (mm del inicio a la primera celda de
+    texto), "celdas", "entrada" (posición en series + abreviaturas)}."""
+    entradas = [("serie", i, LEYENDA_MUESTRA + LEYENDA_HUECO, None, _celdas_braille_mixto(nombre))
+                for i, nombre in series]
+    entradas += [("abreviatura", None, (len(a["celdas_identificador"]) + 1) * CELDA_PITCH,
+                  a["celdas_identificador"], a["celdas_texto"]) for a in abreviaturas]
+    renglones, ocupado = [], None
+    for k, (tipo, serie, sangria, prefijo, celdas) in enumerate(entradas):
+        max_celdas = int((ancho - sangria - ESPACIADO_BRAILLE - DIAM_PUNTO_BRAILLE) // CELDA_PITCH) + 1
+        partes = partir_en_renglones(celdas, max_celdas) or [[]]
+        ancho_primera = sangria + ancho_braille(partes[0])
+        primera = {"dx": 0.0, "serie": serie, "prefijo": prefijo, "sangria": sangria,
+                   "celdas": partes[0], "entrada": k}
+        if (len(partes) == 1 and renglones and ocupado is not None
+                and ocupado + LEYENDA_ENTRE + ancho_primera <= ancho):
+            primera["dx"] = ocupado + LEYENDA_ENTRE
+            renglones[-1].append(primera)
+            ocupado += LEYENDA_ENTRE + ancho_primera
+            continue
+        renglones.append([primera])
+        ocupado = ancho_primera
+        for parte in partes[1:]:
+            renglones.append([{"dx": sangria, "serie": None, "prefijo": None, "sangria": 0.0,
+                               "celdas": parte, "entrada": k}])
+            ocupado = None   # tras un texto partido no se comparte el renglón
+    return renglones
 
 
 def _linea_recta(p0, p1, paso):
@@ -865,7 +962,8 @@ def _ensamblar(base, piezas):
     arreglo de triángulos, con una simple concatenación de numpy — nada de
     boolean/CSG (ver la nota al principio del archivo sobre por qué no hace
     falta)."""
-    trozos = [base] + [p for p in piezas if p is not None and len(p)]
+    trozos = [base] + [m for m in (_malla_de(p) for p in piezas if p is not None)
+                       if m is not None and len(m)]
     return np.concatenate(trozos, axis=0)
 
 
@@ -1014,11 +1112,11 @@ def _ancho_numero(valor, decimales=0):
 
 
 # Formato de la lámina: placa cuadrada de 22 x 22 cm con la esquina superior
-# derecha recortada (orientación al tacto); el gráfico ocupa solo la parte de
-# ABAJO y los 6 cm de arriba quedan en blanco.
+# derecha recortada (orientación al tacto). El gráfico va ARRIBA (con sus
+# títulos, números y rótulos) y lo que sobra abajo es para la leyenda.
 PLACA_ANCHO = 220.0
 PLACA_ALTO = 220.0
-PLACA_MARGEN_SUPERIOR = 60.0
+PLACA_MARGEN_SUPERIOR = 0.0   # franja extra en blanco arriba (además de MARGEN_PLACA)
 PLACA_CHAFLAN = 10.0
 
 
@@ -1028,10 +1126,11 @@ def generar_modelo_desde_recta(
     dim_y=PLACA_ALTO,
     archivo_salida="grafica_tactil.stl",
     incluir_etiquetas=False,
-    incluir_leyenda=False,
+    incluir_leyenda=True,
     diseno=None,
     margen_superior=PLACA_MARGEN_SUPERIOR,
     chaflan=PLACA_CHAFLAN,
+    ajustes=None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -1067,28 +1166,42 @@ def generar_modelo_desde_recta(
 
     `incluir_etiquetas=True` además escribe en Braille los valores que el
     gráfico original tenía anotados junto a la curva ("etiquetas de dato"),
-    en su lugar, corridos lo justo para no pisar ninguna curva.
+    en su lugar, corridos lo justo para no pisar ninguna curva. Un texto que
+    no entra en su lugar (un título muy largo, una categoría más ancha que
+    el espacio entre marcas) se escribe como "A", "B"... y su texto completo
+    va a la leyenda de abajo (braille.Abreviador).
 
-    `incluir_leyenda` (por defecto False, desactivada por ahora: en A5 le
-    quita demasiado alto al gráfico): con 2 o más series, agrega arriba
-    una leyenda con una muestra de la textura de cada serie y su nombre en
-    Braille. Sin ella, qué textura es cada serie lo dice la narración.
+    Distribución: el gráfico (títulos, números, ejes y curvas) va ARRIBA,
+    con la proporción alto/ancho del original; lo que sobra abajo es la
+    leyenda.
 
-    `margen_superior` (mm): franja de arriba que queda en blanco; todo el
-    gráfico (títulos, números, ejes y curvas) va en la parte de abajo.
+    `incluir_leyenda` (por defecto True): con 2 o más series, la leyenda de
+    abajo empieza con una muestra de la textura de cada serie y su nombre.
+
+    `margen_superior` (mm): franja extra en blanco arriba (0 por defecto).
     `chaflan` (mm): lado del triángulo recortado en la esquina superior
     derecha de la placa (0 = sin recorte).
 
     `diseno`: si se pasa un dict, se llena con dónde quedó cada cosa en la
     placa (mm, origen abajo a la izquierda) y la escala usada. Lo usa
     narracion.py para que un programa de narración sepa qué hay bajo el dedo.
+    También trae "elementos": cada cosa en relieve (textos, ejes, curvas,
+    leyenda) con sus primitivas, para dibujar la vista previa.
+
+    `archivo_salida=None`: solo vista previa, se llena `diseno` sin armar
+    las mallas ni escribir el STL (mucho más rápido).
+
+    `ajustes`: lo que el supervisor cambió en la vista previa ("ocultar" y
+    "mover"; los cambios de texto y las series ocultas se aplican antes,
+    con aplicar_ajustes).
     """
 
     if dim_x < 130 or dim_y < 90:
         raise ValueError(
             "La placa debe medir al menos 130 x 90 mm."
         )
-    # Alto que puede usar el gráfico: todo menos la franja de arriba en blanco.
+    # Alto que pueden usar el gráfico y la leyenda: todo menos la franja de
+    # arriba en blanco.
     alto_util = dim_y - margen_superior
     if alto_util < 90:
         raise ValueError(
@@ -1127,9 +1240,28 @@ def generar_modelo_desde_recta(
     # leídas por OCR ("textos" del JSON del segmentador). Con el formato
     # antiguo (lista de puntos) no hay nada de esto disponible.
     textos = resultado.get("textos") or {}
-    titulo_grafico = (textos.get("titulo") or "").strip()
-    titulo_eje_x_txt = (textos.get("titulo_eje_x") or "").strip()
-    titulo_eje_y_txt = (textos.get("titulo_eje_y") or "").strip()
+
+    ajustes = ajustes or {}
+    ocultos = set(ajustes.get("ocultar") or [])
+    movidos = {}
+    for clave, d in (ajustes.get("mover") or {}).items():
+        try:
+            movidos[clave] = (float(d[0]), float(d[1]))
+        except (TypeError, ValueError, IndexError):
+            pass
+    ocultos_info = []   # lo que no se imprime por decisión del supervisor
+
+    def _titulo_visible(clave, texto, clase):
+        # un título oculto ni siquiera reserva su renglón: el gráfico crece
+        texto = (texto or "").strip()
+        if texto and clave in ocultos:
+            ocultos_info.append({"id": clave, "clase": clase, "texto": texto})
+            return ""
+        return texto
+
+    titulo_grafico = _titulo_visible("titulo", textos.get("titulo"), "titulo")
+    titulo_eje_x_txt = _titulo_visible("titulo_eje_x", textos.get("titulo_eje_x"), "titulo_eje")
+    titulo_eje_y_txt = _titulo_visible("titulo_eje_y", textos.get("titulo_eje_y"), "titulo_eje")
 
     # ================================================================
     # 2. OBTENER LAS SERIES
@@ -1139,19 +1271,22 @@ def generar_modelo_desde_recta(
 
         series_puntos = []
         nombres_leidos = []
+        ids_series = []    # posición en el JSON original (ver aplicar_ajustes)
 
-        for serie in series:
+        for k, serie in enumerate(series):
 
             puntos = serie.get("puntos", [])
 
             if isinstance(puntos, list) and len(puntos) >= 2:
                 series_puntos.append(puntos)
                 nombres_leidos.append(serie.get("nombre"))
+                ids_series.append(serie.get("_id", k))
 
     elif puntos_legacy:
 
         series_puntos = [puntos_legacy]
         nombres_leidos = [None]
+        ids_series = [0]
 
     else:
 
@@ -1386,69 +1521,143 @@ def generar_modelo_desde_recta(
     decimales_y = _decimales_necesarios(reales_y) if reales_y else 0
 
     # ================================================================
-    # 6b. DISTRIBUCIÓN EN LA PLACA: el gráfico ocupa todo el espacio
+    # 6b. DISTRIBUCIÓN EN LA PLACA: gráfico ARRIBA, leyenda ABAJO
     # ================================================================
-    # El conjunto (números y títulos + gráfico) llena la placa con
-    # MARGEN_PLACA en cada borde, sin espacio muerto:
+    # Horizontal: el gráfico llena el ancho con MARGEN_PLACA en cada borde:
     #   izquierda: números del eje Y + separación BANA hasta el eje;
-    #   derecha:   el gráfico llega hasta el margen, salvo lo justo para que
-    #              el último rótulo del eje X (centrado en su valor) no se
-    #              salga de la placa;
-    #   abajo:     fila de rótulos del eje X + fila del título del eje X;
-    #   arriba:    una fila por título (eje Y y gráfico) y por fila de leyenda.
-    # (La versión anterior dejaba el recuadro en el centro exacto de la
-    # placa, y al imprimir quedaba espacio sin usar a la derecha, del ancho
-    # de la columna de números del eje Y.)
+    #   derecha:   hasta el margen, salvo lo justo para que el último rótulo
+    #              del eje X (centrado en su valor) no se salga de la placa.
+    # Vertical, de arriba hacia abajo:
+    #   título del gráfico y título del eje Y (un renglón cada uno);
+    #   área del gráfico, con la proporción alto/ancho del original;
+    #   rótulos del eje X y título del eje X;
+    #   leyenda (texturas de las series y textos abreviados), en lo que sobra.
+    #
+    # Un texto que no entra en su lugar se escribe como "A", "B"... y su
+    # texto completo va a la leyenda (braille.Abreviador). Las letras se
+    # asignan en orden de lectura: título, eje Y, categorías, eje X.
     #
     # Eje X de categorías ("Ene", "Feb"...): el valor i del eje es la
     # categoría i, y en la placa se escribe su nombre en vez del número.
 
-    fila_reservada = ALTURA_FILA_BRAILLE + CLEARANCE_BRAILLE
     categorias_x = [str(c) for c in (textos.get("categorias_x") or [])]
+    ancho_texto = dim_x - 2 * MARGEN_PLACA     # un renglón de lado a lado
 
-    def _celdas_rotulo_x(valor):
-        i = int(round(valor))
-        if categorias_x and abs(valor - i) <= 0.25 and 0 <= i < len(categorias_x):
-            return _celdas_braille_mixto(categorias_x[i])
-        return _celdas_numero(valor, decimales_x)
-
-    celdas_x = [_celdas_rotulo_x(v) for v in reales_x]
     celdas_y = [_celdas_numero(v, decimales_y) for v in reales_y]
-    anchos_x = [_ancho_celdas(len(c)) for c in celdas_x]
     anchos_y = [_ancho_celdas(len(c)) for c in celdas_y]
-
     ancho_numeros_y = max(anchos_y, default=0.0)
     bloque_izquierdo = (ancho_numeros_y + CLEARANCE_BRAILLE) if valores_y else 6.0
     izquierda = MARGEN_PLACA + bloque_izquierdo
-
-    # Ancho del gráfico: hasta el margen derecho, achicado solo si algún
-    # rótulo del eje X (centrado en su valor) quedaría fuera de la placa.
     disponible = dim_x - MARGEN_PLACA - izquierda
-    ancho_plot = disponible
-    for v, ancho_rotulo in zip(valores_x, anchos_x):
-        fraccion = (v - x_min) / rango_x
-        if fraccion > 1e-6:
-            ancho_plot = min(ancho_plot, (disponible - ancho_rotulo / 2) / min(fraccion, 1.0))
-    derecha = dim_x - izquierda - ancho_plot
+    x_titulo_y = max(MARGEN_PLACA, izquierda - ancho_numeros_y)
 
-    filas_arriba = int(bool(titulo_grafico)) + int(bool(titulo_eje_y_txt))
+    def _es_categoria(valor):
+        i = int(round(valor))
+        return bool(categorias_x) and abs(valor - i) <= 0.25 and 0 <= i < len(categorias_x)
 
-    # Leyenda: filas propias por encima de los títulos (ver sección 12b).
     nombres_series = [nombre_de_serie(n, i) for i, n in enumerate(nombres_leidos)]
-    filas_leyenda = []
+    series_leyenda = ([(i, nombres_series[i]) for i in range(len(series_puntos))
+                       if f"leyenda_serie_{ids_series[i]}" not in ocultos]
+                      if incluir_leyenda and len(series_puntos) > 1 else [])
     if incluir_leyenda and len(series_puntos) > 1:
-        filas_leyenda = _distribuir_leyenda(nombres_series, dim_x - 2 * LEYENDA_MARGEN)
+        ocultos_info += [{"id": f"leyenda_serie_{ids_series[i]}", "clase": "leyenda",
+                          "texto": nombres_series[i]} for i in range(len(series_puntos))
+                         if f"leyenda_serie_{ids_series[i]}" in ocultos]
+    proporcion = max(PROPORCION_MIN, (rect_y2 - rect_y1) / (rect_x2 - rect_x1))
 
-    bloque_abajo = ALTURA_FILA_BRAILLE / 2 + CLEARANCE_BRAILLE \
-        + (fila_reservada if titulo_eje_x_txt else 0.0)
-    # El número más alto del eje Y va centrado en el borde superior del
-    # gráfico: sobresale media fila aunque no haya títulos.
-    bloque_arriba = max(ALTURA_FILA_BRAILLE / 2,
-                        (filas_arriba + len(filas_leyenda)) * fila_reservada)
-    abajo = MARGEN_PLACA + bloque_abajo
-    arriba = MARGEN_PLACA + bloque_arriba
+    def _alto_leyenda(n):
+        return (CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE + (n - 1) * INTERLINEA_BRAILLE) if n else 0.0
 
-    alto_plot = alto_util - abajo - arriba
+    # Primero se prueba con las categorías largas abreviadas (A, B...). Si
+    # así la leyenda no entra, se vuelve a armar con los nombres completos
+    # (se escriben los que entran sin tocarse, como los números): una letra
+    # en el eje sin su explicación en la placa no le sirve al lector.
+    for abreviar_categorias in (True, False):
+        abreviador = Abreviador()
+
+        def _abreviar(texto, ancho, donde, clave):
+            if not incluir_etiquetas or clave in ocultos:
+                # no se escribe: no hace falta letra (ni ocupa lugar)
+                celdas = [] if clave in ocultos else _celdas_braille_mixto(texto)
+                return {"celdas": celdas, "usa_leyenda": False,
+                        "identificador": None, "texto_original": texto, "texto_stl": texto}
+            return abreviador.procesar(texto, ancho, donde, clave)
+
+        # Títulos de arriba: el del gráfico centrado, el del eje Y alineado
+        # con la columna de números del eje Y.
+        titulos_arriba = []   # (clave, nombre, rótulo)
+        if titulo_grafico:
+            titulos_arriba.append(("titulo", "título del gráfico",
+                                   _abreviar(titulo_grafico, ancho_texto, "título del gráfico",
+                                             "titulo")))
+        if titulo_eje_y_txt:
+            titulos_arriba.append(("titulo_eje_y", "título del eje Y",
+                                   _abreviar(titulo_eje_y_txt, dim_x - MARGEN_PLACA - x_titulo_y,
+                                             "título del eje Y", "titulo_eje_y")))
+
+        # Rótulos del eje X. Una categoría tiene de ancho el espacio hasta la
+        # marca vecina menos una celda de separación; si no entra, va su letra.
+        posiciones = sorted((v - x_min) / rango_x * disponible for v in valores_x)
+        paso_min = min((b - a for a, b in zip(posiciones, posiciones[1:])), default=disponible)
+        ancho_categoria = max(0.0, paso_min - CELDA_PITCH) if abreviar_categorias else float("inf")
+        rotulos_x = [_abreviar(categorias_x[int(round(v))], ancho_categoria, "categoría del eje X",
+                               f"cat_{int(round(v))}")
+                     if _es_categoria(v) else None for v in reales_x]
+        celdas_x = [r["celdas"] if r else _celdas_numero(v, decimales_x)
+                    for r, v in zip(rotulos_x, reales_x)]
+        anchos_x = [_ancho_celdas(len(c)) for c in celdas_x]
+
+        rotulo_titulo_x = (_abreviar(titulo_eje_x_txt, ancho_texto, "título del eje X", "titulo_eje_x")
+                           if titulo_eje_x_txt else None)
+
+        # Ancho del gráfico: hasta el margen derecho, achicado solo si algún
+        # rótulo del eje X (centrado en su valor) quedaría fuera de la placa.
+        ancho_plot = disponible
+        for v, ancho_rotulo in zip(valores_x, anchos_x):
+            fraccion = (v - x_min) / rango_x
+            if fraccion > 1e-6:
+                ancho_plot = min(ancho_plot, (disponible - ancho_rotulo / 2) / min(fraccion, 1.0))
+        derecha = dim_x - izquierda - ancho_plot
+
+        # --- Vertical ---
+        y_tope = alto_util - MARGEN_PLACA
+        filas_titulo = [y_tope - ALTURA_FILA_BRAILLE / 2 - k * INTERLINEA_BRAILLE
+                        for k in range(len(titulos_arriba))]
+        if filas_titulo:
+            tope_plot = filas_titulo[-1] - ALTURA_FILA_BRAILLE / 2 - CLEARANCE_BRAILLE
+        else:
+            # el número más alto del eje Y va centrado en el borde superior
+            # del gráfico: sobresale medio renglón
+            tope_plot = y_tope - ALTURA_FILA_BRAILLE / 2
+        # debajo del eje X: renglón de rótulos (+ renglón del título del eje X)
+        bajo_plot = CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
+            + (INTERLINEA_BRAILLE if titulo_eje_x_txt else 0.0)
+
+        renglones_leyenda = _armar_leyenda(series_leyenda, abreviador.leyenda, ancho_texto)
+        alto_ideal = ancho_plot * proporcion
+
+        def _alto_libre(n):
+            return tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+
+        entra = _alto_libre(len(renglones_leyenda)) >= min(ALTO_PLOT_MIN, alto_ideal)
+        hay_categorias_abreviadas = any(r and r["usa_leyenda"] for r in rotulos_x)
+        if entra or not hay_categorias_abreviadas:
+            break
+
+    avisos = []
+    n_renglones = len(renglones_leyenda)
+    while n_renglones and _alto_libre(n_renglones) < min(ALTO_PLOT_MIN, alto_ideal):
+        n_renglones -= 1
+    if n_renglones < len(renglones_leyenda):
+        avisos.append(
+            f"La leyenda no entra completa en la placa: se escribieron {n_renglones} de "
+            f"{len(renglones_leyenda)} renglones. El texto completo está en la descripción narrada."
+        )
+        renglones_leyenda = renglones_leyenda[:n_renglones]
+    alto_plot = min(alto_ideal, _alto_libre(n_renglones))
+    abajo = tope_plot - alto_plot          # altura del eje X
+    # primer renglón de la leyenda: debajo de lo que va bajo el eje X
+    y_leyenda = abajo - bajo_plot - CLEARANCE_BRAILLE - ALTURA_FILA_BRAILLE / 2
 
     if ancho_plot <= 0 or alto_plot <= 0:
         raise ValueError(
@@ -1457,7 +1666,6 @@ def generar_modelo_desde_recta(
         )
 
     # ================================================================
-    # 7. CONVERSIÓN PIXEL -> VALOR -> MILÍMETROS    # ================================================================
     # 7. CONVERSIÓN PIXEL -> VALOR -> MILÍMETROS
     # ================================================================
 
@@ -1574,12 +1782,36 @@ def generar_modelo_desde_recta(
     # 9. PLACA BASE
     # ================================================================
 
-    modelo = _malla_prisma(contorno_placa(dim_x, dim_y, chaflan), BASE_THICKNESS)
-
     # Todas las piezas en relieve (ejes, ticks, números y texto Braille,
     # curvas) se acumulan acá y se sueldan a la placa base de una sola vez
     # al final (ver _ensamblar) en vez de unirse una por una.
     piezas = []
+
+    # Cada cosa de la lámina (un texto, un eje, una curva, una entrada de la
+    # leyenda) con el tramo de `piezas` que le corresponde: es lo que la
+    # vista previa dibuja y lo que el supervisor puede quitar o mover.
+    elementos = []
+
+    def _registrar(id_, clase, desde, **info):
+        elementos.append({"id": id_, "clase": clase, "desde": desde, "hasta": len(piezas),
+                          "ocultable": False, "movible": False, "editable": None, **info})
+
+    def _texto(id_, clase, celdas, x0, y, tinta, **info):
+        """Escribe un texto Braille (x0 = borde izquierdo) salvo que esté
+        oculto, corrido si el supervisor lo movió. Devuelve su recuadro."""
+        if id_ in ocultos:
+            ocultos_info.append({"id": id_, "clase": clase,
+                                 "texto": info.get("valor_edicion") or tinta})
+            return None
+        dx, dy = movidos.get(id_, (0.0, 0.0))
+        x0, y = x0 + dx, y + dy
+        desde = len(piezas)
+        _dibujar_celdas(piezas, celdas, x0 + BORDE_A_CELDA, y)
+        recuadro = [x0, y - ALTURA_FILA_BRAILLE / 2,
+                    x0 + _ancho_celdas(len(celdas)), y + ALTURA_FILA_BRAILLE / 2]
+        _registrar(id_, clase, desde, texto=tinta, recuadro=recuadro, ocultable=True,
+                   movible=True, movido=bool(dx or dy), **info)
+        return recuadro
 
     # ================================================================
     # 10. EJES
@@ -1594,12 +1826,16 @@ def generar_modelo_desde_recta(
     eje_y_inicio = (izquierda, abajo)
     eje_y_fin = (
         izquierda,
-        alto_util - arriba
+        abajo + alto_plot
     )
 
     # Ejes continuos, más bajos que las curvas: ver EJE_X_ESTILO / EJE_Y_ESTILO.
+    desde = len(piezas)
     _agregar_eje(piezas, eje_x_inicio, eje_x_fin, EJE_X_ESTILO)
+    _registrar("eje_x", "eje", desde, texto="Eje X")
+    desde = len(piezas)
     _agregar_eje(piezas, eje_y_inicio, eje_y_fin, EJE_Y_ESTILO)
+    _registrar("eje_y", "eje", desde, texto="Eje Y")
 
     # ================================================================
     # 11. NÚMEROS DE LOS EJES
@@ -1608,7 +1844,7 @@ def generar_modelo_desde_recta(
     # marca que cruce el eje: los segmentos transversales cortaban la línea
     # del eje y desorientaban al seguirla con el dedo. Se escriben solo los
     # números que entran sin tocarse (ver _indices_legibles).
-    avisos = []
+    textos_diseno = []   # dónde quedó cada texto escrito (para la narración)
     x_marcas = [min(max(valor_a_fisico(v, y_min)[0], izquierda), izquierda + ancho_plot)
                 for v in valores_x]
     y_marcas = [min(max(valor_a_fisico(x_min, v)[1], abajo), abajo + alto_plot)
@@ -1619,14 +1855,28 @@ def generar_modelo_desde_recta(
         for i in con_numero_x:
             inicio_x = min(max(MARGEN_PLACA, x_marcas[i] - anchos_x[i] / 2),
                            dim_x - MARGEN_PLACA - anchos_x[i])
-            _dibujar_celdas(piezas, celdas_x[i], inicio_x + BORDE_A_CELDA,
-                            abajo - CLEARANCE_BRAILLE)
+            y_rotulo = abajo - CLEARANCE_BRAILLE
+            if rotulos_x[i]:
+                k = int(round(reales_x[i]))
+                recuadro = _texto(f"cat_{k}", "categoria", celdas_x[i], inicio_x, y_rotulo,
+                                  rotulos_x[i]["texto_stl"], editable="texto",
+                                  clave_edicion=f"cat_{k}", valor_edicion=categorias_x[k])
+                if recuadro:
+                    textos_diseno.append(_texto_diseno("categoria", rotulos_x[i], recuadro))
+            else:
+                tinta = _texto_numero(reales_x[i], decimales_x)
+                recuadro = _texto(f"num_x_{i}", "numero_eje", celdas_x[i], inicio_x, y_rotulo, tinta)
+                if recuadro:
+                    textos_diseno.append(_texto_diseno("numero_x", _rotulo_simple(tinta), recuadro))
 
         con_numero_y = _indices_legibles(
             y_marcas, [ALTURA_FILA_BRAILLE] * len(y_marcas), ESPACIADO_BRAILLE)
         for i in con_numero_y:
             inicio_y = max(MARGEN_PLACA, izquierda - CLEARANCE_BRAILLE - anchos_y[i])
-            _dibujar_celdas(piezas, celdas_y[i], inicio_y + BORDE_A_CELDA, y_marcas[i])
+            tinta = _texto_numero(reales_y[i], decimales_y)
+            recuadro = _texto(f"num_y_{i}", "numero_eje", celdas_y[i], inicio_y, y_marcas[i], tinta)
+            if recuadro:
+                textos_diseno.append(_texto_diseno("numero_y", _rotulo_simple(tinta), recuadro))
 
         for eje, total, escritos in (("X", len(valores_x), len(con_numero_x)),
                                      ("Y", len(valores_y), len(con_numero_y))):
@@ -1639,50 +1889,43 @@ def generar_modelo_desde_recta(
     # ================================================================
     # 11b. TÍTULOS EN BRAILLE (título del gráfico, nombre de cada eje)
     # ================================================================
-    # Título del gráfico centrado arriba de todo; título del eje Y en la
-    # fila de abajo, alineado con el eje; título del eje X centrado bajo el
-    # gráfico. Si un texto no entra en el ancho de la placa se corta en un
-    # espacio (no a mitad de palabra ni de número).
-    # (con incluir_etiquetas=False se saltea todo el bloque: ya se reservó
-    # el margen en base a si había texto, así que la placa no se reacomoda,
-    # solo queda ese espacio en blanco.)
+    # Título del gráfico centrado arriba de todo; título del eje Y en el
+    # renglón de abajo, alineado con la columna de números del eje Y; título
+    # del eje X centrado bajo el gráfico. Un título que no entra en la placa
+    # no se recorta: se escribe su letra (A, B...) y el texto completo va a
+    # la leyenda.
+    # (con incluir_etiquetas=False se saltea todo el bloque: el espacio ya
+    # quedó reservado, así que la placa no se reacomoda.)
     if incluir_etiquetas:
-        max_celdas = int((dim_x - 2 * MARGEN_PLACA - ESPACIADO_BRAILLE) // CELDA_PITCH)
-
-        def _titulo(texto_crudo, nombre):
-            completas = _celdas_braille_mixto(texto_crudo)
-            celdas = _recortar_celdas(completas, max_celdas)
-            if len(celdas) < len(completas):
-                avisos.append(f"El {nombre} se recortó para que quepa en la placa: "
-                              "el texto completo está en la descripción narrada.")
-            return celdas
-
         def _x_centrada(celdas, centro):
             ancho = _ancho_celdas(len(celdas))
-            x0 = min(max(MARGEN_PLACA, centro - ancho / 2), dim_x - MARGEN_PLACA - ancho)
-            return x0 + BORDE_A_CELDA
+            return min(max(MARGEN_PLACA, centro - ancho / 2), dim_x - MARGEN_PLACA - ancho)
 
-        if titulo_eje_x_txt:
-            celdas = _titulo(titulo_eje_x_txt, "título del eje X")
-            _dibujar_celdas(piezas, celdas, _x_centrada(celdas, izquierda + ancho_plot / 2),
-                            abajo - CLEARANCE_BRAILLE - fila_reservada)
+        def _escribir(clave, nombre, rotulo, x0, y):
+            recuadro = _texto(clave, "titulo" if clave == "titulo" else "titulo_eje",
+                              rotulo["celdas"], x0, y, rotulo["texto_stl"], editable="texto",
+                              clave_edicion=clave, valor_edicion=rotulo["texto_original"])
+            textos_diseno.append(_texto_diseno(clave, rotulo, recuadro))
+            if rotulo["usa_leyenda"]:
+                avisos.append(f"El {nombre} no entraba en la placa: dice «{rotulo['identificador']}» "
+                              "y el texto completo está en la leyenda de abajo.")
 
-        fila_arriba = 0
-        for nombre, texto_crudo in (("título del eje Y", titulo_eje_y_txt),
-                                    ("título del gráfico", titulo_grafico)):
-            if not texto_crudo:
-                continue
-            celdas = _titulo(texto_crudo, nombre)
-            y_fila = (alto_util - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
-                + fila_arriba * fila_reservada
-            if nombre == "título del eje Y":
-                x_primera = max(MARGEN_PLACA, izquierda - ancho_numeros_y) + BORDE_A_CELDA
-                x_primera = min(x_primera, dim_x - MARGEN_PLACA - _ancho_celdas(len(celdas))
-                                + BORDE_A_CELDA)
+        if rotulo_titulo_x:
+            _escribir("titulo_eje_x", "título del eje X", rotulo_titulo_x,
+                      _x_centrada(rotulo_titulo_x["celdas"], izquierda + ancho_plot / 2),
+                      abajo - CLEARANCE_BRAILLE - INTERLINEA_BRAILLE)
+
+        for (clave, nombre, rotulo), y_fila in zip(titulos_arriba, filas_titulo):
+            if clave == "titulo_eje_y":
+                x0 = min(x_titulo_y, dim_x - MARGEN_PLACA - _ancho_celdas(len(rotulo["celdas"])))
             else:
-                x_primera = _x_centrada(celdas, dim_x / 2)
-            _dibujar_celdas(piezas, celdas, x_primera, y_fila)
-            fila_arriba += 1
+                x0 = _x_centrada(rotulo["celdas"], dim_x / 2)
+            _escribir(clave, nombre, rotulo, x0, y_fila)
+
+        abreviadas = [a for a in abreviador.leyenda if a["donde"] == "categoría del eje X"]
+        if abreviadas:
+            avisos.append(f"{len(abreviadas)} categoría(s) del eje X no entraban entre las marcas: "
+                          "van con su letra y el nombre completo está en la leyenda de abajo.")
 
     # ================================================================
     # 11c. VALORES ANOTADOS JUNTO A LA CURVA EN EL GRÁFICO ORIGINAL
@@ -1701,7 +1944,11 @@ def generar_modelo_desde_recta(
         SEPARACION_CURVA = 2.0
         ocupados = []
         omitidas = 0
-        for e in etiquetas_dato:
+        for k_dato, e in enumerate(etiquetas_dato):
+            if f"dato_{k_dato}" in ocultos:
+                ocultos_info.append({"id": f"dato_{k_dato}", "clase": "dato",
+                                     "texto": str(e.get("valor"))})
+                continue
             try:
                 valor = float(e["valor"])
                 x_val, y_val = pixel_a_valor(float(e["px"]), float(e["py"]))
@@ -1738,8 +1985,12 @@ def generar_modelo_desde_recta(
                 continue
             ocupados.append(colocado)
             yc = (colocado[1] + colocado[3]) / 2
-            agregar_numero_braille(piezas, valor, colocado[0] + BORDE_A_CELDA, yc, decimales)
-            datos_diseno.append({"valor": valor, "recuadro": list(colocado)})
+            tinta = _texto_numero(valor, decimales)
+            recuadro = _texto(f"dato_{k_dato}", "dato", _celdas_numero(valor, decimales),
+                              colocado[0], yc, tinta, editable="numero",
+                              clave_edicion=f"dato_{k_dato}", valor_edicion=tinta)
+            datos_diseno.append({"valor": valor, "recuadro": list(recuadro)})
+            textos_diseno.append(_texto_diseno("dato", _rotulo_simple(tinta), recuadro))
         if omitidas:
             avisos.append(
                 f"{omitidas} valor(es) anotado(s) junto a la curva no entraron en la lámina "
@@ -1760,6 +2011,7 @@ def generar_modelo_desde_recta(
     # entre las que se pudieron dibujar), así coincide con la leyenda.
     for indice, puntos_stl in zip(indices_fisicas, series_fisicas):
         estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
+        desde = len(piezas)
         agregar_funcion(
             piezas,
             puntos_stl,
@@ -1767,6 +2019,10 @@ def generar_modelo_desde_recta(
             altura=estilo["altura"],
             patron=estilo["patron"],
         )
+        sid = ids_series[indice]
+        _registrar(f"serie_{sid}", "serie", desde, texto=nombres_series[indice],
+                   textura=estilo["nombre"], ocultable=len(series_fisicas) > 1, editable="texto",
+                   clave_edicion=f"serie_{sid}", valor_edicion=nombres_series[indice])
         print(
             f"[STL] Serie {indice + 1} ('{nombres_series[indice]}') dibujada con "
             f"textura '{estilo['nombre']}' (patrón {estilo['patron']}).",
@@ -1774,43 +2030,93 @@ def generar_modelo_desde_recta(
         )
 
     # ================================================================
-    # 12b. LEYENDA (solo con 2 o más series)
+    # 12b. LEYENDA (abajo, en el espacio que sobra)
     # ================================================================
-    # Muestra corta de la textura de cada serie + su nombre en Braille, en
-    # filas arriba de los títulos. Con una sola curva no hace falta: no hay
-    # nada que distinguir.
-    leyenda_diseno = []
-    for fila, entradas in enumerate(filas_leyenda):
-        y_fila = (alto_util - arriba) + CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2             + (filas_arriba + fila) * fila_reservada
-        x = LEYENDA_MARGEN
-        for indice, celdas in entradas:
-            estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
-            muestra = [(x, y_fila), (x + LEYENDA_MUESTRA, y_fila)]
-            agregar_funcion(
-                piezas, muestra,
-                diametro=estilo["diametro"], altura=estilo["altura"], patron=estilo["patron"],
-            )
-            x_texto = x + LEYENDA_MUESTRA + LEYENDA_HUECO + ESPACIADO_BRAILLE / 2
-            for k, celda in enumerate(celdas):
-                agregar_caracter_braille(piezas, celda, x_texto + k * CELDA_PITCH, y_fila)
-            fin_texto = x_texto + max(0, len(celdas) - 1) * CELDA_PITCH + ESPACIADO_BRAILLE / 2
+    # Primero las texturas de las series (con 2 o más), después cada texto
+    # abreviado: "A  texto completo". Renglones de INTERLINEA_BRAILLE.
+    leyenda_diseno, abreviaturas_diseno = [], []
+    recuadros_entrada = {}
+    inicio_entrada = {}
+    for r, renglon in enumerate(renglones_leyenda):
+        y_fila = y_leyenda - r * INTERLINEA_BRAILLE
+        for pieza in renglon:
+            inicio_entrada.setdefault(pieza["entrada"], len(piezas))
+            x = MARGEN_PLACA + pieza["dx"]
+            if pieza["serie"] is not None:
+                estilo = _ESTILOS_SERIE[pieza["serie"] % len(_ESTILOS_SERIE)]
+                r_tapa = estilo["diametro"] / 2   # la tapa redondeada no sale del margen
+                agregar_funcion(
+                    piezas, [(x + r_tapa, y_fila), (x + LEYENDA_MUESTRA - r_tapa, y_fila)],
+                    diametro=estilo["diametro"], altura=estilo["altura"], patron=estilo["patron"],
+                )
+            if pieza["prefijo"]:
+                _dibujar_celdas(piezas, pieza["prefijo"], x + BORDE_A_CELDA, y_fila)
+            _dibujar_celdas(piezas, pieza["celdas"], x + pieza["sangria"] + BORDE_A_CELDA, y_fila)
+            fin = x + pieza["sangria"] + _ancho_celdas(len(pieza["celdas"]))
+            caja = [x, y_fila - ALTURA_FILA_BRAILLE / 2, fin, y_fila + ALTURA_FILA_BRAILLE / 2]
+            previa = recuadros_entrada.get(pieza["entrada"])
+            recuadros_entrada[pieza["entrada"]] = caja if previa is None else [
+                min(previa[0], caja[0]), min(previa[1], caja[1]),
+                max(previa[2], caja[2]), max(previa[3], caja[3])]
+
+    # las piezas de una entrada son consecutivas (renglones seguidos)
+    orden = sorted(inicio_entrada)
+    for pos, k in enumerate(orden):
+        desde = inicio_entrada[k]
+        hasta = inicio_entrada[orden[pos + 1]] if pos + 1 < len(orden) else len(piezas)
+        if k < len(series_leyenda):
+            indice, nombre = series_leyenda[k]
+            sid = ids_series[indice]
+            info = {"id": f"leyenda_serie_{sid}", "texto": f"{nombre} (textura "
+                    f"{_ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]['nombre']})",
+                    "ocultable": True, "editable": "texto",
+                    "clave_edicion": f"serie_{sid}", "valor_edicion": nombre}
+        else:
+            a = abreviador.leyenda[k - len(series_leyenda)]
+            info = {"id": f"leyenda_{a['identificador']}",
+                    "texto": f"{a['identificador']}: {a['texto']}", "editable": "texto",
+                    "clave_edicion": a.get("clave"), "valor_edicion": a["texto"]}
+        elementos.append({"clase": "leyenda", "desde": desde, "hasta": hasta,
+                          "ocultable": False, "movible": False, "editable": None,
+                          "recuadro": recuadros_entrada[k], **info})
+
+    for k, (indice, nombre) in enumerate(series_leyenda):
+        if k in recuadros_entrada:
+            x0, y0, _, y1 = recuadros_entrada[k]
+            y_muestra = (y0 + y1) / 2 if y1 - y0 <= ALTURA_FILA_BRAILLE + 1e-6 else y1 - ALTURA_FILA_BRAILLE / 2
             leyenda_diseno.append({
                 "indice": indice,
-                "nombre": nombres_series[indice],
-                "textura": estilo["nombre"],
-                "muestra": muestra,
-                "recuadro": [x, y_fila - ALTURA_FILA_BRAILLE / 2, fin_texto, y_fila + ALTURA_FILA_BRAILLE / 2],
-                "recortado": len(celdas) < len(_celdas_braille_mixto(nombres_series[indice])),
+                "nombre": nombre,
+                "textura": _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]["nombre"],
+                "muestra": [(x0, y_muestra), (x0 + LEYENDA_MUESTRA, y_muestra)],
+                "recuadro": recuadros_entrada[k],
+                "recortado": False,
             })
-            x = fin_texto + LEYENDA_ENTRE
-    if leyenda_diseno:
-        print(f"[STL] Leyenda: {len(leyenda_diseno)} entradas en {len(filas_leyenda)} fila(s).", flush=True)
+    for k, a in enumerate(abreviador.leyenda, start=len(series_leyenda)):
+        abreviaturas_diseno.append({
+            "identificador": a["identificador"],
+            "texto": a["texto"],
+            "donde": a["donde"],
+            "recuadro": recuadros_entrada.get(k),   # None si no entró en la placa
+        })
+    if renglones_leyenda:
+        print(f"[STL] Leyenda abajo: {len(leyenda_diseno)} textura(s), "
+              f"{len(abreviaturas_diseno)} texto(s) abreviado(s), {len(renglones_leyenda)} renglón(es).",
+              flush=True)
 
     if diseno is not None:
         diseno.update({
             "placa": {"ancho_mm": dim_x, "alto_mm": dim_y,
-                      "margen_superior_mm": margen_superior, "chaflan_mm": chaflan},
+                      "margen_superior_mm": margen_superior, "chaflan_mm": chaflan,
+                      "contorno": [list(p) for p in contorno_placa(dim_x, dim_y, chaflan)]},
             "area": {"izquierda": izquierda, "abajo": abajo, "ancho": ancho_plot, "alto": alto_plot},
+            # zona del gráfico (arriba, con títulos y rótulos) y de la leyenda
+            # (abajo): [x0, y0, x1, y1] en mm
+            "zonas": {
+                "grafico": [MARGEN_PLACA, abajo - bajo_plot, dim_x - MARGEN_PLACA, y_tope],
+                "leyenda": [MARGEN_PLACA, MARGEN_PLACA, dim_x - MARGEN_PLACA,
+                            abajo - bajo_plot - CLEARANCE_BRAILLE],
+            },
             # en el espacio del eje: log10(valor) si la escala es "log"
             "dominio": {"x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max,
                         "calibrado": calibrados,
@@ -1825,9 +2131,23 @@ def generar_modelo_desde_recta(
                 "puntos_mm": [tuple(p) for p in puntos_stl],
             } for indice, puntos_stl in zip(indices_fisicas, series_fisicas)],
             "leyenda": leyenda_diseno,
+            # textos que no entraban en su lugar: en la placa dicen
+            # "identificador" y en la leyenda de abajo, el texto completo
+            "abreviaturas": abreviaturas_diseno,
+            # cada texto escrito (títulos, categorías): qué dice y dónde
+            "textos": textos_diseno,
             "etiquetas_dato": datos_diseno,
             "avisos": avisos,
+            # vista previa: cada cosa en relieve con sus primitivas (mm)
+            "elementos": [{
+                **{k: v for k, v in e.items() if k not in ("desde", "hasta")},
+                "primitivas": [_primitiva_json(p) for p in piezas[e["desde"]:e["hasta"]]],
+            } for e in elementos],
+            "ocultos": ocultos_info,
         })
+
+    if archivo_salida is None:      # solo vista previa
+        return None
 
     # ================================================================
     # 13. ENSAMBLAR Y EXPORTAR
@@ -1836,6 +2156,7 @@ def generar_modelo_desde_recta(
     # (no unión booleana una por una): ver _ensamblar más arriba.
 
     print(f"[STL] Ensamblando {len(piezas)} piezas en relieve...", flush=True)
+    modelo = _malla_prisma(contorno_placa(dim_x, dim_y, chaflan), BASE_THICKNESS)
     triangulos = _ensamblar(modelo, piezas)
     _guardar_stl(triangulos, archivo_salida)
 
