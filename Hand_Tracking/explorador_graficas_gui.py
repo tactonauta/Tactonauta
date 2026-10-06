@@ -39,6 +39,12 @@ Formato del archivo de datos (CSV, coma o punto y coma)
    "# origen_x", "# origen_y" (cruce de los ejes) y "# fin_x", "# fin_y" (extremos),
    en coordenadas del mismo lienzo; si faltan, se estiman a partir de los puntos.
 
+Láminas de tactiverso: el QR impreso en la placa abre el CSV de Hand_Tracking
+que genera el servidor (columnas tipo,id,serie,x1_mm,y1_mm,x2_mm,y2_mm,...; ver
+tactiver/cod/narracion.py). Se reconoce solo: la placa es el lienzo de
+referencia y cada punto, tramo, eje, texto Braille y entrada de la leyenda se
+narra con el texto que ya trae el archivo.
+
 Dependencias
 ------------
     pip install opencv-python numpy mediapipe pyttsx3
@@ -61,6 +67,7 @@ Teclas (con la ventana en primer plano)
 import base64
 import csv
 import hashlib
+import io
 import json
 import math
 import os
@@ -287,7 +294,12 @@ class DatosGrafica:
         self.eje_x = ""             # descripción del eje horizontal
         self.eje_y = ""             # descripción del eje vertical
         self.origen_x = self.origen_y = self.fin_x = self.fin_y = 0.0
-        self.puntos = {}            # nombre -> {"x","y","valor","info"}
+        self.puntos = {}            # nombre -> {"x","y","valor","info"} (+ "texto" si viene narrado)
+        # Solo con el CSV de una lámina de tactiverso: tramos de curva, ejes,
+        # textos Braille, leyenda y QR, cada uno con su texto ya narrado
+        # ({"tipo","id","x1","y1","x2","y2","texto","corto"}). Si hay, reemplazan
+        # a los tramos y ejes que se arman a partir de los puntos.
+        self.regiones = []
         self.origen = ""            # "descarga" | "copia local" | "archivo local"
         self.url = ""
         self.ruta_local = ""
@@ -307,6 +319,8 @@ class DatosGrafica:
 
     def resumen(self):
         """Texto para leer al empezar o al pedir 'repetir descripción'."""
+        if self.regiones:           # lámina de tactiverso: su descripción ya lo cuenta todo
+            return self.descripcion or f"{self.titulo}."
         partes = [self.titulo + "."]
         if self.descripcion:
             partes.append(self.descripcion)
@@ -329,9 +343,68 @@ def _num(s):
     return float(s.strip().replace(",", "."))
 
 
+def _es_csv_tactiverso(texto):
+    primera = next((l for l in texto.splitlines() if l.strip()), "")
+    encabezados = [normalizar_clave(c) for c in primera.split(",")]
+    return "tipo" in encabezados and "x1_mm" in encabezados
+
+
+def interpretar_csv_tactiverso(texto):
+    """El CSV que tactiverso genera junto a cada l\u00e1mina STL (el que descarga
+    el QR impreso; ver exportar_csv_hand_tracking en tactiver/cod/narracion.py).
+    Coordenadas en mm sobre la placa, con el origen arriba a la izquierda: la
+    placa es el lienzo de referencia. Cada punto, tramo de curva, eje, texto
+    Braille, entrada de la leyenda y el QR ya traen el texto a narrar."""
+    d = DatosGrafica()
+    d.titulo = "L\u00e1mina t\u00e1ctil"
+    n = 0
+    try:
+        for n, fila in enumerate(csv.DictReader(io.StringIO(texto)), start=1):
+            def num(columna):
+                v = (fila.get(columna) or "").strip()
+                return _num(v) if v else None
+
+            tipo, ident = (fila.get("tipo") or "").strip(), (fila.get("id") or "").strip()
+            narrado = (fila.get("texto") or "").strip()
+            if tipo == "placa":
+                d.ancho_ref, d.alto_ref = num("x2_mm"), num("y2_mm")
+            elif tipo == "descripcion":
+                d.descripcion = narrado
+            elif tipo == "punto":
+                x, y = num("x1_mm"), num("y1_mm")
+                if x is None or y is None:
+                    raise ValueError
+                d.puntos[ident] = {"x": x, "y": y, "valor": num("valor_y"), "info": "",
+                                   "texto": narrado}
+            elif tipo in ("curva", "eje", "texto", "leyenda"):
+                coords = [num(c) for c in ("x1_mm", "y1_mm", "x2_mm", "y2_mm")]
+                if None in coords:
+                    raise ValueError
+                if tipo == "eje":
+                    corto = "Eje horizontal" if ident == "eje_x" else "Eje vertical"
+                elif tipo == "curva":
+                    corto = f"Curva: {(fila.get('tendencia') or '').strip() or 'tramo'}"
+                else:
+                    corto = narrado.split(":")[0][:40]
+                if tipo == "texto" and narrado.startswith("T\u00edtulo:"):
+                    d.titulo = narrado[len("T\u00edtulo:"):].strip().rstrip(".") or d.titulo
+                d.regiones.append({"tipo": tipo, "id": ident, "texto": narrado, "corto": corto,
+                                   **dict(zip(("x1", "y1", "x2", "y2"), coords))})
+    except (KeyError, TypeError, ValueError, csv.Error):
+        raise ErrorDatos(f"La fila {n} del archivo de la l\u00e1mina no es v\u00e1lida.")
+
+    if not d.ancho_ref or not d.alto_ref or d.ancho_ref <= 0 or d.alto_ref <= 0:
+        raise ErrorDatos("El archivo de la l\u00e1mina no dice el tama\u00f1o de la placa.")
+    if not d.puntos and not any(r["tipo"] == "curva" for r in d.regiones):
+        raise ErrorDatos("El archivo de la l\u00e1mina no tiene ninguna curva para explorar.")
+    return d
+
+
 def interpretar_csv(texto):
     """Valida y convierte el texto del archivo. Lanza ErrorDatos si no sirve."""
     texto = texto.lstrip("\ufeff")
+    if _es_csv_tactiverso(texto):
+        return interpretar_csv_tactiverso(texto)
     meta, lineas = {}, []
     for linea in texto.splitlines():
         s = linea.strip()
@@ -590,7 +663,19 @@ def escalar_puntos(puntos, ancho_ref, alto_ref, hoja):
     res = {}
     for n, p in puntos.items():
         x, y = f(p["x"], p["y"])
-        res[n] = {"x": x, "y": y, "valor": p["valor"], "info": p.get("info", "")}
+        res[n] = {"x": x, "y": y, "valor": p["valor"], "info": p.get("info", ""),
+                  "texto": p.get("texto", "")}
+    return res
+
+
+def escalar_regiones(regiones, ancho_ref, alto_ref, hoja):
+    """Las regiones narradas de una lámina de tactiverso, en píxeles del frame."""
+    f = transformacion(ancho_ref, alto_ref, hoja)
+    res = []
+    for r in regiones:
+        (x1, y1), (x2, y2) = f(r["x1"], r["y1"]), f(r["x2"], r["y2"])
+        res.append({**r, "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                    "etiqueta": {"eje_x": "X", "eje_y": "Y"}.get(r["id"])})
     return res
 
 
@@ -602,9 +687,9 @@ def construir_ejes(d, hoja):
     _, fy = f(d.origen_x, d.fin_y)
     return [
         {"id": "x", "x1": ox, "y1": oy, "x2": fx, "y2": oy,
-         "texto": d.texto_eje("x"), "corto": "Eje horizontal"},
+         "texto": d.texto_eje("x"), "corto": "Eje horizontal", "etiqueta": "X"},
         {"id": "y", "x1": ox, "y1": oy, "x2": ox, "y2": fy,
-         "texto": d.texto_eje("y"), "corto": "Eje vertical"},
+         "texto": d.texto_eje("y"), "corto": "Eje vertical", "etiqueta": "Y"},
     ]
 
 
@@ -750,8 +835,15 @@ class Explorador:
     def configurar(self, datos, hoja):
         self.datos = datos
         self.puntos = escalar_puntos(datos.puntos, datos.ancho_ref, datos.alto_ref, hoja)
-        self.segmentos = construir_segmentos(self.puntos)
-        self.ejes = construir_ejes(datos, hoja)
+        if datos.regiones:
+            # lámina de tactiverso: tramos de curva por un lado (se buscan antes)
+            # y ejes, textos, leyenda y QR por el otro, todos con su texto
+            regiones = escalar_regiones(datos.regiones, datos.ancho_ref, datos.alto_ref, hoja)
+            self.segmentos = [r for r in regiones if r["tipo"] == "curva"]
+            self.ejes = [r for r in regiones if r["tipo"] != "curva"]
+        else:
+            self.segmentos = construir_segmentos(self.puntos)
+            self.ejes = construir_ejes(datos, hoja)
         self.anterior = None
         self.t_mano = time.time()
 
@@ -763,10 +855,14 @@ class Explorador:
 
     def _texto_punto(self, nombre):
         d, p = self.datos, self.puntos[nombre]
+        if p.get("texto"):
+            return p["texto"]
         t = f"{nombre}. {d.magnitud} de {d.valor_texto(p['valor'])}."
         return t + (" " + p["info"] if p["info"] else "")
 
     def _texto_tramo(self, s):
+        if s.get("texto"):
+            return s["texto"]
         d = self.datos
         return (f"De {s['inicio']} a {s['fin']}, tendencia de {s['tendencia']}. "
                 f"{d.magnitud} pasa de {fmt_num(s['valor_inicial'])} a {d.valor_texto(s['valor_final'])}.")
@@ -812,6 +908,8 @@ class Explorador:
             ident = ("punto", actual[1])
         elif actual[0] == "eje":
             ident = ("eje", actual[1]["id"])
+        elif "id" in actual[1]:
+            ident = ("tendencia", actual[1]["id"])
         else:
             ident = ("tendencia", actual[1]["inicio"], actual[1]["fin"])
 
@@ -834,8 +932,9 @@ class Explorador:
 
         for e in self.ejes:                                       # ejes en cian
             cv2.line(frame, (e["x1"], e["y1"]), (e["x2"], e["y2"]), (255, 255, 0), 2)
-            cv2.putText(frame, "X" if e["id"] == "x" else "Y", (e["x2"] + 6, e["y2"] + 6),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            if e.get("etiqueta"):
+                cv2.putText(frame, e["etiqueta"], (e["x2"] + 6, e["y2"] + 6),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         for p in self.puntos.values():
             cv2.circle(frame, (p["x"], p["y"]), 6, (0, 0, 255), -1)
         for s in self.segmentos:
@@ -850,10 +949,12 @@ class Explorador:
             if actual[0] == "eje":
                 visible = actual[1]["corto"]
             elif actual[0] == "punto":
-                visible = f"{actual[1]}: {fmt_num(self.puntos[actual[1]]['valor'])} {self.datos.unidad}".strip()
+                p = self.puntos[actual[1]]
+                visible = (p["texto"] if p.get("texto") else
+                           f"{actual[1]}: {fmt_num(p['valor'])} {self.datos.unidad}".strip())
             else:
                 s = actual[1]
-                visible = f"{s['inicio']} → {s['fin']}: {s['tendencia']}"
+                visible = s.get("corto") or f"{s['inicio']} → {s['fin']}: {s['tendencia']}"
             cv2.putText(frame, texto_cv(visible), (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         return frame, visible
 

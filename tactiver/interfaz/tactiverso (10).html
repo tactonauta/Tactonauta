@@ -750,6 +750,7 @@
   .lamina-svg .lam-placa { fill: #fffdf8; stroke: #8a8475; stroke-width: 0.6; }
   .lamina-svg .lam-zona { fill: none; stroke: #c9c2b0; stroke-width: 0.35; stroke-dasharray: 2 1.5; }
   .lamina-svg .lam-punto { fill: #1d1d1f; }
+  .lamina-svg .lam-qr { fill: #1d1d1f; shape-rendering: crispEdges; }
   .lamina-svg .lam-tramo { stroke-linecap: round; }
   .lamina-svg .lam-hit { fill: transparent; }
   .lamina-svg .lam-hit-linea { stroke: transparent; stroke-width: 4; stroke-linecap: round; }
@@ -2154,6 +2155,11 @@
       linkCsv.setAttribute('download', '');
       li.appendChild(linkCsv);
     }
+    // El mismo CSV, por el enlace que lleva el QR de la lámina: sirve para
+    // pegarlo en Hand_Tracking (F2) si no se puede escanear el QR.
+    if (f.qr_url) {
+      li.appendChild(crearEl('p', 'editor-ayuda', 'Enlace del QR (Hand_Tracking): ' + f.qr_url));
+    }
 
     const leida = f.correccion_id && f.json_url && !f.error;
     if (modo.revision && leida) {
@@ -2666,7 +2672,7 @@
     const NOMBRES = {
       titulo: 'Título del gráfico', titulo_eje: 'Título de eje', numero_eje: 'Número del eje',
       categoria: 'Categoría del eje X', dato: 'Valor anotado junto a la curva', serie: 'Curva',
-      leyenda: 'Entrada de la leyenda', eje: 'Eje',
+      leyenda: 'Entrada de la leyenda', eje: 'Eje', qr: 'Código QR',
     };
 
     function el(tag, attrs, padre) {
@@ -2708,6 +2714,9 @@
         e.primitivas.forEach(p => {
           if (p.t === 'p') el('circle', { class: 'lam-punto', cx: p.x, cy: p.y, r: 0.75 }, g);
           else if (p.t === 'b') el('circle', { cx: p.x, cy: p.y, r: p.d / 2, fill: color }, g);
+          // módulo del QR (centro y lado, en mm): se ve y se puede escanear en pantalla
+          else if (p.t === 'q') el('rect', { class: 'lam-qr', x: p.x - p.d / 2, y: p.y - p.d / 2,
+                                             width: p.d, height: p.d }, g);
           else el('line', { class: 'lam-tramo', x1: p.a[0], y1: p.a[1], x2: p.b[0], y2: p.b[1],
                             stroke: color, 'stroke-width': p.d }, g);
         });
@@ -3004,6 +3013,14 @@
         return;
       }
       laminaSeleccion.appendChild(crearEl('h4', null, Lamina.NOMBRES[e.clase] || 'Elemento'));
+      if (e.clase === 'qr') {
+        laminaSeleccion.appendChild(crearEl('p', null,
+          'Lleva el enlace a los datos de esta gráfica (CSV). El programa de exploración ' +
+          '(Hand_Tracking) lo lee con la cámara para narrar lo que toca el estudiante. ' +
+          'No se puede quitar ni mover.'));
+        if (vista.qr_url) laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda', 'Enlace: ' + vista.qr_url));
+        return;
+      }
       laminaSeleccion.appendChild(crearEl('p', null, 'En la lámina dice: «' + e.texto + '»'));
       if (e.editable && e.clave_edicion) {
         const fila = crearEl('div', 'fila');

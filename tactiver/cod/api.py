@@ -47,14 +47,18 @@ Supervisor: GET /api/solicitudes/supervisor
 Imprenta:   GET /api/solicitudes/imprenta
             POST /api/solicitudes/<id>/estado-imprenta
 Archivos:   GET /api/resultados/<archivo>[/descargar]
+QR:         GET /q/<token>  el CSV de Hand_Tracking de una lámina (lo abre
+            el QR impreso; ver _url_qr)
 Salud:      GET /api/salud -> {"ok": true}
 ------------------------------------------------------------------
 """
 
 import glob
+import hashlib
 import os
 import json
 import math
+import re
 import secrets
 import shutil
 import time
@@ -62,7 +66,7 @@ import uuid
 import traceback
 
 import cv2
-from flask import Flask, request, jsonify, send_from_directory, session
+from flask import Flask, has_request_context, request, jsonify, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 import numpy as np
@@ -996,21 +1000,16 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
 
     base = f"{prefijo}_{uuid.uuid4().hex[:8]}"
     nombre = f"{base}.stl"
-    nombre_csv = f"{base}_handtracking.csv"
-    url_csv = f"/api/resultados/stl/{nombre_csv}/descargar"
+    token = _token_qr(resultado)
+    url_qr = _url_qr(token)
     diseno = {}
-    PUBLIC_BASE_URL = os.environ.get(
-        "PUBLIC_BASE_URL",
-        "http://localhost:5000"
-    ).rstrip("/")
-    
     generar_modelo_desde_recta(
         payload,
         archivo_salida=os.path.join(STL_DIR, nombre),
         incluir_etiquetas=True,
         diseno=diseno,
         ajustes=ajustes,
-        url_qr=url_csv,
+        url_qr=url_qr,
     )
     advertencias.extend(diseno.get("avisos") or [])
 
@@ -1022,14 +1021,80 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
     # Lo mismo en CSV: coordenadas de todo lo que hay en la placa + textos a
     # narrar, para Hand_Tracking (lo carga igual que el JSON).
     nombre_csv = f"{base}_handtracking.csv"
-    narracion.exportar_csv_hand_tracking(exportacion, os.path.join(STL_DIR, nombre_csv))
+    ruta_csv = os.path.join(STL_DIR, nombre_csv)
+    narracion.exportar_csv_hand_tracking(exportacion, ruta_csv)
+    # La copia que sirve el QR (/q/<token>): se reemplaza de una vez, así
+    # quien la esté descargando nunca recibe un archivo a medio escribir.
+    temporal = f"{_ruta_csv_qr(token)}.{uuid.uuid4().hex[:6]}.tmp"
+    shutil.copyfile(ruta_csv, temporal)
+    os.replace(temporal, _ruta_csv_qr(token))
     return nombre, advertencias, {"descripcion": descripcion, "nombre": nombre_narracion,
-                                  "csv": nombre_csv}
+                                  "csv": nombre_csv, "qr": url_qr}
+
+
+# ------------------------------------------------------------------
+# QR de la lámina
+# ------------------------------------------------------------------
+# El QR en relieve lleva el enlace con el que el programa de Hand_Tracking
+# (que corre en la computadora del estudiante) descarga el CSV de la lámina.
+# Ese enlace tiene que ser:
+#   - absoluto: el programa no sabe en qué servidor está esta API;
+#   - corto: menos módulos en el QR, y cada uno sale más grande en relieve;
+#   - el mismo en la vista previa, al autorizar y al corregir después: el
+#     supervisor ve en la pizarra exactamente el QR que se va a imprimir.
+# Por eso el token sale de la imagen original de la figura (no cambia al
+# corregir la lectura; sí al reemplazar la gráfica, que es otra) y /q/<token>
+# sirve siempre el último CSV generado para ella.
+_RE_TOKEN_QR = re.compile(r"[0-9a-f]{10}")
+
+
+def _base_publica():
+    """Dirección pública del servidor: PUBLIC_BASE_URL si se definió, la que
+    Render pone sola (RENDER_EXTERNAL_URL), o la del pedido en curso."""
+    base = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+    if not base and has_request_context():
+        base = request.host_url
+    return (base or "http://localhost:5000").rstrip("/")
+
+
+def _token_qr(resultado):
+    """Token del QR de una figura (ver arriba), a partir de su lectura."""
+    ruta_imagen = None
+    try:
+        with open(resultado["ruta_json"], encoding="utf-8") as f:
+            ruta_imagen = json.load(f).get("_ruta_imagen_original")
+    except (KeyError, TypeError, OSError, ValueError):
+        pass
+    origen = os.path.basename(ruta_imagen or "") or resultado.get("nombre_json") or ""
+    return hashlib.sha1(origen.encode("utf-8")).hexdigest()[:10]
+
+
+def _url_qr(token):
+    return f"{_base_publica()}/q/{token}"
+
+
+def _ruta_csv_qr(token):
+    return os.path.join(STL_DIR, f"qr_{token}.csv")
+
+
+@app.route("/q/<token>", methods=["GET"])
+def csv_por_qr(token):
+    """Lo que abre el QR impreso: el CSV de Hand_Tracking más reciente de esa
+    lámina. Sin caché, para que una corrección posterior llegue siempre."""
+    if not _RE_TOKEN_QR.fullmatch(token) or not os.path.isfile(_ruta_csv_qr(token)):
+        return ("Esta lámina todavía no tiene datos publicados (falta que el supervisor "
+                "la autorice) o el enlace no es válido.", 404,
+                {"Content-Type": "text/plain; charset=utf-8"})
+    respuesta = send_from_directory(STL_DIR, f"qr_{token}.csv", mimetype="text/csv",
+                                    as_attachment=True, download_name=f"lamina_{token}.csv")
+    respuesta.headers["Cache-Control"] = "no-store"
+    return respuesta
 
 
 def _urls_lamina(nombre_stl, narracion_info):
     """Campos de una lámina ya generada que se devuelven al frontend."""
     return {
+        "qr_url": narracion_info["qr"],
         "stl_url": f"/api/resultados/stl/{nombre_stl}",
         "stl_download_url": f"/api/resultados/stl/{nombre_stl}/descargar",
         "descripcion": narracion_info["descripcion"],
@@ -1189,13 +1254,16 @@ def vista_lamina():
     ajustes = _ajustes_validos(datos.get("ajustes"))
     payload, series_ocultas = aplicar_ajustes(_payload_stl(resultado), ajustes)
     diseno = {}
+    # con el mismo QR que llevará el STL: ocupa su lugar y se ve en la pizarra
+    url_qr = _url_qr(_token_qr(resultado))
     try:
         generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
-                                   diseno=diseno, ajustes=ajustes)
+                                   diseno=diseno, ajustes=ajustes, url_qr=url_qr)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({
         "ok": True,
+        "qr_url": url_qr,
         "placa": diseno["placa"],
         "zonas": diseno["zonas"],
         "area": diseno["area"],

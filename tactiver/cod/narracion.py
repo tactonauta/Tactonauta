@@ -43,6 +43,10 @@ VERSION = 1
 PUNTOS_CLAVE_MAX = 12
 PUNTOS_CLAVE_TOLERANCIA_MM = 3.0
 
+# Lo que se narra del QR en relieve (generador_stl.agregar_qr).
+TEXTO_QR = ("En la esquina superior izquierda hay un código QR en relieve: no es parte del "
+            "gráfico, sirve para que el programa de exploración descargue los datos de esta lámina.")
+
 
 # ------------------------------------------------------------------
 # Números en español
@@ -289,6 +293,8 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
                 partes += [f"{a['identificador']}, {donde}: «{a['texto']}»" for a in lista]
         frases.append("En la lámina, algunos textos van con una letra que se explica en la "
                       "leyenda de abajo. " + "; ".join(partes) + ".")
+    if (diseno or {}).get("qr"):
+        frases.append(TEXTO_QR)
     return " ".join(frases)
 
 
@@ -440,6 +446,15 @@ def exportar_hand_tracking(datos, diseno, descripcion):
             "x1": ax, "y1": ay, "x2": bx, "y2": by,
             "texto": f"Leyenda: {a['identificador']} es {a['texto']}.",
         })
+
+    # El QR en relieve: al tocarlo se dice qué es, para que no se confunda
+    # con parte del gráfico. x1,y1 -> x2,y2 = su diagonal (como la leyenda).
+    qr = diseno.get("qr")
+    if qr:
+        (ax, ay) = a_hoja(qr["x"], qr["y"] + qr["lado"])
+        (bx, by) = a_hoja(qr["x"] + qr["lado"], qr["y"])
+        segmentos.append({"id": "qr", "tipo": "texto", "serie": None,
+                          "x1": ax, "y1": ay, "x2": bx, "y2": by, "texto": TEXTO_QR})
 
     for clave_eje, nombre_eje, tit, d0, d1, dec in (
             ("x", "horizontal", textos.get("titulo_eje_x"), dom["x_min"], dom["x_max"], dec_x),

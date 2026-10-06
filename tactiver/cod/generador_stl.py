@@ -65,10 +65,19 @@ CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
 RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
-# QR táctil
-QR_LADO = 25.0
+# QR en relieve (esquina superior izquierda): lleva el enlace corto al CSV de
+# Hand_Tracking (api.py, /q/<token>), para que el programa de exploración lo
+# descargue con la cámara. Con un enlace de ~45 caracteres sale un QR de 29
+# módulos: en 30 mm, cada módulo mide ~1 mm, lo mínimo que una boquilla de
+# 0,4 mm imprime con bordes limpios y una webcam distingue a la distancia
+# de la mano.
+QR_LADO = 30.0
 QR_ALTURA = 1.6
-QR_MARGEN = 4
+# Módulos de borde DENTRO de QR_LADO. Es 0 porque la "zona de silencio" que
+# exige el estándar ya la da la placa lisa alrededor (MARGEN_PLACA hacia los
+# bordes y CLEARANCE_BRAILLE hacia la leyenda y el gráfico, ambos más que
+# 4 módulos): dibujarla adentro solo achicaría cada módulo.
+QR_MARGEN = 0
 QR_ERROR_CORRECTION = ERROR_CORRECT_L
 # Cada módulo del QR se agranda esto (mm) en la malla, así dos módulos
 # vecinos se superponen apenas en vez de compartir caras exactas
@@ -1180,7 +1189,7 @@ def generar_modelo_desde_recta(
     incluir_leyenda=True,
     diseno=None,
     ajustes=None,
-    =None,
+    url_qr=None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -1245,8 +1254,8 @@ def generar_modelo_desde_recta(
     con aplicar_ajustes).
 
     `url_qr`: si se pasa, se agrega un QR en relieve con esa URL en la
-    esquina inferior derecha (dentro del margen). La leyenda se angosta
-    para no pisarlo y la zona de abajo se reserva al menos de su alto.
+    esquina superior izquierda (dentro del margen). Los títulos de arriba
+    se escriben a su derecha y el gráfico empieza debajo de él.
     """
 
     dim_x, dim_y, chaflan = PLACA_ANCHO, PLACA_ALTO, PLACA_CHAFLAN
@@ -1587,12 +1596,12 @@ def generar_modelo_desde_recta(
     categorias_x = [str(c) for c in (textos.get("categorias_x") or [])]
     ancho_texto = dim_x - 2 * MARGEN_PLACA     # un renglón de lado a lado
 
-    # QR (esquina inferior derecha, dentro del margen): la leyenda se angosta
-    # para no pisarlo, y la zona de abajo (leyenda) mide al menos su alto más
-    # la separación BANA, así tampoco toca los rótulos del eje X.
+    # QR (esquina superior izquierda, dentro del margen): los títulos de
+    # arriba se escriben a su derecha, más angostos, y el gráfico empieza
+    # debajo de él, con la separación BANA.
     hay_qr = bool(url_qr)
-    ancho_leyenda = ancho_texto - (QR_LADO + CLEARANCE_BRAILLE if hay_qr else 0.0)
-    alto_reserva_qr = (QR_LADO + CLEARANCE_BRAILLE) if hay_qr else 0.0
+    x_titulos = MARGEN_PLACA + (QR_LADO + CLEARANCE_BRAILLE if hay_qr else 0.0)
+    ancho_titulos = dim_x - MARGEN_PLACA - x_titulos
 
     def _es_categoria(valor):
         i = int(round(valor))
@@ -1658,11 +1667,11 @@ def generar_modelo_desde_recta(
             titulos_arriba = []   # (clave, nombre, rótulo)
             if titulo_grafico:
                 titulos_arriba.append(("titulo", "título del gráfico",
-                                       _abreviar(titulo_grafico, ancho_texto, "título del gráfico",
+                                       _abreviar(titulo_grafico, ancho_titulos, "título del gráfico",
                                                  "titulo")))
             if titulo_eje_y_txt:
                 titulos_arriba.append(("titulo_eje_y", "título del eje Y",
-                                       _abreviar(titulo_eje_y_txt, ancho_texto - CLEARANCE_BRAILLE,
+                                       _abreviar(titulo_eje_y_txt, ancho_titulos - CLEARANCE_BRAILLE,
                                                  "título del eje Y", "titulo_eje_y")))
 
             # --- Números del eje Y: con letras solo si son muy anchos (una
@@ -1736,25 +1745,26 @@ def generar_modelo_desde_recta(
                 # el número más alto del eje Y va centrado en el borde superior
                 # del gráfico: sobresale medio renglón
                 tope_plot = y_tope - ALTURA_FILA_BRAILLE / 2
+            if hay_qr:
+                # el gráfico (y el medio renglón que sobresale el número más
+                # alto del eje Y) empieza debajo del QR
+                tope_plot = min(tope_plot, y_tope - QR_LADO - CLEARANCE_BRAILLE - ALTURA_FILA_BRAILLE / 2)
             # debajo del eje X: renglón de rótulos (+ renglón del título del eje X)
             bajo_plot = CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
                 + (INTERLINEA_BRAILLE if titulo_eje_x_txt else 0.0)
 
             leyenda_letras = _ordenar_abreviaturas(abreviador.leyenda)
-            renglones_leyenda = _armar_leyenda(series_leyenda, leyenda_letras, ancho_leyenda)
+            renglones_leyenda = _armar_leyenda(series_leyenda, leyenda_letras, ancho_texto)
             renglones_necesarios = len(renglones_leyenda)
             alto_ideal = ancho_plot * proporcion
 
             def _alto_libre(n):
-                # la zona de abajo mide lo que pida la leyenda o el QR, lo mayor
-                return tope_plot - bajo_plot - max(_alto_leyenda(n), alto_reserva_qr) - MARGEN_PLACA
+                return tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
 
             umbral = min(ALTO_PLOT_MIN, alto_ideal)
             entra = _alto_libre(renglones_necesarios) >= umbral
             n_renglones = renglones_necesarios
-            # sacar un renglón solo sirve si libera alto (con QR puede no hacerlo)
-            while (n_renglones and _alto_libre(n_renglones) < umbral
-                   and _alto_libre(n_renglones - 1) > _alto_libre(n_renglones)):
+            while n_renglones and _alto_libre(n_renglones) < umbral:
                 n_renglones -= 1
             renglones_leyenda = renglones_leyenda[:n_renglones]
             alto_plot = min(alto_ideal, _alto_libre(n_renglones))
@@ -2043,9 +2053,9 @@ def generar_modelo_desde_recta(
     # (con incluir_etiquetas=False se saltea todo el bloque: el espacio ya
     # quedó reservado, así que la placa no se reacomoda.)
     if incluir_etiquetas:
-        def _x_centrada(celdas, centro):
+        def _x_centrada(celdas, centro, desde=MARGEN_PLACA):
             ancho = _ancho_celdas(len(celdas))
-            return min(max(MARGEN_PLACA, centro - ancho / 2), dim_x - MARGEN_PLACA - ancho)
+            return min(max(desde, centro - ancho / 2), dim_x - MARGEN_PLACA - ancho)
 
         def _escribir(clave, nombre, rotulo, x0, y):
             recuadro = _texto(clave, "titulo" if clave == "titulo" else "titulo_eje",
@@ -2061,11 +2071,13 @@ def generar_modelo_desde_recta(
                       _x_centrada(rotulo_titulo_x["celdas"], izquierda + ancho_plot / 2),
                       abajo - CLEARANCE_BRAILLE - INTERLINEA_BRAILLE)
 
+        # a la derecha del QR, si lo hay (x_titulos)
         for (clave, nombre, rotulo), y_fila in zip(titulos_arriba, filas_titulo):
             if clave == "titulo_eje_y":
-                x0 = min(x_titulo_y, dim_x - MARGEN_PLACA - _ancho_celdas(len(rotulo["celdas"])))
+                x0 = min(max(x_titulo_y, x_titulos),
+                         dim_x - MARGEN_PLACA - _ancho_celdas(len(rotulo["celdas"])))
             else:
-                x0 = _x_centrada(rotulo["celdas"], dim_x / 2)
+                x0 = _x_centrada(rotulo["celdas"], (x_titulos + dim_x - MARGEN_PLACA) / 2, x_titulos)
             _escribir(clave, nombre, rotulo, x0, y_fila)
 
         abreviadas = [a for a in abreviador.leyenda if a["donde"] == "categoría del eje X"]
@@ -2253,12 +2265,12 @@ def generar_modelo_desde_recta(
               flush=True)
 
     # ================================================================
-    # 12c. QR (esquina inferior derecha, en el lugar reservado en 6b)
+    # 12c. QR (esquina superior izquierda, en el lugar reservado en 6b)
     # ================================================================
     qr_info = None
     if hay_qr:
-        qr_x = dim_x - MARGEN_PLACA - QR_LADO
-        qr_y = MARGEN_PLACA
+        qr_x = MARGEN_PLACA
+        qr_y = y_tope - QR_LADO
         desde = len(piezas)
         qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, lado=QR_LADO, altura=QR_ALTURA)
         if qr_info:
