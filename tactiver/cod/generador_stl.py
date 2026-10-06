@@ -21,6 +21,24 @@ picos de ~1.3-1.7GB de RAM y hasta 100s. El mismo modelo construido a mano
 como arreglos de triángulos (numpy) y escrito con `numpy-stl` midió <50MB de
 pico y ~2s — la sobrecarga era enteramente del kernel CAD, no de la
 geometría en sí.
+
+Higiene de la malla
+-------------------
+Aunque el STL no necesite ser un único sólido, Bambu Studio sí revisa cada
+pieza al importarlo: si encuentra cáscaras abiertas, triángulos de área
+cero o caras/aristas exactamente coincidentes entre piezas, corre su
+reparación automática, que con miles de piezas superpuestas puede deformar
+el modelo (la placa se veía "pandeada" antes de laminar). Por eso:
+  - cada primitiva es una malla cerrada y sin triángulos degenerados (las
+    esferas tenían los dos polos abiertos);
+  - en una línea continua, la unión entre dos tramos lleva UNA sola tapa
+    redonda (antes había dos cilindros idénticos superpuestos), y lo mismo
+    en la esquina donde se juntan los dos ejes;
+  - los módulos vecinos del QR se superponen apenas en vez de compartir
+    caras exactas;
+  - los vértices de los cilindros no caen justo sobre las esquinas de la
+    caja del tramo (aristas coincidentes en tramos horizontales/verticales);
+  - al guardar se descarta cualquier triángulo de área cero que quede.
 """
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
@@ -52,6 +70,11 @@ QR_LADO = 25.0
 QR_ALTURA = 1.6
 QR_MARGEN = 4.0
 QR_ERROR_CORRECTION = ERROR_CORRECT_L
+# Cada módulo del QR se agranda esto (mm) en la malla, así dos módulos
+# vecinos se superponen apenas en vez de compartir caras exactas
+# (geometría no-manifold que Bambu Studio intenta "reparar"). No cambia la
+# lectura del código: es una centésima de milímetro.
+QR_SOLAPE_LATERAL = 0.02
 # Una fila de texto Braille ocupa esto de alto (dos filas de puntos + su
 # diámetro), y la separación de BANA entre elementos Braille no relacionados
 # es CLEARANCE_BRAILLE. Se usan para reservar espacio para títulos.
@@ -125,6 +148,8 @@ def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
         (3, 0, 4), (3, 4, 7),  # izquierda(normal -X)
     )
     return v[np.array(caras)]
+
+
 def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
     """Agrega un QR cuadrado en relieve a la lista de primitivas.
 
@@ -164,6 +189,8 @@ def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
         "filas": n,
         "url": url,
     }
+
+
 def _crear_matriz_qr(url):
     """Genera la matriz binaria del QR.
 
@@ -181,6 +208,7 @@ def _crear_matriz_qr(url):
     qr.make(fit=True)
 
     return qr.get_matrix()
+
 
 def _malla_prisma(poligono, altura, z0=0.0):
     """Un polígono CONVEXO (vértices en sentido antihorario, en mm) extruido
@@ -218,8 +246,13 @@ def _malla_cilindro(radio, altura, cx=0.0, cy=0.0, z0=0.0, lados=CILINDRO_LADOS)
     Equivale a lo que antes hacía
     `cq.Workplane("XY").workplane(offset=z0).center(cx, cy)
        .circle(radio).extrude(altura)`.
+
+    Los vértices arrancan medio paso girados (no en 0°, 90°, 180°...): si no,
+    en un tramo horizontal o vertical (los ejes, las muestras de la leyenda)
+    dos vértices del cilindro caen exactamente sobre las esquinas de la caja
+    del tramo y comparten con ella una arista vertical entera.
     """
-    angulos = np.linspace(0, 2 * np.pi, lados, endpoint=False)
+    angulos = np.linspace(0, 2 * np.pi, lados, endpoint=False) + np.pi / lados
     anillo_x = cx + radio * np.cos(angulos)
     anillo_y = cy + radio * np.sin(angulos)
     z1 = z0 + altura
@@ -243,24 +276,49 @@ def _malla_esfera(radio, cx=0.0, cy=0.0, cz=0.0, lat=ESFERA_LAT, lon=ESFERA_LON)
     Equivale a lo que antes hacía
     `cq.Workplane("XY").workplane(offset=cz).center(cx, cy).sphere(radio)`
     (acá `cz` ya es la coordenada Z absoluta del centro).
+
+    En las filas de los polos cada cuadrilátero de la grilla se reduce a un
+    triángulo, porque sus dos vértices del polo son el mismo punto:
+      - fila del polo norte (i == 0): p00 == p01, vale (p00, p10, p11);
+      - fila del polo sur (i == lat-1): p10 == p11, vale (p00, p11, p01).
+    (Antes estas dos condiciones estaban al revés: se descartaba justo el
+    triángulo válido y se guardaba el de área cero, así que cada punto
+    Braille quedaba con un agujero arriba y otro abajo.)
+
+    Los vértices se calculan UNA vez y se reutilizan: los polos son puntos
+    exactos y la costura (φ = 360°) toma los mismos vértices que φ = 0°.
+    Calcularlos de nuevo con sin/cos no sirve, porque sin(π) y sin(2π) no
+    dan 0 exacto en coma flotante y quedan rendijas de ~1e-16 mm que el
+    chequeo exacto de Bambu Studio cuenta como aristas abiertas.
     """
-    def punto(theta, phi):
-        return (
-            cx + radio * math.sin(theta) * math.cos(phi),
-            cy + radio * math.sin(theta) * math.sin(phi),
-            cz + radio * math.cos(theta),
-        )
+    norte = (cx, cy, cz + radio)
+    sur = (cx, cy, cz - radio)
+    anillos = []   # anillos intermedios i = 1 .. lat-1
+    for i in range(1, lat):
+        theta = math.pi * i / lat
+        s, c = math.sin(theta), math.cos(theta)
+        anillos.append([
+            (cx + radio * s * math.cos(2 * math.pi * j / lon),
+             cy + radio * s * math.sin(2 * math.pi * j / lon),
+             cz + radio * c)
+            for j in range(lon)
+        ])
+
+    def punto(i, j):
+        if i == 0:
+            return norte
+        if i == lat:
+            return sur
+        return anillos[i - 1][j % lon]
 
     tris = []
     for i in range(lat):
-        theta0, theta1 = math.pi * i / lat, math.pi * (i + 1) / lat
         for j in range(lon):
-            phi0, phi1 = 2 * math.pi * j / lon, 2 * math.pi * (j + 1) / lon
-            p00, p01 = punto(theta0, phi0), punto(theta0, phi1)
-            p10, p11 = punto(theta1, phi0), punto(theta1, phi1)
-            if i != 0:
-                tris.append((p00, p10, p11))
+            p00, p01 = punto(i, j), punto(i, j + 1)
+            p10, p11 = punto(i + 1, j), punto(i + 1, j + 1)
             if i != lat - 1:
+                tris.append((p00, p10, p11))
+            if i != 0:
                 tris.append((p00, p11, p01))
     return np.array(tris)
 
@@ -283,8 +341,22 @@ def _trasladar(triangulos, dx, dy, dz):
     return triangulos + np.array([dx, dy, dz])
 
 
+def _quitar_degenerados(triangulos):
+    """Descarta los triángulos de área cero (medida ya en float32, que es la
+    precisión con que se escribe el STL). No aportan nada a la forma, dejan
+    una normal NaN en el archivo y Bambu Studio los cuenta como errores."""
+    v = np.asarray(triangulos, dtype=np.float32).astype(np.float64)
+    areas = np.linalg.norm(np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]), axis=1)
+    validos = areas > 1e-12
+    descartados = int((~validos).sum())
+    if descartados:
+        print(f"[STL] Se descartaron {descartados} triángulos de área cero.", flush=True)
+    return np.asarray(triangulos)[validos]
+
+
 def _guardar_stl(triangulos, archivo_salida):
     """Escribe una malla (arreglo N×3×3) a un archivo STL binario."""
+    triangulos = _quitar_degenerados(triangulos)
     m = mesh.Mesh(np.zeros(triangulos.shape[0], dtype=mesh.Mesh.dtype))
     m.vectors[:] = triangulos
     m.update_normals()
@@ -387,15 +459,21 @@ def _valores_reales_eje(etiquetas, minimo, valor_min, valor_max, tolerancia=0.15
     return valores
 
 
-def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
-    """Agrega un tramo recto en relieve, con dos extremos redondeados, a la
-    lista `piezas` (tres piezas: el cuerpo y las dos tapas).
+def agregar_segmento_relieve(piezas, p0, p1, diametro, altura, tapa_inicio=True):
+    """Agrega un tramo recto en relieve, con extremos redondeados, a la
+    lista `piezas`.
 
     Arrancan `SOLAPE` mm por debajo de la superficie de la placa (en vez de
     justo en el borde) para garantizar una superposición real: sin un
     kernel CAD que suelde topológicamente las piezas, dos superficies que
     solo se tocan dependen de que el slicer las una bien al cortar por
     capas. La altura visible por encima de la superficie no cambia.
+
+    `tapa_inicio=False`: el tramo continúa a otro que ya terminó en `p0` con
+    su tapa redonda (mismo diámetro y altura); repetirla sería un cilindro
+    idéntico encima del otro, con todas sus caras coincidentes.
+
+    Devuelve True si el tramo se agregó (False si era de largo cero).
     """
     x0 = float(p0[0])
     y0 = float(p0[1])
@@ -408,14 +486,16 @@ def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
     largo = hypot(dx, dy)
 
     if largo < 1e-6:
-        return
+        return False
 
     piezas.append({"t": "s", "a": (x0, y0), "b": (x1, y1),
-                   "d": float(diametro), "h": float(altura)})
+                   "d": float(diametro), "h": float(altura), "c0": bool(tapa_inicio)})
+    return True
 
 
-def _malla_segmento(p0, p1, diametro, altura):
-    """Malla de un tramo en relieve: el cuerpo y las dos tapas redondas."""
+def _malla_segmento(p0, p1, diametro, altura, tapa_inicio=True):
+    """Malla de un tramo en relieve: el cuerpo, la tapa redonda del final y
+    (salvo que otro tramo ya la ponga) la del principio."""
     x0, y0 = p0
     x1, y1 = p1
     largo = hypot(x1 - x0, y1 - y0)
@@ -426,13 +506,30 @@ def _malla_segmento(p0, p1, diametro, altura):
 
     z0 = BASE_THICKNESS - SOLAPE
     altura_real = float(altura) + SOLAPE
+    radio = float(diametro) / 2
 
     cuerpo_local = _malla_caja(largo, float(diametro), altura_real, cx=0.0, cy=0.0, z0=0.0)
-    cuerpo = _trasladar(_rotar_z(cuerpo_local, angulo), mx, my, z0)
+    partes = [_trasladar(_rotar_z(cuerpo_local, angulo), mx, my, z0),
+              _malla_cilindro(radio, altura_real, cx=x1, cy=y1, z0=z0)]
+    if tapa_inicio:
+        partes.append(_malla_cilindro(radio, altura_real, cx=x0, cy=y0, z0=z0))
+    return np.concatenate(partes, axis=0)
 
-    tapa0 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x0, cy=y0, z0=z0)
-    tapa1 = _malla_cilindro(float(diametro) / 2, altura_real, cx=x1, cy=y1, z0=z0)
-    return np.concatenate([cuerpo, tapa0, tapa1], axis=0)
+
+def _agregar_cadena(piezas, tramos, diametro, altura, tapa_inicio=True):
+    """Agrega tramos rectos [(p0, p1), ...] del mismo diámetro y altura. Un
+    tramo que empieza donde terminó el anterior no repite la tapa redonda
+    de la unión (ver `agregar_segmento_relieve`); uno que empieza en otro
+    lado (después del hueco de una raya) sí la lleva. `tapa_inicio` vale
+    para el primer tramo de todos."""
+    ultimo = None
+    for a, b in tramos:
+        if ultimo is None:
+            tapa = tapa_inicio
+        else:
+            tapa = hypot(a[0] - ultimo[0], a[1] - ultimo[1]) > 1e-6
+        if agregar_segmento_relieve(piezas, a, b, diametro, altura, tapa_inicio=tapa):
+            ultimo = b
 
 
 def agregar_punto_relieve(piezas, punto, diametro, altura):
@@ -462,13 +559,14 @@ def _malla_de(pieza):
             pieza["a"],
             pieza["b"],
             pieza["d"],
-            pieza["h"]
+            pieza["h"],
+            pieza.get("c0", True)
         )
 
     if pieza["t"] == "q":
         return _malla_caja(
-            pieza["d"],
-            pieza["d"],
+            pieza["d"] + QR_SOLAPE_LATERAL,
+            pieza["d"] + QR_SOLAPE_LATERAL,
             pieza["h"] + SOLAPE,
             cx=pieza["x"],
             cy=pieza["y"],
@@ -482,6 +580,8 @@ def _malla_de(pieza):
         cy=pieza["y"],
         z0=BASE_THICKNESS - SOLAPE
     )
+
+
 def _primitiva_json(pieza):
     """Primitiva para la vista previa del navegador (mm, 2 decimales)."""
     r = lambda v: round(float(v), 2)
@@ -516,6 +616,7 @@ def _primitiva_json(pieza):
         "x": r(pieza["x"]),
         "y": r(pieza["y"])
     }
+
 
 def _puntos_espaciados(puntos, distancia_min):
     """Filtra una polilínea para que sus puntos queden separados al menos
@@ -972,6 +1073,7 @@ def agregar_funcion(
     raya_largo=RAYA_LARGO,
     raya_hueco=RAYA_HUECO,
     punteado_espaciado=PUNTEADO_ESPACIADO,
+    tapa_inicio=True,
 ):
     """
     Agrega una polilínea en relieve a la lista `piezas`.
@@ -988,6 +1090,9 @@ def agregar_funcion(
         patrón solo pondría un bulto en cada punta.
       - "celdas"   -> línea continua hecha de celdas largas (diámetro y
         altura del estilo) unidas por cuellos angostos y bajos.
+
+    `tapa_inicio=False`: el primer punto ya tiene una tapa redonda igual
+    puesta por otra línea (la esquina donde se juntan los dos ejes).
     """
 
     if not puntos or len(puntos) < 2:
@@ -999,11 +1104,14 @@ def agregar_funcion(
         # alarga lo mismo) para que las tapas no tapen el cuello y la muesca
         # entre celdas mida de verdad CUELLO_LARGO.
         largo_celda = max(CELDA_LARGO - diametro, 0.5)
-        for es_celda, tramo in _dividir_en_celdas(puntos, largo_celda, CUELLO_LARGO + diametro):
+        for k, (es_celda, tramo) in enumerate(
+                _dividir_en_celdas(puntos, largo_celda, CUELLO_LARGO + diametro)):
             d = diametro if es_celda else CUELLO_DIAMETRO
             h = altura if es_celda else CUELLO_ALTURA
-            for p0, p1 in zip(tramo[:-1], tramo[1:]):
-                agregar_segmento_relieve(piezas, p0, p1, d, h)
+            # dentro de un tramo, las uniones llevan una sola tapa; entre una
+            # celda y un cuello las tapas son de distinto tamaño y van las dos
+            _agregar_cadena(piezas, list(zip(tramo[:-1], tramo[1:])), d, h,
+                            tapa_inicio=tapa_inicio or k > 0)
         return
 
     if patron == "punteado":
@@ -1013,15 +1121,15 @@ def agregar_funcion(
             agregar_punto_relieve(piezas, p, diametro, altura)
         return
 
-    for p0, p1 in zip(puntos[:-1], puntos[1:]):
-        if patron == "rayado":
-            for a, b in _dividir_en_rayas(p0, p1, raya_largo, raya_hueco):
-                agregar_segmento_relieve(piezas, a, b, diametro, altura)
-        else:
-            agregar_segmento_relieve(piezas, p0, p1, diametro, altura)
+    if patron == "rayado":
+        tramos = [t for p0, p1 in zip(puntos[:-1], puntos[1:])
+                  for t in _dividir_en_rayas(p0, p1, raya_largo, raya_hueco)]
+    else:
+        tramos = list(zip(puntos[:-1], puntos[1:]))
+    _agregar_cadena(piezas, tramos, diametro, altura, tapa_inicio=tapa_inicio)
 
 
-def _agregar_eje(piezas, p0, p1, estilo):
+def _agregar_eje(piezas, p0, p1, estilo, tapa_inicio=True):
     """Dibuja un eje (tramo recto de p0 a p1) con su textura propia
     (ver EJE_X_ESTILO / EJE_Y_ESTILO)."""
     agregar_funcion(
@@ -1029,6 +1137,7 @@ def _agregar_eje(piezas, p0, p1, estilo):
         diametro=estilo["diametro"], altura=estilo["altura"], patron=estilo["patron"],
         raya_largo=estilo["raya_largo"], raya_hueco=estilo["raya_hueco"],
         punteado_espaciado=estilo["punteado_espaciado"],
+        tapa_inicio=tapa_inicio,
     )
 
 
@@ -1134,6 +1243,10 @@ def generar_modelo_desde_recta(
     `ajustes`: lo que el supervisor cambió en la vista previa ("ocultar" y
     "mover"; los cambios de texto y las series ocultas se aplican antes,
     con aplicar_ajustes).
+
+    `url_qr`: si se pasa, se agrega un QR en relieve con esa URL en la
+    esquina inferior derecha (dentro del margen). La leyenda se angosta
+    para no pisarlo y la zona de abajo se reserva al menos de su alto.
     """
 
     dim_x, dim_y, chaflan = PLACA_ANCHO, PLACA_ALTO, PLACA_CHAFLAN
@@ -1474,6 +1587,13 @@ def generar_modelo_desde_recta(
     categorias_x = [str(c) for c in (textos.get("categorias_x") or [])]
     ancho_texto = dim_x - 2 * MARGEN_PLACA     # un renglón de lado a lado
 
+    # QR (esquina inferior derecha, dentro del margen): la leyenda se angosta
+    # para no pisarlo, y la zona de abajo (leyenda) mide al menos su alto más
+    # la separación BANA, así tampoco toca los rótulos del eje X.
+    hay_qr = bool(url_qr)
+    ancho_leyenda = ancho_texto - (QR_LADO + CLEARANCE_BRAILLE if hay_qr else 0.0)
+    alto_reserva_qr = (QR_LADO + CLEARANCE_BRAILLE) if hay_qr else 0.0
+
     def _es_categoria(valor):
         i = int(round(valor))
         return bool(categorias_x) and abs(valor - i) <= 0.25 and 0 <= i < len(categorias_x)
@@ -1621,16 +1741,20 @@ def generar_modelo_desde_recta(
                 + (INTERLINEA_BRAILLE if titulo_eje_x_txt else 0.0)
 
             leyenda_letras = _ordenar_abreviaturas(abreviador.leyenda)
-            renglones_leyenda = _armar_leyenda(series_leyenda, leyenda_letras, ancho_texto)
+            renglones_leyenda = _armar_leyenda(series_leyenda, leyenda_letras, ancho_leyenda)
             renglones_necesarios = len(renglones_leyenda)
             alto_ideal = ancho_plot * proporcion
 
             def _alto_libre(n):
-                return tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+                # la zona de abajo mide lo que pida la leyenda o el QR, lo mayor
+                return tope_plot - bajo_plot - max(_alto_leyenda(n), alto_reserva_qr) - MARGEN_PLACA
 
-            entra = _alto_libre(renglones_necesarios) >= min(ALTO_PLOT_MIN, alto_ideal)
+            umbral = min(ALTO_PLOT_MIN, alto_ideal)
+            entra = _alto_libre(renglones_necesarios) >= umbral
             n_renglones = renglones_necesarios
-            while n_renglones and _alto_libre(n_renglones) < min(ALTO_PLOT_MIN, alto_ideal):
+            # sacar un renglón solo sirve si libera alto (con QR puede no hacerlo)
+            while (n_renglones and _alto_libre(n_renglones) < umbral
+                   and _alto_libre(n_renglones - 1) > _alto_libre(n_renglones)):
                 n_renglones -= 1
             renglones_leyenda = renglones_leyenda[:n_renglones]
             alto_plot = min(alto_ideal, _alto_libre(n_renglones))
@@ -1846,11 +1970,15 @@ def generar_modelo_desde_recta(
     )
 
     # Ejes continuos, más bajos que las curvas: ver EJE_X_ESTILO / EJE_Y_ESTILO.
+    # Los dos arrancan en la misma esquina: la tapa redonda de ahí la pone
+    # el eje X; si el eje Y pusiera la suya, serían dos cilindros idénticos
+    # uno encima del otro (caras coincidentes).
     desde = len(piezas)
     _agregar_eje(piezas, eje_x_inicio, eje_x_fin, EJE_X_ESTILO)
     _registrar("eje_x", "eje", desde, texto="Eje X")
     desde = len(piezas)
-    _agregar_eje(piezas, eje_y_inicio, eje_y_fin, EJE_Y_ESTILO)
+    mismo_inicio = EJE_Y_ESTILO == EJE_X_ESTILO and EJE_Y_ESTILO["patron"] == "solido"
+    _agregar_eje(piezas, eje_y_inicio, eje_y_fin, EJE_Y_ESTILO, tapa_inicio=not mismo_inicio)
     _registrar("eje_y", "eje", desde, texto="Eje Y")
 
     # ================================================================
@@ -2123,17 +2251,20 @@ def generar_modelo_desde_recta(
         print(f"[STL] Leyenda abajo: {len(leyenda_diseno)} textura(s), "
               f"{len(abreviaturas_diseno)} texto(s) abreviado(s), {len(renglones_leyenda)} renglón(es).",
               flush=True)
-    if url_qr:
-      qr_info = agregar_qr(
-          piezas,
-          url_qr,
-          qr_x,
-          qr_y,
-          lado=QR_LADO,
-          altura=QR_ALTURA,
-        )
-    else:
-      qr_info = None
+
+    # ================================================================
+    # 12c. QR (esquina inferior derecha, en el lugar reservado en 6b)
+    # ================================================================
+    qr_info = None
+    if hay_qr:
+        qr_x = dim_x - MARGEN_PLACA - QR_LADO
+        qr_y = MARGEN_PLACA
+        desde = len(piezas)
+        qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, lado=QR_LADO, altura=QR_ALTURA)
+        if qr_info:
+            _registrar("qr", "qr", desde, texto="Código QR",
+                       recuadro=[qr_x, qr_y, qr_x + QR_LADO, qr_y + QR_LADO])
+
     if diseno is not None:
         diseno.update({
             "placa": {"ancho_mm": dim_x, "alto_mm": dim_y, "chaflan_mm": chaflan,
@@ -2166,6 +2297,8 @@ def generar_modelo_desde_recta(
             # cada texto escrito (títulos, categorías): qué dice y dónde
             "textos": textos_diseno,
             "etiquetas_dato": datos_diseno,
+            # QR en relieve (None si no se pidió): esquina, lado y URL
+            "qr": qr_info,
             "avisos": avisos,
             # vista previa: cada cosa en relieve con sus primitivas (mm)
             "elementos": [{
