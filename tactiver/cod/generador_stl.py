@@ -68,7 +68,7 @@ DIAM_LINEA = 2.0
 # QR táctil
 QR_LADO = 25.0
 QR_ALTURA = 1.6
-QR_MARGEN = 4.0
+QR_MARGEN = 4
 QR_ERROR_CORRECTION = ERROR_CORRECT_L
 # Cada módulo del QR se agranda esto (mm) en la malla, así dos módulos
 # vecinos se superponen apenas en vez de compartir caras exactas
@@ -1180,7 +1180,7 @@ def generar_modelo_desde_recta(
     incluir_leyenda=True,
     diseno=None,
     ajustes=None,
-    url_qr=None,
+    =None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
