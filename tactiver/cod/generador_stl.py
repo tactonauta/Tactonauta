@@ -26,7 +26,6 @@ geometría en sí.
 import copy
 import math
 import re
-import unicodedata
 from math import atan2, degrees, hypot
 
 import numpy as np
@@ -45,10 +44,8 @@ from braille import (BRAILLE, CELDA_PITCH, DIAM_PUNTO_BRAILLE, ESPACIADO_BRAILLE
 BASE_THICKNESS = 1.5
 CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
-RELIEVE_TICK = 1.0
 RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
-MARGEN_BORDE = 25.0
 
 # Una fila de texto Braille ocupa esto de alto (dos filas de puntos + su
 # diámetro), y la separación de BANA entre elementos Braille no relacionados
@@ -266,14 +263,6 @@ def agregar_caracter_braille(piezas, caracter, cx, cy):
         agregar_punto_braille(piezas, cx + dx, cy + dy)
 
 
-def agregar_texto_braille(piezas, texto, cx, cy):
-    """Coloca una cadena de caracteres Braille en línea."""
-    x = cx
-    for ch in texto:
-        agregar_caracter_braille(piezas, ch, x, cy)
-        x += CELDA_PITCH
-
-
 def _decimales_necesarios(valores, max_decimales=3):
     """Cuántos decimales hacen falta para que los valores de un eje (sus
     marcas/ticks) se distingan entre sí al redondear, sin pasarse de
@@ -306,32 +295,6 @@ def _formatear_valor_braille(valor, decimales):
     return es_negativo, entero, frac
 
 
-def agregar_numero_braille(piezas, valor, cx, cy, decimales=0):
-    """Coloca un número en formato Nemeth: signo menos si corresponde,
-    indicador numeral, parte entera y, si `decimales` > 0, punto decimal
-    Nemeth + parte decimal.
-
-    Con `decimales=0` (el valor por defecto) el comportamiento es idéntico
-    al de la versión anterior, que solo aceptaba enteros.
-    """
-    es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
-    x = cx
-    if es_negativo:
-        agregar_caracter_braille(piezas, "menos", x, cy)
-        x += CELDA_PITCH
-    agregar_caracter_braille(piezas, "numeral", x, cy)
-    x += CELDA_PITCH
-    for ch in entero:
-        agregar_caracter_braille(piezas, ch, x, cy)
-        x += CELDA_PITCH
-    if frac:
-        agregar_caracter_braille(piezas, "punto", x, cy)
-        x += CELDA_PITCH
-        for ch in frac:
-            agregar_caracter_braille(piezas, ch, x, cy)
-            x += CELDA_PITCH
-
-
 def _valores_reales_eje(etiquetas, minimo, valor_min, valor_max, tolerancia=0.15):
     """Valores de eje realmente leídos por OCR (los que el segmentador
     reporta en "textos.etiquetas_eje_x/y"), en vez de inventar marcas
@@ -362,22 +325,6 @@ def _valores_reales_eje(etiquetas, minimo, valor_min, valor_max, tolerancia=0.15
         return []
     valores.sort()
     return valores
-
-
-def _sanear_texto_braille(texto):
-    """Deja el texto en minúsculas y sin tildes para que las letras
-    encuentren su signo en la tabla BRAILLE.
-
-    Limitación conocida: no hay indicador de "vuelta a letras" dentro de un
-    texto corrido, así que un dígito incrustado en un título (p. ej.
-    "figura 3") se dibuja con la misma forma que una letra, sin el
-    indicador numeral — ambigüedad aceptable para un título, pero por eso
-    los NÚMEROS DE LOS EJES (el dato que importa) se dibujan siempre con
-    agregar_numero_braille(), no con esta función.
-    """
-    sin_tildes = unicodedata.normalize("NFKD", texto)
-    sin_tildes = "".join(c for c in sin_tildes if not unicodedata.combining(c))
-    return sin_tildes.lower()
 
 
 def agregar_segmento_relieve(piezas, p0, p1, diametro, altura):
@@ -690,8 +637,7 @@ def _dibujar_celdas(piezas, celdas, x_primera, y):
 
 
 def _celdas_numero(valor, decimales=0):
-    """Celdas Braille de un número, igual que agregar_numero_braille():
-    [menos] numeral dígitos [punto dígitos]."""
+    """Celdas Braille de un número: [menos] numeral dígitos [punto dígitos]."""
     es_negativo, entero, frac = _formatear_valor_braille(valor, decimales)
     celdas = (["menos"] if es_negativo else []) + ["numeral"] + list(entero)
     if frac:
@@ -986,139 +932,8 @@ def _ensamblar(base, piezas):
     return np.concatenate(trozos, axis=0)
 
 
-def _valores_tick(v_min, v_max, intervalo):
-    """Devuelve los múltiplos de un intervalo dentro del rango."""
-    inicio = math.ceil(v_min / intervalo) * intervalo
-    valores = []
-    v = inicio
-    while v <= v_max:
-        valores.append(int(v))
-        v += intervalo
-    return valores
-
-
-def generar_modelo_bana(
-    dim_x=210.0,
-    dim_y=148.0,
-    p1=(0, 0),
-    p2=(150, 90),
-    intervalo_ticks=25,
-    archivo_salida="grafica_bana.stl",
-):
-    """Genera una placa táctil BANA con ejes, marcas y una línea en relieve."""
-    xs = [0, p1[0], p2[0]]
-    ys = [0, p1[1], p2[1]]
-    x_min, x_max = min(xs), max(xs)
-    y_min, y_max = min(ys), max(ys)
-
-    ancho_datos = x_max - x_min
-    alto_datos = y_max - y_min
-    if ancho_datos > dim_x - 2 * MARGEN_BORDE or alto_datos > dim_y - 2 * MARGEN_BORDE:
-        raise ValueError(
-            f"Los datos (ancho={ancho_datos}mm, alto={alto_datos}mm) no entran en la "
-            f"placa de {dim_x}x{dim_y}mm con un margen de {MARGEN_BORDE}mm por lado."
-        )
-
-    origen_x_fis = MARGEN_BORDE - x_min
-    origen_y_fis = MARGEN_BORDE - y_min
-
-    def a_fisico(punto):
-        return (punto[0] + origen_x_fis, punto[1] + origen_y_fis)
-
-    modelo = _malla_caja(dim_x, dim_y, BASE_THICKNESS, cx=dim_x / 2, cy=dim_y / 2, z0=0.0)
-
-    grosor_eje = 2.0
-    z_ejes = BASE_THICKNESS + RELIEVE_EJE
-    z_ticks = BASE_THICKNESS + RELIEVE_TICK
-
-    x0_fis, x1_fis = a_fisico((x_min, 0))[0], a_fisico((x_max, 0))[0]
-    y0_fis, y1_fis = a_fisico((0, y_min))[1], a_fisico((0, y_max))[1]
-
-    piezas = []
-
-    # Ejes y ticks arrancan en z=0 (atraviesan toda la placa) en vez de
-    # apenas en su superficie, así que ya quedan bien anclados sin
-    # necesitar ningún boolean.
-    eje_x = _malla_caja(
-        x1_fis - x0_fis, grosor_eje, z_ejes,
-        cx=(x0_fis + x1_fis) / 2, cy=origen_y_fis, z0=0.0,
-    )
-    eje_y = _malla_caja(
-        grosor_eje, y1_fis - y0_fis, z_ejes,
-        cx=origen_x_fis, cy=(y0_fis + y1_fis) / 2, z0=0.0,
-    )
-    piezas.append(eje_x)
-    piezas.append(eje_y)
-
-    longitud_tick = 6.0
-    for valor in _valores_tick(x_min, x_max, intervalo_ticks):
-        x_fis = origen_x_fis + valor
-        if valor != 0:
-            tick = _malla_caja(
-                grosor_eje, longitud_tick, z_ticks,
-                cx=x_fis, cy=origen_y_fis, z0=0.0,
-            )
-            piezas.append(tick)
-        agregar_numero_braille(
-            piezas, valor, cx=x_fis, cy=origen_y_fis - CLEARANCE_BRAILLE
-        )
-
-    for valor in _valores_tick(y_min, y_max, intervalo_ticks):
-        if valor == 0:
-            continue
-        y_fis = origen_y_fis + valor
-        tick = _malla_caja(
-            longitud_tick, grosor_eje, z_ticks,
-            cx=origen_x_fis, cy=y_fis, z0=0.0,
-        )
-        piezas.append(tick)
-        ancho_estimado = CELDA_PITCH * (len(str(abs(valor))) + 2)
-        agregar_numero_braille(
-            piezas, valor, cx=origen_x_fis - CLEARANCE_BRAILLE - ancho_estimado, cy=y_fis
-        )
-
-    agregar_texto_braille(
-        piezas, "x", cx=x1_fis - CELDA_PITCH,
-        cy=origen_y_fis - CLEARANCE_BRAILLE - CELDA_PITCH * 2,
-    )
-    agregar_texto_braille(
-        piezas, "y", cx=origen_x_fis - CLEARANCE_BRAILLE - CELDA_PITCH * 3,
-        cy=y1_fis - CELDA_PITCH,
-    )
-
-    agregar_funcion(piezas, [a_fisico(p1), a_fisico(p2)])
-
-    triangulos = _ensamblar(modelo, piezas)
-    _guardar_stl(triangulos, archivo_salida)
-    print(f"Modelo táctil BANA ({dim_x}x{dim_y}mm) exportado a: {archivo_salida}")
-    return triangulos
-
-
-# Compatibilidad con el código previo del proyecto. Nada más en el repo las
-# llama, pero se actualiza su firma (reciben `piezas`, no `modelo`) para que
-# sigan siendo un espejo fiel de las funciones que envuelven.
-def _punto_braille(piezas, cx, cy):
-    return agregar_punto_braille(piezas, cx, cy)
-
-
-def _caracter_braille(piezas, caracter, cx, cy):
-    return agregar_caracter_braille(piezas, caracter, cx, cy)
-
-
-def _numero_braille(piezas, valor, cx, cy):
-    return agregar_numero_braille(piezas, valor, cx, cy)
-
-
-def _segmento(piezas, inicio, fin, diametro, altura):
-    return agregar_segmento_relieve(piezas, inicio, fin, diametro, altura)
-
-
-def _ticks(minimo, maximo, intervalo):
-    return _valores_tick(minimo, maximo, intervalo)
-
-
 def _ancho_numero(valor, decimales=0):
-    """Ancho horizontal (mm) que ocupará `agregar_numero_braille` para este
+    """Ancho horizontal (mm) que ocupará un número en Braille para este
     valor: se calcula con el mismo formateo que usa el dibujo, así que
     coincide celda por celda (antes no contaba la celda del signo menos en
     valores negativos, y el número podía quedar más pegado al vecino de lo
@@ -1130,25 +945,21 @@ def _ancho_numero(valor, decimales=0):
     return CELDA_PITCH * celdas
 
 
-# Formato de la lámina: placa cuadrada de 22 x 22 cm con la esquina superior
-# derecha recortada (orientación al tacto). El gráfico va ARRIBA (con sus
-# títulos, números y rótulos) y lo que sobra abajo es para la leyenda.
+# Formato de la lámina, FIJO: placa cuadrada de 22 x 22 cm con la esquina
+# superior derecha recortada (orientación al tacto). El gráfico va ARRIBA
+# (con sus títulos, números y rótulos) y lo que sobra abajo es para la
+# leyenda. Para otro formato, cambiar solo estas constantes.
 PLACA_ANCHO = 220.0
 PLACA_ALTO = 220.0
-PLACA_MARGEN_SUPERIOR = 0.0   # franja extra en blanco arriba (además de MARGEN_PLACA)
 PLACA_CHAFLAN = 10.0
 
 
 def generar_modelo_desde_recta(
     datos_segmentador,
-    dim_x=PLACA_ANCHO,
-    dim_y=PLACA_ALTO,
     archivo_salida="grafica_tactil.stl",
     incluir_etiquetas=False,
     incluir_leyenda=True,
     diseno=None,
-    margen_superior=PLACA_MARGEN_SUPERIOR,
-    chaflan=PLACA_CHAFLAN,
     ajustes=None,
 ):
     """
@@ -1197,9 +1008,8 @@ def generar_modelo_desde_recta(
     `incluir_leyenda` (por defecto True): con 2 o más series, la leyenda de
     abajo empieza con una muestra de la textura de cada serie y su nombre.
 
-    `margen_superior` (mm): franja extra en blanco arriba (0 por defecto).
-    `chaflan` (mm): lado del triángulo recortado en la esquina superior
-    derecha de la placa (0 = sin recorte).
+    La placa es siempre la de PLACA_ANCHO x PLACA_ALTO con la esquina
+    recortada (PLACA_CHAFLAN).
 
     `diseno`: si se pasa un dict, se llena con dónde quedó cada cosa en la
     placa (mm, origen abajo a la izquierda) y la escala usada. Lo usa
@@ -1215,17 +1025,8 @@ def generar_modelo_desde_recta(
     con aplicar_ajustes).
     """
 
-    if dim_x < 130 or dim_y < 90:
-        raise ValueError(
-            "La placa debe medir al menos 130 x 90 mm."
-        )
-    # Alto que pueden usar el gráfico y la leyenda: todo menos la franja de
-    # arriba en blanco.
-    alto_util = dim_y - margen_superior
-    if alto_util < 90:
-        raise ValueError(
-            "Con ese margen superior no quedan al menos 90 mm de alto para el gráfico."
-        )
+    dim_x, dim_y, chaflan = PLACA_ANCHO, PLACA_ALTO, PLACA_CHAFLAN
+    alto_util = dim_y
 
     # ================================================================
     # 1. EXTRAER INFORMACIÓN DEL NUEVO SEGMENTADOR
@@ -2214,8 +2015,7 @@ def generar_modelo_desde_recta(
 
     if diseno is not None:
         diseno.update({
-            "placa": {"ancho_mm": dim_x, "alto_mm": dim_y,
-                      "margen_superior_mm": margen_superior, "chaflan_mm": chaflan,
+            "placa": {"ancho_mm": dim_x, "alto_mm": dim_y, "chaflan_mm": chaflan,
                       "contorno": [list(p) for p in contorno_placa(dim_x, dim_y, chaflan)]},
             "area": {"izquierda": izquierda, "abajo": abajo, "ancho": ancho_plot, "alto": alto_plot},
             # zona del gráfico (arriba, con títulos y rótulos) y de la leyenda
@@ -2274,5 +2074,3 @@ def generar_modelo_desde_recta(
     )
 
     return triangulos
-if __name__ == "__main__":
-    generar_modelo_bana()

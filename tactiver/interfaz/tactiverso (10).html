@@ -1383,14 +1383,6 @@
     });
   }
 
-  // Las solicitudes siguen en localStorage por ahora (fase siguiente: mover
-  // también esto al backend, junto con la generación real de las láminas).
-  function cargarSolicitudes() {
-    try { return JSON.parse(localStorage.getItem('puntito_solicitudes')) || []; }
-    catch (e) { return []; }
-  }
-  function guardarSolicitudes(s) { localStorage.setItem('puntito_solicitudes', JSON.stringify(s)); }
-
   function vacio(v) { return !v || !v.trim(); }
 
   let usuarioActual = null; // se llena desde /api/auth/yo o tras iniciar sesión/registrarse

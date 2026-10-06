@@ -471,12 +471,6 @@ def detectar_curvas(imagen_bgr, rect=None, sat_minima=60, tolerancia_hue=12,
     return series
 
 
-def detectar_curva(imagen_bgr, **kw):
-    """Compatibilidad: solo la máscara de la primera serie."""
-    s = detectar_curvas(imagen_bgr, **kw)
-    return s[0]["mascara"] if s else None
-
-
 # ---------- 3) OCR: DETECCIÓN Y CLASIFICACIÓN DE TEXTO ----------
 
 def _mapa_distancia_curva(mascaras):
@@ -1425,7 +1419,6 @@ def _solapa(a, b, holgura=2):
 def detectar_leyenda(imagen_bgr, gris, rect, series, tol=None, lang=None,
                      sat_minima=60, tolerancia_hue=12, advertencias=None):
     """Busca la muestra de color de cada serie y lee el texto a su derecha."""
-    t = tol or _tolerancias(gris.shape)
     alto, ancho = gris.shape[:2]
     hsv = cv2.cvtColor(imagen_bgr, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
@@ -1616,12 +1609,6 @@ def ajustar_lineal_robusto(pixeles, valores, umbral_rel=0.04):
         usados=[bool(x) for x in mejor_inliers],
     )
     return float(m), float(b), info
-
-
-def ajustar_lineal(pixeles, valores):
-    """Compatibilidad: devuelve solo (m, b)."""
-    m, b, _ = ajustar_lineal_robusto(pixeles, valores)
-    return m, b
 
 
 def _variantes_numero(texto):
@@ -1828,7 +1815,7 @@ def _calibrar_y_exportar(imagen, ruta_imagen, dir_resultados, uid,
         union = np.zeros_like(mascaras[0], dtype=bool)
         for m in mascaras:
             union |= m
-        filas_c, cols_c = np.where(union)
+        _, cols_c = np.where(union)
         if cols_c.size:
             pl = mascara_a_polilinea(union, n_puntos=0)
             if pl is not None:

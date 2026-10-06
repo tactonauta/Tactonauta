@@ -466,7 +466,6 @@ def exportar_hand_tracking(datos, diseno, descripcion):
         "version": VERSION,
         "descripcion": descripcion,
         "placa": {"ancho_mm": ancho, "alto_mm": alto,
-                  "margen_superior_mm": diseno["placa"].get("margen_superior_mm", 0),
                   "chaflan_mm": diseno["placa"].get("chaflan_mm", 0),
                   "origen": "esquina superior izquierda, y hacia abajo "
                             "(la esquina recortada es la superior derecha)"},

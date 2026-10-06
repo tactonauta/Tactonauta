@@ -255,30 +255,7 @@ def texto_a_celdas(texto):
 
 
 # ============================================================
-# 7. CONVERTIR CELDAS A PUNTOS
-#
-# ["mayuscula", "a"] -> [[4, 6], [1]]
-# ============================================================
-
-def celdas_a_puntos(celdas):
-
-    resultado = []
-
-    for celda in celdas:
-
-        if celda == " ":
-            resultado.append([])
-
-        else:
-            resultado.append(
-                BRAILLE.get(celda, [])
-            )
-
-    return resultado
-
-
-# ============================================================
-# 8. CALCULAR EL ANCHO FÍSICO DEL BRAILLE
+# 7. CALCULAR EL ANCHO FÍSICO DEL BRAILLE
 #
 # De borde a borde de los puntos, con las mismas medidas del generador.
 # ============================================================
@@ -302,20 +279,7 @@ def ancho_braille(celdas):
 
 
 # ============================================================
-# 9. COMPROBAR SI UN TEXTO CABE
-# ============================================================
-
-def texto_cabe(texto, ancho_disponible):
-
-    celdas = texto_a_celdas(texto)
-
-    ancho = ancho_braille(celdas)
-
-    return ancho <= ancho_disponible
-
-
-# ============================================================
-# 10. CREAR IDENTIFICADORES PARA LA LEYENDA
+# 8. CREAR IDENTIFICADORES PARA LA LEYENDA
 #
 # A, B, C, ... Z, y si hubiera más: A1, A2, ...
 # ============================================================
@@ -334,7 +298,7 @@ def crear_identificador(indice):
 
 
 # ============================================================
-# 11. ABREVIAR ETIQUETAS QUE NO CABEN
+# 9. ABREVIAR ETIQUETAS QUE NO CABEN
 #
 # Una etiqueta que no entra en su lugar se reemplaza por un identificador
 # (A, B, C...) y el texto completo va a la leyenda. El Abreviador lleva la
@@ -354,8 +318,8 @@ class Abreviador:
 
     def procesar(self, texto, ancho_disponible, donde=None, clave=None, celdas=None,
                  minuscula=False):
-        """Dict con lo que va físicamente en la gráfica (ver
-        procesar_etiquetas). `donde` (opcional) dice qué es la etiqueta
+        """Dict con lo que va físicamente en la gráfica: el texto completo
+        si entra en `ancho_disponible` (mm), si no su letra. `donde` (opcional) dice qué es la etiqueta
         ("título del eje X"...), para la leyenda y la narración; `clave`
         (opcional) identifica el elemento de la lámina de donde salió.
 
@@ -388,8 +352,6 @@ class Abreviador:
                 "texto_stl": texto,
 
                 "celdas": celdas,
-
-                "puntos": celdas_a_puntos(celdas),
 
                 "ancho_mm": ancho,
 
@@ -435,11 +397,7 @@ class Abreviador:
 
                 "celdas_identificador": celdas_id,
 
-                "puntos_identificador": celdas_a_puntos(celdas_id),
-
-                "celdas_texto": celdas,
-
-                "puntos_texto": celdas_a_puntos(celdas)
+                "celdas_texto": celdas
 
             }
 
@@ -456,8 +414,6 @@ class Abreviador:
 
             "celdas": entrada["celdas_identificador"],
 
-            "puntos": entrada["puntos_identificador"],
-
             "ancho_mm": ancho_braille(entrada["celdas_identificador"]),
 
             "usa_leyenda": True,
@@ -468,26 +424,7 @@ class Abreviador:
 
 
 # ============================================================
-# 12. PROCESAR TODAS LAS ETIQUETAS
-#
-# Función principal del módulo original: todas las etiquetas con el mismo
-# ancho disponible. Devuelve (etiquetas_procesadas, leyenda).
-# ============================================================
-
-def procesar_etiquetas(etiquetas, ancho_disponible):
-
-    abreviador = Abreviador()
-
-    etiquetas_procesadas = [
-        abreviador.procesar(texto, ancho_disponible)
-        for texto in etiquetas
-    ]
-
-    return etiquetas_procesadas, abreviador.leyenda
-
-
-# ============================================================
-# 13. PARTIR UN TEXTO LARGO EN RENGLONES
+# 10. PARTIR UN TEXTO LARGO EN RENGLONES
 #
 # Para la leyenda: el texto completo nunca se recorta, se sigue en el
 # renglón de abajo (cortando en un espacio; una palabra más larga que un
@@ -543,48 +480,3 @@ def partir_en_renglones(celdas, max_celdas):
         renglones.append(renglon)
 
     return renglones
-
-
-# ============================================================
-# 14. PRUEBA
-#
-# Esta parte solo se ejecuta cuando corres directamente braille.py.
-# ============================================================
-
-if __name__ == "__main__":
-
-    print("\nTACTONAUTA - PRUEBA BRAILLE ESPAÑOL\n")
-
-    etiquetas = [
-        "Tiempo",
-        "Temperatura",
-        "Presión",
-        "Temperatura promedio durante el experimento",
-        "Grupo experimental con tratamiento",
-    ]
-
-    ancho_disponible = 80.0
-
-    procesadas, leyenda = procesar_etiquetas(etiquetas, ancho_disponible)
-
-    print("Ancho disponible:", ancho_disponible, "mm")
-
-    print("\nETIQUETAS EN LA GRÁFICA\n")
-
-    for etiqueta in procesadas:
-        print(
-            etiqueta["texto_original"], "->", etiqueta["texto_stl"],
-            "| ancho:", round(etiqueta["ancho_mm"], 1), "mm",
-            "| usa leyenda:", etiqueta["usa_leyenda"],
-        )
-
-    print("\nLEYENDA\n")
-
-    if not leyenda:
-        print("No fue necesario crear una leyenda.")
-
-    else:
-        for entrada in leyenda:
-            print(entrada["identificador"], "=", entrada["texto"])
-            print("  Braille identificador:", entrada["celdas_identificador"])
-            print("  Puntos:", entrada["puntos_identificador"])
