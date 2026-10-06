@@ -996,13 +996,23 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
 
     base = f"{prefijo}_{uuid.uuid4().hex[:8]}"
     nombre = f"{base}.stl"
+    nombre_csv = f"{base}_handtracking.csv"
+    url_csv = f"/api/resultados/stl/{nombre_csv}/descargar"
     diseno = {}
+    PUBLIC_BASE_URL = os.environ.get(
+        "PUBLIC_BASE_URL",
+        "http://localhost:5000"
+    ).rstrip("/")
+    nombre_csv = f"{base}_handtracking.csv"
+
+    url_csv = f"{PUBLIC_BASE_URL}/api/resultados/stl/{nombre_csv}/descargar"
     generar_modelo_desde_recta(
         payload,
         archivo_salida=os.path.join(STL_DIR, nombre),
         incluir_etiquetas=True,
         diseno=diseno,
         ajustes=ajustes,
+        url_qr=url_csv,
     )
     advertencias.extend(diseno.get("avisos") or [])
 
