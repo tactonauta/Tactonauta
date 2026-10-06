@@ -1,0 +1,34 @@
+# Explorador de gráficas impresas con textura  -  dependencias
+# Python 3.9 a 3.12 (mediapipe 0.10.14 no tiene ruedas para 3.13)
+#
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)   |   source .venv/bin/activate   (Linux/macOS)
+#   pip install -r requirements.txt
+#
+# tkinter NO se instala con pip: viene con Python en Windows/macOS.
+# En Linux:  sudo apt install python3-tk
+
+# --- Imagen / cámara ---
+# Se usa la variante "contrib" (en vez de opencv-python) porque mediapipe ya la
+# exige; instalar las dos a la vez suele causar conflictos.
+opencv-contrib-python>=4.8,<4.11
+numpy>=1.26,<2
+
+# --- Seguimiento de la mano ---
+# IMPORTANTE: el código usa mp.solutions.hands (API clásica). Las versiones
+# recientes de mediapipe (p. ej. 0.10.33) ya no la incluyen, así que se fija
+# una versión que sí la tiene.
+mediapipe==0.10.14
+
+# --- Voz ---
+pyttsx3>=2.90
+
+# --- Cámara por nombre (solo Windows; opcional) ---
+# Permite elegir la cámara por su nombre ("nombre_camara" en config_exploracion.json).
+# Sin ella se usa el índice 0.
+pygrabber>=0.2; sys_platform == "win32"
+
+# --- Lectura de QR más robusta (opcional) ---
+# Mejora la lectura del QR a distintas alturas/inclinaciones. Si no está, se usa OpenCV.
+# En Windows funciona directo; en Linux requiere:  sudo apt install libzbar0
+# pyzbar>=0.1.9
