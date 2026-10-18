@@ -68,16 +68,20 @@ DIAM_LINEA = 2.0
 # QR en relieve (esquina superior izquierda): identifica la lámina con un
 # enlace corto a todos sus datos (api.py, /q/<token>: documento, página,
 # contexto, valores y el mapa para Hand_Tracking), que se abre con un
-# celular o con la cámara de Hand_Tracking. Con un enlace de ~45 caracteres sale un QR de 29
-# módulos: en 30 mm, cada módulo mide ~1 mm, lo mínimo que una boquilla de
-# 0,4 mm imprime con bordes limpios y una webcam distingue a la distancia
-# de la mano.
-QR_LADO = 30.0
+# celular o con la cámara de Hand_Tracking.
+# Lo que fija la legibilidad es el lado de cada módulo (cuadradito), no el
+# del QR: ~1 mm es lo que una boquilla de 0,4 mm imprime con bordes limpios
+# (por debajo de ~0,8 mm los módulos vecinos se empastan) y deja 3 px o más
+# por módulo a una cámara a la distancia de la mano. El QR mide entonces
+# módulos x QR_MODULO: con el enlace en mayúsculas (api._url_qr, modo
+# alfanumérico del QR) un enlace de ~45 caracteres da 25x25 módulos, unos
+# 26 mm; en minúsculas daba 29x29, 30 mm.
+QR_MODULO = 1.03
 QR_ALTURA = 1.6
-# Módulos de borde DENTRO de QR_LADO. Es 0 porque la "zona de silencio" que
+# Módulos de borde dentro del QR. Es 0 porque la "zona de silencio" que
 # exige el estándar ya la da la placa lisa alrededor (MARGEN_PLACA hacia los
 # bordes y CLEARANCE_BRAILLE hacia la leyenda y el gráfico, ambos más que
-# 4 módulos): dibujarla adentro solo achicaría cada módulo.
+# 4 módulos): dibujarla adentro solo agrandaría el QR.
 QR_MARGEN = 0
 QR_ERROR_CORRECTION = ERROR_CORRECT_L
 # Cada módulo del QR se agranda esto (mm) en la malla, así dos módulos
@@ -160,10 +164,16 @@ def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
     return v[np.array(caras)]
 
 
-def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
+def lado_qr(url, modulo=QR_MODULO):
+    """Lado (mm) del QR en relieve de este enlace: módulos x `modulo`."""
+    return len(_crear_matriz_qr(url)) * modulo
+
+
+def agregar_qr(piezas, url, x0, y0, modulo=QR_MODULO, altura=QR_ALTURA):
     """Agrega un QR cuadrado en relieve a la lista de primitivas.
 
-    x0, y0 corresponden a la esquina inferior izquierda del QR.
+    x0, y0 corresponden a la esquina inferior izquierda del QR, y cada
+    módulo mide `modulo` mm de lado (ver lado_qr).
     El QR se genera como una matriz de pequeños cuadrados en relieve.
     """
     matriz = _crear_matriz_qr(url)
@@ -173,7 +183,7 @@ def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
     if n == 0:
         return None
 
-    modulo = lado / n
+    lado = n * modulo
 
     for fila, fila_qr in enumerate(matriz):
         for columna, activo in enumerate(fila_qr):
@@ -1602,7 +1612,8 @@ def generar_modelo_desde_recta(
     # arriba se escriben a su derecha, más angostos, y el gráfico empieza
     # debajo de él, con la separación BANA.
     hay_qr = bool(url_qr)
-    x_titulos = MARGEN_PLACA + (QR_LADO + CLEARANCE_BRAILLE if hay_qr else 0.0)
+    qr_lado = lado_qr(url_qr) if hay_qr else 0.0
+    x_titulos = MARGEN_PLACA + (qr_lado + CLEARANCE_BRAILLE if hay_qr else 0.0)
     ancho_titulos = dim_x - MARGEN_PLACA - x_titulos
 
     def _es_categoria(valor):
@@ -1750,7 +1761,7 @@ def generar_modelo_desde_recta(
             if hay_qr:
                 # el gráfico (y el medio renglón que sobresale el número más
                 # alto del eje Y) empieza debajo del QR
-                tope_plot = min(tope_plot, y_tope - QR_LADO - CLEARANCE_BRAILLE - ALTURA_FILA_BRAILLE / 2)
+                tope_plot = min(tope_plot, y_tope - qr_lado - CLEARANCE_BRAILLE - ALTURA_FILA_BRAILLE / 2)
             # debajo del eje X: renglón de rótulos (+ renglón del título del eje X)
             bajo_plot = CLEARANCE_BRAILLE + ALTURA_FILA_BRAILLE / 2 \
                 + (INTERLINEA_BRAILLE if titulo_eje_x_txt else 0.0)
@@ -2272,12 +2283,12 @@ def generar_modelo_desde_recta(
     qr_info = None
     if hay_qr:
         qr_x = MARGEN_PLACA
-        qr_y = y_tope - QR_LADO
+        qr_y = y_tope - qr_lado
         desde = len(piezas)
-        qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, lado=QR_LADO, altura=QR_ALTURA)
+        qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, modulo=QR_MODULO, altura=QR_ALTURA)
         if qr_info:
             _registrar("qr", "qr", desde, texto="Código QR",
-                       recuadro=[qr_x, qr_y, qr_x + QR_LADO, qr_y + QR_LADO])
+                       recuadro=[qr_x, qr_y, qr_x + qr_lado, qr_y + qr_lado])
 
     if diseno is not None:
         diseno.update({

@@ -47,9 +47,9 @@ Supervisor: GET /api/solicitudes/supervisor
 Imprenta:   GET /api/solicitudes/imprenta
             POST /api/solicitudes/<id>/estado-imprenta
 Archivos:   GET /api/resultados/<archivo>[/descargar]
-QR:         GET /q/<token>[?formato=html|json|csv]  lo que abre el QR impreso
+QR:         GET /Q/<TOKEN>[?formato=html|json|csv]  lo que abre el QR impreso
             en la lámina: documento, página, contexto y valores de la
-            gráfica (ver csv_por_qr)
+            gráfica (ver csv_por_qr; /q/<token> en minúsculas también)
 Salud:      GET /api/salud -> {"ok": true}
 ------------------------------------------------------------------
 """
@@ -63,6 +63,7 @@ import re
 import secrets
 import shutil
 import time
+import urllib.parse
 import uuid
 import traceback
 
@@ -1074,6 +1075,11 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
 # Por eso el token sale de la imagen original de la figura (no cambia al
 # corregir la lectura; sí al reemplazar la gráfica, que es otra) y /q/<token>
 # sirve siempre los últimos datos generados para ella (db.laminas_qr).
+# El enlace va en MAYÚSCULAS ("HTTPS://SERVIDOR/Q/0A1B2C3D4E"): un QR tiene un
+# modo alfanumérico (solo mayúsculas, dígitos y . / : -) bastante más denso
+# que el de texto libre, y con él un enlace de ~45 caracteres pasa de 29x29
+# a 25x25 módulos: el QR en relieve se achica sin achicar sus módulos. El
+# esquema y el dominio no distinguen mayúsculas, y /Q/ acepta el código así.
 _RE_TOKEN_QR = re.compile(r"[0-9a-f]{10}")
 
 
@@ -1102,7 +1108,12 @@ def _token_qr(resultado):
 
 
 def _url_qr(token):
-    return f"{_base_publica()}/q/{token}"
+    """El enlace que lleva el QR, en mayúsculas (ver arriba). Solo el
+    esquema y el dominio: si PUBLIC_BASE_URL trae una ruta, esa sí distingue
+    mayúsculas y queda como está."""
+    base = urllib.parse.urlsplit(_base_publica())
+    base = base._replace(scheme=base.scheme.upper(), netloc=base.netloc.upper())
+    return f"{urllib.parse.urlunsplit(base)}/Q/{token.upper()}"
 
 
 def _info_figura(resultado, figura=None, pie_figura=None):
@@ -1127,6 +1138,7 @@ def _no_encontrada_qr():
 
 
 @app.route("/q/<token>", methods=["GET"])
+@app.route("/Q/<token>", methods=["GET"])
 def csv_por_qr(token):
     """Lo que abre el QR impreso: los datos más recientes de esa lámina.
 
@@ -1138,7 +1150,9 @@ def csv_por_qr(token):
       - formato=csv, o un programa que no pide HTML (Hand_Tracking): el CSV
         de Hand_Tracking.
     `descargar=1` lo baja como archivo. Sin caché, para que una corrección
-    posterior llegue siempre."""
+    posterior llegue siempre. El código llega en mayúsculas desde el QR
+    (/Q/0A1B2C3D4E) y en minúsculas en láminas anteriores: es el mismo."""
+    token = token.lower()
     if not _RE_TOKEN_QR.fullmatch(token):
         return _no_encontrada_qr()
     datos = db.buscar_lamina_qr(token)
