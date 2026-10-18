@@ -33,8 +33,36 @@ def contar_paneles(image_path, umbral_gris=120, frac_largo=0.4):
                 clusters.append([p])
         return clusters
 
+    def tramos(mask, cluster, eje):
+        """(inicio, fin) de cada tramo continuo de una línea larga (las
+        posiciones de `cluster`), a lo largo de la línea."""
+        franja = mask[:, cluster] if eje == 0 else mask[cluster, :]
+        presente = franja.any(axis=1 - eje)
+        bordes = np.flatnonzero(np.diff(np.concatenate(([0], presente.astype(np.int8), [0]))))
+        return list(zip(bordes[::2], bordes[1::2] - 1))
+
+    def interiores(clusters, otros, mask_otros, eje_otros, margen=10):
+        """Las líneas de `clusters` que caen DENTRO de un panel: alguna línea
+        perpendicular (un borde del marco) pasa de largo por ellas, sin
+        cortarse, a los dos lados. Es una línea de referencia del gráfico
+        (y = 0, un umbral), no la separación entre dos paneles: entre dos
+        paneles apilados los bordes laterales se interrumpen."""
+        quitar = set()
+        for k, c in enumerate(clusters):
+            pos = (c[0] + c[-1]) / 2
+            for o in otros:
+                if any(a < pos - margen and b > pos + margen for a, b in tramos(mask_otros, o, eje_otros)):
+                    quitar.add(k)
+                    break
+        return [c for k, c in enumerate(clusters) if k not in quitar]
+
     clusters_v = clusters_de_posiciones(verticales, eje=0)
     clusters_h = clusters_de_posiciones(horizontales, eje=1)
+    # Una línea de referencia larga (p. ej. la del cero, negra, de lado a
+    # lado del gráfico) contaba como borde de un segundo panel y la figura
+    # se descartaba por "compuesta".
+    clusters_h, clusters_v = (interiores(clusters_h, clusters_v, verticales, 0),
+                              interiores(clusters_v, clusters_h, horizontales, 1))
 
     n_columnas = max(len(clusters_v) - 1, 1)
     n_filas = max(len(clusters_h) - 1, 1)

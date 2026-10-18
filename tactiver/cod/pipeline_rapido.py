@@ -268,10 +268,11 @@ def datos_documento(doc):
     }
 
 
-def titulo_en_figura(palabras, alto_px):
+def titulo_en_figura(palabras, ancho_px, alto_px):
     """El título escrito dentro de la figura (el renglón de letra más grande
-    en su cuarto superior, con letras y no solo números), a partir de las
-    palabras del PDF de extraer_palabras. "" si no hay (imagen sin texto)."""
+    en su cuarto superior, centrado y con letras, no solo números), a partir
+    de las palabras del PDF de extraer_palabras. "" si no hay (imagen sin
+    texto). Centrado: una leyenda arriba a un costado no es el título."""
     renglones = {}
     for p in palabras or []:
         if p.get("vertical"):
@@ -281,7 +282,9 @@ def titulo_en_figura(palabras, alto_px):
     for ps in renglones.values():
         texto = " ".join(p["texto"] for p in sorted(ps, key=lambda p: p["px"]))
         arriba = min(p["py"] for p in ps)
-        if arriba > 0.25 * alto_px or not re.search(r"[^\W\d_]{3}", texto):
+        centro = (min(p["px"] for p in ps) + max(p["px"] + p["pw"] for p in ps)) / 2
+        if (arriba > 0.25 * alto_px or abs(centro - ancho_px / 2) > 0.2 * ancho_px
+                or not re.search(r"[^\W\d_]{3}", texto)):
             continue
         candidatos.append((max(p["ph"] for p in ps), -arriba, texto))
     return _recortar(max(candidatos)[2], TITULO_LARGO_MAX) if candidatos else ""
@@ -343,6 +346,42 @@ def _ampliar_con_texto(page, rect):
     return ampliado
 
 
+# Signo menos DIBUJADO en vez de escrito: matplotlib, con su tipo de letra
+# por defecto en PDF (Type 3), no tiene el "−" en la fuente y lo pinta como
+# un rectangulito lleno al lado del número. En el texto del PDF el número
+# queda sin signo ("7.5" en vez de "−7.5") y el eje se leía invertido.
+_NUMERO = re.compile(r"[0-9]+([.,][0-9]+)?([eE][-+]?[0-9]+)?%?")
+
+
+def _signos_menos_dibujados(page, clip):
+    """Rayitas horizontales cortas y finas dibujadas dentro de `clip`."""
+    rayas = []
+    for dibujo in page.get_drawings():
+        r = dibujo.get("rect")
+        if r is None or not fitz.Rect(clip).intersects(r):
+            continue
+        if r.height <= 1.6 and 1.5 <= r.width <= 12 and r.width >= 3 * max(r.height, 0.1):
+            rayas.append(fitz.Rect(r))
+    return rayas
+
+
+def _menos_a_la_izquierda(rayas, texto, x0, y0, y1):
+    """La raya que hace de signo menos de este número, o None: pegada a su
+    izquierda (no más de un tercio de su alto), a la altura del medio del
+    número y no más ancha que un dígito y medio (la muestra de una línea en
+    la leyenda es mucho más larga)."""
+    if not _NUMERO.fullmatch(texto):
+        return None
+    alto = y1 - y0
+    for r in rayas:
+        centro = (r.y0 + r.y1) / 2
+        if (r.x1 <= x0 + 0.5 and x0 - r.x1 <= 0.35 * alto
+                and y0 + 0.3 * alto <= centro <= y1 - 0.15 * alto
+                and r.width <= 0.9 * alto):
+            return r
+    return None
+
+
 def extraer_palabras(page, clip, ancho_px, alto_px):
     """Palabras del PDF dentro de `clip`, en píxeles de la imagen extraída
     (ancho_px x alto_px). Son el texto EXACTO del documento: el segmentador
@@ -374,6 +413,7 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
                         and exp["origin"][1] < base["origin"][1] - 0.5):
                     potencias.append((fitz.Rect(base["bbox"]) | fitz.Rect(exp["bbox"]),
                                       b_txt + exp["text"].strip(), b_txt[:-2] + "1e" + e_txt))
+    menos = _signos_menos_dibujados(page, clip)
     palabras = []
     for x0, y0, x1, y1, texto, bloque, linea, num in page.get_text("words", clip=clip):
         texto = texto.strip()
@@ -383,6 +423,9 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
             if texto == pegado and recuadro.intersects(fitz.Rect(x0, y0, x1, y1)):
                 texto = correcto
                 break
+        signo = _menos_a_la_izquierda(menos, texto, x0, y0, y1)
+        if signo is not None:
+            texto, x0 = "-" + texto, signo.x0
         w, h = x1 - x0, y1 - y0
         palabras.append({
             "texto": texto,
@@ -462,7 +505,7 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bl
         extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height,
                           "origen": "vectorial",
                           "pie_figura": pie,
-                          "titulo_grafico": titulo_en_figura(palabras, pix.height),
+                          "titulo_grafico": titulo_en_figura(palabras, pix.width, pix.height),
                           "contexto": extraer_contexto(bloques, page_num + 1, clip, pie),
                           "palabras": palabras})
 
@@ -518,7 +561,7 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
                               "origen": "imagen",
                               "pie_figura": pie,
-                              "titulo_grafico": titulo_en_figura(palabras, pix.height),
+                              "titulo_grafico": titulo_en_figura(palabras, pix.width, pix.height),
                               "contexto": extraer_contexto(bloques, page_num + 1, im["bbox"], pie),
                               "palabras": palabras})
 
