@@ -47,8 +47,9 @@ Supervisor: GET /api/solicitudes/supervisor
 Imprenta:   GET /api/solicitudes/imprenta
             POST /api/solicitudes/<id>/estado-imprenta
 Archivos:   GET /api/resultados/<archivo>[/descargar]
-QR:         GET /q/<token>  el CSV de Hand_Tracking de una lámina (lo abre
-            el QR impreso; ver _url_qr)
+QR:         GET /q/<token>[?formato=html|json|csv]  lo que abre el QR impreso
+            en la lámina: documento, página, contexto y valores de la
+            gráfica (ver csv_por_qr)
 Salud:      GET /api/salud -> {"ok": true}
 ------------------------------------------------------------------
 """
@@ -66,7 +67,8 @@ import uuid
 import traceback
 
 import cv2
-from flask import Flask, has_request_context, request, jsonify, send_from_directory, session
+from flask import (Flask, has_request_context, jsonify, render_template_string, request,
+                   send_from_directory, session)
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 import numpy as np
@@ -588,7 +590,7 @@ def autorizar_solicitud(id_solicitud):
         try:
             nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
                 resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"),
-                ajustes=figura.get("ajustes_lamina"))
+                ajustes=figura.get("ajustes_lamina"), figura=figura)
             figura_actualizada.update(
                 _campos_figura(resultado, nombre_stl, advertencias, narracion_info))
             algun_exito = True
@@ -658,7 +660,8 @@ def corregir_figura_solicitud(id_solicitud, indice):
             campos = {**_campos_revision(resultado, figura.get("pie_figura")), "revisada": True}
         else:
             nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
-                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"), ajustes=ajustes)
+                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"), ajustes=ajustes,
+                figura=figura)
             campos = _campos_figura(resultado, nombre_stl, advertencias, narracion_info)
         if hay_ajustes:
             campos["ajustes_lamina"] = ajustes
@@ -960,7 +963,8 @@ def _payload_stl(resultado):
     }
 
 
-def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, ajustes=None):
+def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, ajustes=None,
+                              figura=None):
     """Convierte una segmentación ya hecha en una placa táctil STL, y escribe
     al lado su narración para Hand_Tracking (ver narracion.py).
 
@@ -976,8 +980,15 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
     `ajustes`: lo que el supervisor cambió en la vista previa de la lámina
     (ver generador_stl.aplicar_ajustes); la narración usa los mismos textos.
 
+    `figura`: la figura de la solicitud (página, pie), por si la imagen no
+    tiene lo extraído del PDF (reemplazada o agregada por el supervisor).
+
+    La lámina lleva un QR en relieve que la identifica; lo que abre (ver
+    csv_por_qr) se guarda acá en la base, con todos los datos de la figura.
+
     Devuelve (nombre_stl, advertencias, narracion), con narracion =
-    {"descripcion": texto, "nombre": archivo JSON para Hand_Tracking}.
+    {"descripcion": texto, "nombre": archivo JSON para Hand_Tracking,
+     "csv": su CSV, "qr": el enlace del QR}.
     Lanza ValueError con un mensaje entendible si la gráfica no da para una
     lámina.
     """
@@ -1021,13 +1032,13 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
     # Lo mismo en CSV: coordenadas de todo lo que hay en la placa + textos a
     # narrar, para Hand_Tracking (lo carga igual que el JSON).
     nombre_csv = f"{base}_handtracking.csv"
-    ruta_csv = os.path.join(STL_DIR, nombre_csv)
-    narracion.exportar_csv_hand_tracking(exportacion, ruta_csv)
-    # La copia que sirve el QR (/q/<token>): se reemplaza de una vez, así
-    # quien la esté descargando nunca recibe un archivo a medio escribir.
-    temporal = f"{_ruta_csv_qr(token)}.{uuid.uuid4().hex[:6]}.tmp"
-    shutil.copyfile(ruta_csv, temporal)
-    os.replace(temporal, _ruta_csv_qr(token))
+    narracion.exportar_csv_hand_tracking(exportacion, os.path.join(STL_DIR, nombre_csv))
+    # Lo que abre el QR: todo lo de la figura, en la base (persiste aunque
+    # el servidor se reinicie; el QR ya quedó grabado en la placa).
+    datos_qr = narracion.exportar_datos_lamina(payload, diseno, descripcion, exportacion,
+                                               _info_figura(resultado, figura, pie_figura))
+    datos_qr.update({"id": token, "url": url_qr, "advertencias": advertencias})
+    db.guardar_lamina_qr(token, datos_qr)
     return nombre, advertencias, {"descripcion": descripcion, "nombre": nombre_narracion,
                                   "csv": nombre_csv, "qr": url_qr}
 
@@ -1035,16 +1046,18 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
 # ------------------------------------------------------------------
 # QR de la lámina
 # ------------------------------------------------------------------
-# El QR en relieve lleva el enlace con el que el programa de Hand_Tracking
-# (que corre en la computadora del estudiante) descarga el CSV de la lámina.
+# El QR en relieve identifica la lámina: lleva un enlace a todo lo que se
+# sabe de su gráfica (documento y página de donde sale, pie, contexto en el
+# texto, valores de cada curva y el mapa de la placa para Hand_Tracking).
 # Ese enlace tiene que ser:
-#   - absoluto: el programa no sabe en qué servidor está esta API;
+#   - absoluto: quien lo escanea (un celular, Hand_Tracking) no sabe en qué
+#     servidor está esta API;
 #   - corto: menos módulos en el QR, y cada uno sale más grande en relieve;
 #   - el mismo en la vista previa, al autorizar y al corregir después: el
 #     supervisor ve en la pizarra exactamente el QR que se va a imprimir.
 # Por eso el token sale de la imagen original de la figura (no cambia al
 # corregir la lectura; sí al reemplazar la gráfica, que es otra) y /q/<token>
-# sirve siempre el último CSV generado para ella.
+# sirve siempre los últimos datos generados para ella (db.laminas_qr).
 _RE_TOKEN_QR = re.compile(r"[0-9a-f]{10}")
 
 
@@ -1057,15 +1070,18 @@ def _base_publica():
     return (base or "http://localhost:5000").rstrip("/")
 
 
-def _token_qr(resultado):
-    """Token del QR de una figura (ver arriba), a partir de su lectura."""
-    ruta_imagen = None
+def _imagen_original(resultado):
+    """Ruta de la imagen de la figura que se segmentó (None si no se sabe)."""
     try:
         with open(resultado["ruta_json"], encoding="utf-8") as f:
-            ruta_imagen = json.load(f).get("_ruta_imagen_original")
+            return json.load(f).get("_ruta_imagen_original")
     except (KeyError, TypeError, OSError, ValueError):
-        pass
-    origen = os.path.basename(ruta_imagen or "") or resultado.get("nombre_json") or ""
+        return None
+
+
+def _token_qr(resultado):
+    """Token del QR de una figura (ver arriba), a partir de su lectura."""
+    origen = os.path.basename(_imagen_original(resultado) or "") or resultado.get("nombre_json") or ""
     return hashlib.sha1(origen.encode("utf-8")).hexdigest()[:10]
 
 
@@ -1073,22 +1089,144 @@ def _url_qr(token):
     return f"{_base_publica()}/q/{token}"
 
 
-def _ruta_csv_qr(token):
-    return os.path.join(STL_DIR, f"qr_{token}.csv")
+def _info_figura(resultado, figura=None, pie_figura=None):
+    """De dónde sale la figura, para los datos del QR: lo extraído del PDF
+    junto a su imagen (_guardar_extraccion) y, si falta algo, lo que dice la
+    figura de la solicitud (página, pie)."""
+    ruta_imagen = _imagen_original(resultado)
+    info = _extraccion(ruta_imagen) if ruta_imagen else {}
+    info.pop("palabras", None)
+    figura = figura or {}
+    if not info.get("pagina") and figura.get("pagina"):
+        info["pagina"] = figura["pagina"]
+    if pie_figura or figura.get("pie_figura"):
+        info["pie_figura"] = pie_figura or figura["pie_figura"]
+    return info
+
+
+def _no_encontrada_qr():
+    return ("Esta lámina todavía no tiene datos publicados (falta que el supervisor "
+            "la autorice) o el enlace no es válido.", 404,
+            {"Content-Type": "text/plain; charset=utf-8"})
 
 
 @app.route("/q/<token>", methods=["GET"])
 def csv_por_qr(token):
-    """Lo que abre el QR impreso: el CSV de Hand_Tracking más reciente de esa
-    lámina. Sin caché, para que una corrección posterior llegue siempre."""
-    if not _RE_TOKEN_QR.fullmatch(token) or not os.path.isfile(_ruta_csv_qr(token)):
-        return ("Esta lámina todavía no tiene datos publicados (falta que el supervisor "
-                "la autorice) o el enlace no es válido.", 404,
-                {"Content-Type": "text/plain; charset=utf-8"})
-    respuesta = send_from_directory(STL_DIR, f"qr_{token}.csv", mimetype="text/csv",
-                                    as_attachment=True, download_name=f"lamina_{token}.csv")
+    """Lo que abre el QR impreso: los datos más recientes de esa lámina.
+
+    Según quién lo pida (o `?formato=`):
+      - un navegador (el celular que escaneó el QR): una página accesible
+        con el documento, la página, el contexto y los valores, y los
+        enlaces para descargar todo;
+      - formato=json: todo (narracion.exportar_datos_lamina) en JSON;
+      - formato=csv, o un programa que no pide HTML (Hand_Tracking): el CSV
+        de Hand_Tracking.
+    `descargar=1` lo baja como archivo. Sin caché, para que una corrección
+    posterior llegue siempre."""
+    if not _RE_TOKEN_QR.fullmatch(token):
+        return _no_encontrada_qr()
+    datos = db.buscar_lamina_qr(token)
+    formato = (request.args.get("formato") or "").lower()
+    if formato not in ("json", "csv", "html"):
+        elegido = request.accept_mimetypes.best_match(
+            ["text/csv", "application/json", "text/html"], default="text/csv")
+        formato = {"application/json": "json", "text/html": "html"}.get(elegido, "csv")
+    descargar = request.args.get("descargar") == "1"
+
+    if datos is None:
+        # láminas generadas antes de que los datos fueran a la base
+        if formato == "csv" and os.path.isfile(os.path.join(STL_DIR, f"qr_{token}.csv")):
+            respuesta = send_from_directory(STL_DIR, f"qr_{token}.csv", mimetype="text/csv",
+                                            as_attachment=True, download_name=f"lamina_{token}.csv")
+            respuesta.headers["Cache-Control"] = "no-store"
+            return respuesta
+        return _no_encontrada_qr()
+
+    if formato == "json":
+        respuesta = app.response_class(json.dumps(datos, ensure_ascii=False, indent=1),
+                                       mimetype="application/json")
+        nombre = f"lamina_{token}.json"
+    elif formato == "csv":
+        # con BOM, como el archivo: Excel respeta las tildes
+        respuesta = app.response_class(
+            narracion.csv_hand_tracking(datos["lamina"]).encode("utf-8-sig"),
+            mimetype="text/csv")
+        nombre = f"lamina_{token}.csv"
+        descargar = True
+    else:
+        respuesta = app.response_class(render_template_string(_PAGINA_QR, d=datos, token=token),
+                                       mimetype="text/html")
+        nombre = None
+    if descargar and nombre:
+        respuesta.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     respuesta.headers["Cache-Control"] = "no-store"
     return respuesta
+
+
+# Página que abre el QR en un celular. Pensada para lector de pantalla:
+# títulos en orden, listas, nada que dependa de ver la lámina. Jinja escapa
+# todo lo que viene del PDF (render_template_string tiene autoescape).
+_PAGINA_QR = """<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ d.grafica.titulo or d.figura.pie_figura or "Lámina táctil" }}</title>
+<style>
+  body { font: 1.15rem/1.6 system-ui, sans-serif; max-width: 46rem; margin: 0 auto;
+         padding: 1rem; background: #fffdf8; color: #1d1d1f; }
+  h1 { font-size: 1.6rem; line-height: 1.25; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; border-top: 2px solid #c9c2b0; padding-top: 1rem; }
+  a { color: #0b4f9c; }
+  .descargas a { display: block; padding: .75rem 1rem; margin: .5rem 0; border: 2px solid #0b4f9c;
+                 border-radius: .5rem; text-decoration: none; font-weight: 600; }
+  blockquote { margin: .5rem 0; padding-left: 1rem; border-left: 4px solid #c9c2b0; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1d1d1f; color: #f5f5f0; } a { color: #8cc4ff; }
+    .descargas a { border-color: #8cc4ff; }
+  }
+</style>
+</head>
+<body>
+<main>
+<h1>{{ d.grafica.titulo or d.figura.pie_figura or "Lámina táctil" }}</h1>
+<p>
+  {% if d.documento.titulo or d.documento.archivo %}Documento: {{ d.documento.titulo or d.documento.archivo }}.{% endif %}
+  {% if d.figura.pagina %}Página {{ d.figura.pagina }}{% if d.documento.paginas %} de {{ d.documento.paginas }}{% endif %}.{% endif %}
+</p>
+{% if d.figura.pie_figura and d.figura.pie_figura != d.grafica.titulo %}<p>{{ d.figura.pie_figura }}</p>{% endif %}
+
+<h2>Descripción</h2>
+<p>{{ d.descripcion }}</p>
+
+{% for s in d.lamina.series %}
+<h2>Valores{% if d.lamina.series|length > 1 %}: {{ s.nombre }}{% endif %}</h2>
+<p>En la lámina, textura {{ s.textura }}.</p>
+<ul>
+{% for p in d.lamina.puntos if p.serie == s.nombre %}  <li>{{ p.texto }}</li>
+{% endfor %}</ul>
+{% endfor %}
+
+{% set c = d.contexto %}
+{% if c.antes or c.despues or c.menciones %}
+<h2>Contexto en el documento</h2>
+{% if c.menciones %}<h3>Párrafos que citan esta figura</h3>
+{% for m in c.menciones %}<blockquote><p>Página {{ m.pagina }}: {{ m.texto }}</p></blockquote>
+{% endfor %}{% endif %}
+{% if c.antes %}<h3>Texto antes de la figura</h3><blockquote><p>{{ c.antes }}</p></blockquote>{% endif %}
+{% if c.despues %}<h3>Texto después de la figura</h3><blockquote><p>{{ c.despues }}</p></blockquote>{% endif %}
+{% endif %}
+
+<h2>Descargar los datos</h2>
+<div class="descargas">
+  <a href="?formato=json&amp;descargar=1">Todos los datos de la lámina (JSON)</a>
+  <a href="?formato=csv">Mapa de la lámina para Hand_Tracking (CSV)</a>
+</div>
+<p><small>Código de la lámina: {{ token }}. Actualizado: {{ d.generado_en }}.</small></p>
+</main>
+</body>
+</html>
+"""
 
 
 def _urls_lamina(nombre_stl, narracion_info):
@@ -1109,16 +1247,20 @@ def _ruta_extraccion(ruta_imagen):
     return ruta_imagen + ".extraccion.json"
 
 
-def _guardar_extraccion(ruta_imagen, detectado):
+def _guardar_extraccion(ruta_imagen, detectado, archivo_pdf=""):
     """Todo lo que /api/clasificar sacó del PDF para esta figura, al lado de
-    su imagen: página, pie de figura y el texto real del PDF dentro de la
-    figura (el segmentador lo usa en vez del OCR). Así la segmentación, al
-    autorizar, tiene la misma información sin volver a abrir el PDF."""
+    su imagen: página, pie de figura, el texto real del PDF dentro de la
+    figura (el segmentador lo usa en vez del OCR) y, para los datos del QR,
+    el documento (`archivo_pdf`: el nombre con que lo subió el estudiante) y
+    el contexto de la figura en el texto. Así la segmentación, al autorizar,
+    tiene la misma información sin volver a abrir el PDF."""
     with open(_ruta_extraccion(ruta_imagen), "w", encoding="utf-8") as f:
         json.dump({
             "pagina": detectado.get("page"),
             "origen": detectado.get("origen"),
             "pie_figura": detectado.get("pie_figura", ""),
+            "contexto": detectado.get("contexto"),
+            "documento": {"archivo": archivo_pdf, **(detectado.get("documento") or {})},
             "palabras": detectado.get("palabras") or [],
         }, f, ensure_ascii=False)
 
@@ -1189,7 +1331,7 @@ def clasificar():
         nombre_servido = f"{lote_id}_{nombre_original}"
         ruta_servida = os.path.join(RESULTADOS_DIR, nombre_servido)
         shutil.copy(d["file_path"], ruta_servida)
-        _guardar_extraccion(ruta_servida, d)
+        _guardar_extraccion(ruta_servida, d, archivo.filename)
         graficos.append({
             "id": nombre_servido,
             "pagina": d["page"],

@@ -2155,10 +2155,10 @@
       linkCsv.setAttribute('download', '');
       li.appendChild(linkCsv);
     }
-    // El mismo CSV, por el enlace que lleva el QR de la lámina: sirve para
-    // pegarlo en Hand_Tracking (F2) si no se puede escanear el QR.
+    // El enlace que lleva el QR de la lámina: abre sus datos (documento,
+    // página, contexto y valores); también se puede pegar en Hand_Tracking (F2).
     if (f.qr_url) {
-      li.appendChild(crearEl('p', 'editor-ayuda', 'Enlace del QR (Hand_Tracking): ' + f.qr_url));
+      li.appendChild(crearEl('p', 'editor-ayuda', 'Enlace del QR (datos de la lámina): ' + f.qr_url));
     }
 
     const leida = f.correccion_id && f.json_url && !f.error;
@@ -3015,9 +3015,9 @@
       laminaSeleccion.appendChild(crearEl('h4', null, Lamina.NOMBRES[e.clase] || 'Elemento'));
       if (e.clase === 'qr') {
         laminaSeleccion.appendChild(crearEl('p', null,
-          'Lleva el enlace a los datos de esta gráfica (CSV). El programa de exploración ' +
-          '(Hand_Tracking) lo lee con la cámara para narrar lo que toca el estudiante. ' +
-          'No se puede quitar ni mover.'));
+          'Identifica esta lámina: al escanearlo se abren los datos de la gráfica (documento y ' +
+          'página de donde sale, contexto y valores), para descargar o para Hand_Tracking. ' +
+          'Los datos se publican al autorizar. No se puede quitar ni mover.'));
         if (vista.qr_url) laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda', 'Enlace: ' + vista.qr_url));
         return;
       }

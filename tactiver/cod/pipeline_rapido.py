@@ -113,6 +113,108 @@ def extraer_pie_de_figura(page, bbox):
     return mejor
 
 
+# Contexto de una figura en el documento (lo que el QR de la lámina ofrece
+# además de los datos): los párrafos que la citan ("como muestra la Figura
+# 3...") en cualquier página, y el párrafo de cuerpo justo antes y justo
+# después de ella en su página.
+CONTEXTO_MIN_PALABRAS = 8        # menos que esto es un rótulo, no un párrafo
+CONTEXTO_LARGO_MAX = 1200        # caracteres por párrafo
+CONTEXTO_MENCIONES_MAX = 6
+
+
+def _recortar(texto, largo=CONTEXTO_LARGO_MAX):
+    return texto if len(texto) <= largo else texto[:largo].rsplit(" ", 1)[0] + "…"
+
+
+def bloques_documento(doc):
+    """[(página 1.., recuadro, texto)] de los bloques de texto de todo el
+    documento, una sola vez por PDF (lo usan todas sus figuras). Las palabras
+    cortadas con guion al final de un renglón se vuelven a unir."""
+    flags = fitz.TEXTFLAGS_BLOCKS | getattr(fitz, "TEXT_DEHYPHENATE", 0)
+    bloques = []
+    for num, page in enumerate(doc, start=1):
+        for b in page.get_text("blocks", flags=flags):
+            if len(b) > 6 and b[6] != 0:
+                continue
+            texto = " ".join(str(b[4]).split())
+            if texto:
+                bloques.append((num, fitz.Rect(b[:4]), texto))
+    return bloques
+
+
+def _patron_mencion(pie):
+    """Regex que encuentra en el texto una cita a la figura de este pie
+    ("Figura 3", "fig. 3", "Gráfico 3"...), o None si el pie no trae número."""
+    m = _PATRON_PIE.match(pie or "")
+    if not m:
+        return None
+    numero = re.escape(m.group(4))
+    return re.compile(
+        r"\b(fig(ura|ure)?s?\.?|gr[aá]fic[oa]s?|chart|ilustraci[oó]n|diagrama)"
+        rf"\s*(n[°º.]\s*)?{numero}(?![0-9a-z])",
+        re.IGNORECASE,
+    )
+
+
+def extraer_contexto(bloques, pagina, bbox, pie):
+    """Dónde y cómo habla el documento de la figura de `bbox` en `pagina`.
+
+    Devuelve {"antes": str, "despues": str, "menciones": [{"pagina", "texto"}]}:
+    el párrafo de cuerpo más cercano encima y debajo de la figura (y de su
+    pie) en su página, y los párrafos de todo el documento que la citan por
+    su número. Se dejan de lado el pie mismo y el texto dentro del gráfico
+    (números de ejes, leyenda)."""
+    r = fitz.Rect(bbox)
+    pie_txt = " ".join((pie or "").split())
+
+    def es_cuerpo(rect, texto):
+        return (len(texto.split()) >= CONTEXTO_MIN_PALABRAS
+                and not _PATRON_PIE.match(texto)
+                and not r.intersects(rect))
+
+    # el pie (si está debajo) también es parte de la figura: el párrafo de
+    # "después" empieza debajo de él
+    abajo = r.y1
+    for num, rect, texto in bloques:
+        if num == pagina and pie_txt and texto.startswith(pie_txt[:40]):
+            abajo = max(abajo, rect.y1)
+
+    antes, despues = None, None
+    for num, rect, texto in bloques:
+        if num != pagina or not es_cuerpo(rect, texto):
+            continue
+        if rect.y1 <= r.y0 + 2 and (antes is None or rect.y1 > antes[0].y1):
+            antes = (rect, texto)
+        elif rect.y0 >= abajo - 2 and (despues is None or rect.y0 < despues[0].y0):
+            despues = (rect, texto)
+
+    menciones = []
+    patron = _patron_mencion(pie_txt)
+    if patron:
+        for num, rect, texto in bloques:
+            if len(menciones) >= CONTEXTO_MENCIONES_MAX:
+                break
+            if _PATRON_PIE.match(texto) or not patron.search(texto):
+                continue
+            menciones.append({"pagina": num, "texto": _recortar(texto)})
+
+    return {
+        "antes": _recortar(antes[1]) if antes else "",
+        "despues": _recortar(despues[1]) if despues else "",
+        "menciones": menciones,
+    }
+
+
+def datos_documento(doc):
+    """Lo que identifica al PDF (sin su nombre de archivo, que lo pone la API)."""
+    meta = doc.metadata or {}
+    return {
+        "titulo": (meta.get("title") or "").strip(),
+        "autor": (meta.get("author") or "").strip(),
+        "paginas": doc.page_count,
+    }
+
+
 # Texto alrededor de un dibujo vectorial que se considera parte del gráfico
 # (números de los ejes, títulos, leyenda) y no del cuerpo del documento.
 TEXTO_GRAFICO_DISTANCIA = 12   # pt entre un texto y lo que ya es parte del gráfico
@@ -256,10 +358,10 @@ def _agrupar_rects(rects, umbral=15):
     return grupos
 
 
-def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial):
+def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bloques=()):
     """Detecta gráficos dibujados directamente con vectores (matplotlib/R/LaTeX),
     agrupando los trazos sueltos (líneas, ejes, leyenda) en bloques y renderizándolos
-    como imagen."""
+    como imagen. `bloques`: los de bloques_documento(), para el contexto."""
     extraidas = []
     drawings = page.get_drawings()
     if not drawings:
@@ -283,9 +385,11 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial):
         nombre = f"page{page_num+1}_drawing{contador}.png"
         ruta = os.path.join(output_dir, nombre)
         pix.save(ruta)
+        pie = extraer_pie_de_figura(page, clip)
         extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height,
                           "origen": "vectorial",
-                          "pie_figura": extraer_pie_de_figura(page, clip),
+                          "pie_figura": pie,
+                          "contexto": extraer_contexto(bloques, page_num + 1, clip, pie),
                           "palabras": extraer_palabras(page, clip, pix.width, pix.height)})
 
     return extraidas, contador
@@ -323,6 +427,7 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     doc = fitz.open(pdf_path)
     extraidas = []
+    bloques = bloques_documento(doc)
 
     for page_num, page in enumerate(doc):
         # 1. Imágenes raster embebidas (fotos/capturas pegadas, ej. exportadas de Excel)
@@ -334,15 +439,20 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             nombre = f"page{page_num+1}_img{i+1}.png"
             ruta = os.path.join(output_dir, nombre)
             pix.save(ruta)
+            pie = extraer_pie_de_figura(page, im["bbox"])
             extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
                               "origen": "imagen",
-                              "pie_figura": extraer_pie_de_figura(page, im["bbox"]),
+                              "pie_figura": pie,
+                              "contexto": extraer_contexto(bloques, page_num + 1, im["bbox"], pie),
                               "palabras": extraer_palabras(page, im["bbox"], pix.width, pix.height)})
 
         # 2. Dibujos vectoriales (gráficos hechos con matplotlib/R/LaTeX directo en el PDF)
-        vectoriales, _ = extraer_dibujos_vectoriales(page, page_num, output_dir, 0)
+        vectoriales, _ = extraer_dibujos_vectoriales(page, page_num, output_dir, 0, bloques)
         extraidas.extend(vectoriales)
 
+    documento = datos_documento(doc)
+    for r in extraidas:
+        r["documento"] = documento
     return extraidas
 
 
@@ -357,10 +467,13 @@ def detectar_graficos(pdf_path, output_dir):
 
     Devuelve una lista de dicts (uno por figura que pasó los filtros
     baratos de tamaño/duplicado/logo), cada uno con:
-      file_path, page, width, height, origen, pie_figura, palabras,
-      tipo, confianza, es_lineal
+      file_path, page, width, height, origen, pie_figura, contexto,
+      documento, palabras, tipo, confianza, es_lineal
     "pie_figura" es el texto "Figura N. ..." que el PDF pone junto a la
     figura ("" si no se encontró): es la base de la descripción narrada.
+    "contexto" son los párrafos que la rodean y los que la citan (ver
+    extraer_contexto) y "documento", título/autor/páginas del PDF: los dos
+    van a los datos que abre el QR de la lámina.
     "palabras" es el texto real del PDF dentro de la figura, en píxeles de
     la imagen (ver extraer_palabras): el segmentador lo prefiere al OCR.
     "tipo" es uno de: "linea", "barra_o_torta", "compuesta", "dispersion",

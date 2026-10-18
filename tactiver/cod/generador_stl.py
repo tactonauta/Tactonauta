@@ -65,9 +65,10 @@ CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
 RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
-# QR en relieve (esquina superior izquierda): lleva el enlace corto al CSV de
-# Hand_Tracking (api.py, /q/<token>), para que el programa de exploración lo
-# descargue con la cámara. Con un enlace de ~45 caracteres sale un QR de 29
+# QR en relieve (esquina superior izquierda): identifica la lámina con un
+# enlace corto a todos sus datos (api.py, /q/<token>: documento, página,
+# contexto, valores y el mapa para Hand_Tracking), que se abre con un
+# celular o con la cámara de Hand_Tracking. Con un enlace de ~45 caracteres sale un QR de 29
 # módulos: en 30 mm, cada módulo mide ~1 mm, lo mínimo que una boquilla de
 # 0,4 mm imprime con bordes limpios y una webcam distingue a la distancia
 # de la mano.
@@ -203,8 +204,9 @@ def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
 def _crear_matriz_qr(url):
     """Genera la matriz binaria del QR.
 
-    El QR contiene únicamente la URL del CSV. No contiene los datos de la
-    gráfica ni el CSV completo.
+    El QR contiene únicamente el enlace corto a los datos de la lámina
+    (api.py, /q/<token>), no los datos mismos: no entrarían en un QR que se
+    pueda imprimir en relieve.
     """
     qr = qrcode.QRCode(
         version=None,

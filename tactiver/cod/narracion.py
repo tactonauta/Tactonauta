@@ -23,13 +23,22 @@ exportar_csv_hand_tracking(exportacion, ruta)
     Lo mismo en un CSV (una fila por elemento), para abrirlo en una hoja de
     cálculo o cargarlo en Hand_Tracking igual que el JSON.
 
+exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura)
+    Todo lo que se sabe de la lámina, en un solo dict: de qué documento y
+    página sale la figura, su pie y su contexto en el texto, los valores de
+    cada curva y el mapa de la placa de exportar_hand_tracking. Es lo que
+    abre el QR impreso (api.py, /q/<token>).
+
 `datos` es el JSON que escribe segmentador.py (claves ejes, textos, series,
 resumen). `diseno` es el dict que llena generador_stl.generar_modelo_desde_recta
 con dónde quedó cada cosa en la placa; sin él solo se puede describir, no
 ubicar.
 """
 import csv
+import io
 import math
+import numbers
+import time
 
 import numpy as np
 
@@ -45,7 +54,14 @@ PUNTOS_CLAVE_TOLERANCIA_MM = 3.0
 
 # Lo que se narra del QR en relieve (generador_stl.agregar_qr).
 TEXTO_QR = ("En la esquina superior izquierda hay un código QR en relieve: no es parte del "
-            "gráfico, sirve para que el programa de exploración descargue los datos de esta lámina.")
+            "gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y "
+            "página de donde sale, contexto y valores de cada curva).")
+
+FORMATO_DATOS = "tactiverso-lamina"
+VERSION_DATOS = 1
+# Valores por curva en los datos del QR: suficientes para reconstruirla (el
+# segmentador da ~300, casi todos redundantes).
+VALORES_SERIE_MAX = 200
 
 
 # ------------------------------------------------------------------
@@ -521,26 +537,128 @@ def exportar_csv_hand_tracking(exportacion, ruta):
                    derecha, si ocupa más de un renglón).
 
     Se guarda en UTF-8 con BOM para que Excel respete las tildes."""
+    with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
+        f.write(csv_hand_tracking(exportacion))
+
+
+def csv_hand_tracking(exportacion):
+    """El texto del CSV de `exportar_csv_hand_tracking` (sin BOM)."""
     placa = exportacion["placa"]
 
     def r(v):
         # valores con 4 decimales (más es ruido de píxeles); vacío si no hay
         return round(v, 4) if isinstance(v, float) else ("" if v is None else v)
 
-    with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.writer(f)
-        w.writerow(COLUMNAS_CSV)
-        w.writerow(["placa", "placa", "", 0, 0, placa["ancho_mm"], placa["alto_mm"], "", "", "",
-                    f"{placa['origen']}; esquina recortada de {placa.get('chaflan_mm', 0)} mm; "
-                    "gráfico arriba y leyenda abajo"])
-        w.writerow(["descripcion", "descripcion", "", "", "", "", "", "", "", "",
-                    exportacion.get("descripcion", "")])
-        for i, s in enumerate(exportacion.get("series") or [], start=1):
-            w.writerow(["serie", f"serie_{i}", s["nombre"], "", "", "", "", "", "", "",
-                        f"Textura {s['textura']}"])
-        for p in exportacion.get("puntos") or []:
-            w.writerow(["punto", p["id"], p.get("serie") or "", p["x"], p["y"], "", "",
-                        r(p.get("valor_x")), r(p.get("valor_y")), "", p["texto"]])
-        for s in exportacion.get("segmentos") or []:
-            w.writerow([s["tipo"], s["id"], s.get("serie") or "", s["x1"], s["y1"], s["x2"], s["y2"],
-                        "", "", s.get("tendencia", ""), s["texto"]])
+    f = io.StringIO(newline="")
+    w = csv.writer(f)
+    w.writerow(COLUMNAS_CSV)
+    w.writerow(["placa", "placa", "", 0, 0, placa["ancho_mm"], placa["alto_mm"], "", "", "",
+                f"{placa['origen']}; esquina recortada de {placa.get('chaflan_mm', 0)} mm; "
+                "gráfico arriba y leyenda abajo"])
+    w.writerow(["descripcion", "descripcion", "", "", "", "", "", "", "", "",
+                exportacion.get("descripcion", "")])
+    for i, s in enumerate(exportacion.get("series") or [], start=1):
+        w.writerow(["serie", f"serie_{i}", s["nombre"], "", "", "", "", "", "", "",
+                    f"Textura {s['textura']}"])
+    for p in exportacion.get("puntos") or []:
+        w.writerow(["punto", p["id"], p.get("serie") or "", p["x"], p["y"], "", "",
+                    r(p.get("valor_x")), r(p.get("valor_y")), "", p["texto"]])
+    for s in exportacion.get("segmentos") or []:
+        w.writerow([s["tipo"], s["id"], s.get("serie") or "", s["x1"], s["y1"], s["x2"], s["y2"],
+                    "", "", s.get("tendencia", ""), s["texto"]])
+    return f.getvalue()
+
+
+# ------------------------------------------------------------------
+# Datos completos de la lámina (lo que abre su QR)
+# ------------------------------------------------------------------
+def _num(v):
+    """Un valor leído, con 6 cifras significativas (más es ruido de píxeles),
+    como float de Python (los de numpy no se pueden escribir en JSON)."""
+    if isinstance(v, numbers.Real) and not isinstance(v, bool) and math.isfinite(v):
+        return float(f"{float(v):.6g}")
+    return None
+
+
+def _eje_datos(datos, eje, rango):
+    textos = datos.get("textos") or {}
+    marcas = [e["valor"] for e in textos.get(f"etiquetas_eje_{eje}") or []
+              if e.get("valor") is not None and math.isfinite(e["valor"])]
+    return {
+        "titulo": (textos.get(f"titulo_eje_{eje}") or "").strip(),
+        "escala": "log" if _es_log(datos, eje) else "lineal",
+        "min": _num(rango[0]) if rango else None,
+        "max": _num(rango[1]) if rango else None,
+        # los números que el gráfico original tenía escritos en el eje
+        "marcas": sorted(_num(v) for v in marcas),
+    }
+
+
+def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
+    """Dict con todo lo que se sabe de una lámina (ver el docstring del módulo).
+
+    `figura`: lo que /api/clasificar sacó del PDF para esta figura
+    (api._extraccion): "pagina", "pie_figura", "contexto", "documento",
+    "origen". Puede faltar (imagen subida suelta por el supervisor).
+
+    Coordenadas de la placa como en exportar_hand_tracking: mm, origen en
+    la esquina superior izquierda, y hacia abajo. "lamina.area_grafico_mm" y
+    "lamina.dominio" permiten pasar cualquier punto de la placa a valores
+    del gráfico (y al revés) sin los puntos narrables."""
+    figura = figura or {}
+    textos = datos.get("textos") or {}
+    rx, ry = _rango_ejes(datos)
+    texturas = {s["indice"]: s["textura"] for s in diseno.get("series") or []}
+    series = []
+    for i, serie in enumerate(s for s in datos.get("series") or [] if s.get("puntos")):
+        vals = sorted(_valores_serie(serie))
+        if len(vals) > VALORES_SERIE_MAX:
+            paso = (len(vals) - 1) / (VALORES_SERIE_MAX - 1)
+            vals = [vals[round(k * paso)] for k in range(VALORES_SERIE_MAX)]
+        entrada = {"nombre": nombre_de_serie(serie.get("nombre"), i),
+                   "textura": texturas.get(i),
+                   "valores": [[_num(x), _num(y)] for x, y in vals]}
+        if vals:
+            x_max, y_max = max(vals, key=lambda v: v[1])
+            x_min, y_min = min(vals, key=lambda v: v[1])
+            entrada["maximo"] = {"x": _num(x_max), "y": _num(y_max)}
+            entrada["minimo"] = {"x": _num(x_min), "y": _num(y_min)}
+        series.append(entrada)
+
+    alto_placa = float(diseno["placa"]["alto_mm"])
+    area = diseno["area"]
+    dom = diseno["dominio"]
+    documento = dict(figura.get("documento") or {})
+    return {
+        "formato": FORMATO_DATOS,
+        "version": VERSION_DATOS,
+        "generado_en": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "documento": documento,
+        "figura": {
+            "pagina": figura.get("pagina"),
+            "pie_figura": (figura.get("pie_figura") or "").strip(),
+            "origen": figura.get("origen"),
+        },
+        "contexto": figura.get("contexto") or {"antes": "", "despues": "", "menciones": []},
+        "descripcion": descripcion,
+        "grafica": {
+            "titulo": (textos.get("titulo") or "").strip(),
+            "calibrada": bool(dom.get("calibrado")),
+            "eje_x": {**_eje_datos(datos, "x", rx), "categorias": _categorias(textos)},
+            "eje_y": _eje_datos(datos, "y", ry),
+            "series": series,
+        },
+        "lamina": {
+            **exportacion,
+            # recuadro del gráfico en la placa y los valores en sus bordes
+            # (en escala log, el dominio está en log10 del valor)
+            "area_grafico_mm": {
+                "izquierda": round(float(area["izquierda"]), 2),
+                "arriba": round(alto_placa - float(area["abajo"] + area["alto"]), 2),
+                "ancho": round(float(area["ancho"]), 2),
+                "alto": round(float(area["alto"]), 2),
+            },
+            "dominio": {k: (bool(v) if k == "calibrado" else _num(v) if k.endswith(("_min", "_max")) else v)
+                        for k, v in dom.items()},
+        },
+    }

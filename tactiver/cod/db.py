@@ -74,6 +74,17 @@ _ESQUEMA = [
         creado_en TEXT NOT NULL
     )
     """,
+    # Lo que abre el QR impreso en cada lámina (api.py, /q/<token>). Va en la
+    # base y no en un archivo porque el QR queda grabado en la placa: tiene
+    # que seguir respondiendo después de que Render reinicie el contenedor
+    # y borre el disco.
+    """
+    CREATE TABLE IF NOT EXISTS laminas_qr (
+        token TEXT PRIMARY KEY,
+        datos_json TEXT NOT NULL,
+        actualizado_en TEXT NOT NULL
+    )
+    """,
 ]
 
 # Columnas agregadas después de la primera versión del esquema. CREATE TABLE
@@ -456,3 +467,27 @@ def actualizar_solicitud(id_solicitud, cambios):
     valores.append(id_solicitud)
     con.ejecutar_escritura(f"UPDATE solicitudes SET {set_sql} WHERE id = ?", valores)
     return buscar_solicitud(id_solicitud)
+
+
+# ============================================================
+# Datos del QR de cada lámina
+# ============================================================
+
+def guardar_lamina_qr(token, datos):
+    """Guarda (o reemplaza, si se corrigió la lámina) los datos que abre su QR."""
+    con = _obtener_conexion()
+    con.ejecutar_escritura(
+        """
+        INSERT INTO laminas_qr (token, datos_json, actualizado_en) VALUES (?, ?, ?)
+        ON CONFLICT(token) DO UPDATE SET
+            datos_json = excluded.datos_json, actualizado_en = excluded.actualizado_en
+        """,
+        (token, json.dumps(datos, ensure_ascii=False), time.strftime("%Y-%m-%dT%H:%M:%S")),
+    )
+
+
+def buscar_lamina_qr(token):
+    """Los datos guardados para ese QR, o None."""
+    con = _obtener_conexion()
+    filas = con.ejecutar("SELECT datos_json FROM laminas_qr WHERE token = ?", (token,))
+    return json.loads(filas[0]["datos_json"]) if filas else None
