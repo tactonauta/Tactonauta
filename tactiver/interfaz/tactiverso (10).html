@@ -27,6 +27,10 @@
 
   * { box-sizing: border-box; }
 
+  /* El atributo hidden siempre gana: sin esto, una clase con display
+     (.actions es flex) lo anulaba y aparecían botones repetidos. */
+  [hidden] { display: none !important; }
+
   html, body {
     margin: 0;
     background: var(--paper);
@@ -248,10 +252,7 @@
   }
   .eleccion-lista .texto strong { display: block; font-family: 'Fraunces', serif; font-size: 1.05rem; }
   .eleccion-lista .texto span { display: block; margin-top: 0.2rem; color: #3a362e; }
-  .eleccion-lista img {
-    display: block; max-width: 100%; height: auto; margin: 0 1.1rem 1rem 3.4rem;
-    max-height: 260px; border: 1px solid var(--line); border-radius: 4px; background: #fff;
-  }
+  .eleccion-lista .contexto { margin: -0.4rem 1.1rem 1rem 3.4rem; color: #3a362e; font-size: 0.95rem; }
 
   .progress-line {
     display: flex; align-items: center; gap: 0.7rem;
@@ -300,6 +301,7 @@
   }
   .request-card .request-summary strong { font-family: 'Fraunces', serif; font-size: 1.05rem; }
   .request-card .request-summary .meta { font-size: 0.9rem; color: #3a362e; }
+  .request-card .doc-titulo { flex-basis: 100%; order: 3; font-size: 0.95rem; color: var(--night); font-weight: 700; }
   .request-card .request-summary .badges { margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .request-card .request-detail { padding: 0 1.1rem 1.1rem; border-top: 1px solid var(--line); }
   .request-card .request-detail[hidden] { display: none; }
@@ -685,6 +687,7 @@
   /* Historial */
   .historial-controles { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 0 1.2rem; max-width: 760px; }
   @media (max-width: 640px) { .historial-controles { grid-template-columns: minmax(0, 1fr); } }
+  .aviso-supervisor {
     margin: 0 0 1rem; padding: 0.75rem 1rem; background: #eceefa;
     border-left: 4px solid var(--night); border-radius: 0 6px 6px 0;
   }
@@ -1169,7 +1172,7 @@
 
     <div class="historial-controles">
       <div class="field-group">
-        <label for="historial-buscar">Buscar por nombre, código o carrera</label>
+        <label for="historial-buscar">Buscar por nombre, código, carrera o título del estudio</label>
         <input type="search" id="historial-buscar" autocomplete="off">
       </div>
       <div class="field-group" id="historial-filtro-grupo">
@@ -1189,7 +1192,7 @@
     </div>
   </section>
 
-</main></main>
+</main>
 
 <footer class="bottom">
 </footer>
@@ -1763,6 +1766,8 @@
       encontrados = {
         lote_id: datos.lote_id,
         archivo: archivo.name,
+        documento: datos.documento_titulo || '',
+        paginas: datos.paginas || null,
         otras: detectados.length - lineales.length,
         figuras: lineales.map(g => ({
           id: g.id,
@@ -1771,15 +1776,17 @@
           // gráfico: es lo que el estudiante escucha para decidir.
           caption: g.pie_figura || ('Gráfico de líneas sin pie de figura en la página ' + g.pagina),
           pagina: g.pagina,
-          imagen_url: API_BASE + g.preview_url,
           pie_figura: g.pie_figura || '',
+          titulo_grafico: g.titulo_grafico || '',
+          contexto_breve: g.contexto_breve || '',
         })),
       };
       pintarEleccion();
       progress.style.display = 'none';
       formEleccion.hidden = false;
       const n = encontrados.figuras.length;
-      avisar((n === 1 ? 'Se encontró 1 gráfico de líneas. Está marcado.'
+      avisar((encontrados.documento ? 'Documento: ' + encontrados.documento + '. ' : '') +
+        (n === 1 ? 'Se encontró 1 gráfico de líneas. Está marcado.'
         : 'Se encontraron ' + n + ' gráficos de líneas. Todos están marcados.') +
         ' Desmarca los que no quieras enviar y pulsa "Enviar a mi supervisor".' +
         (encontrados.otras > 0 ? ' El documento tiene además ' + encontrados.otras +
@@ -1791,6 +1798,17 @@
       procesando = false;
       input.value = '';
     }
+  }
+
+  // Lo que el estudiante sabe de cada gráfico, sin verlo: su título (el pie
+  // de figura del PDF o, si no tiene, el título escrito en el gráfico),
+  // dónde está en el documento y de qué habla el texto alrededor.
+  function tituloGrafico(f) {
+    return f.pie_figura || f.titulo_grafico || 'Gráfico de líneas sin título';
+  }
+
+  function ubicacionGrafico(f, paginas) {
+    return 'Página ' + f.pagina + (paginas ? ' de ' + paginas : '') + ' del documento';
   }
 
   function pintarEleccion() {
@@ -1810,22 +1828,24 @@
       const texto = document.createElement('span');
       texto.className = 'texto';
       const titulo = document.createElement('strong');
-      titulo.textContent = 'Gráfico ' + (i + 1) + ', página ' + f.pagina;
-      const pie = document.createElement('span');
-      pie.textContent = f.pie_figura || 'Sin pie de figura en el documento.';
+      titulo.textContent = tituloGrafico(f);
+      const ubicacion = document.createElement('span');
+      ubicacion.textContent = ubicacionGrafico(f, encontrados.paginas);
       texto.appendChild(titulo);
-      texto.appendChild(pie);
+      texto.appendChild(ubicacion);
       label.appendChild(check);
       label.appendChild(texto);
       li.appendChild(label);
-      // Miniatura para quien acompañe al estudiante; el lector de pantalla
-      // ya tiene el texto de la casilla, así que la imagen es decorativa.
-      const img = document.createElement('img');
-      img.src = f.imagen_url;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.onerror = () => img.remove();
-      li.appendChild(img);
+      // El contexto, aparte de la casilla: el lector de pantalla lo lee como
+      // descripción, después del título y la página.
+      if (f.contexto_breve) {
+        const contexto = document.createElement('p');
+        contexto.className = 'contexto';
+        contexto.id = 'contexto-' + i;
+        contexto.textContent = 'Contexto: «' + f.contexto_breve + '»';
+        check.setAttribute('aria-describedby', contexto.id);
+        li.appendChild(contexto);
+      }
       listaEleccion.appendChild(li);
     });
     actualizarEleccion();
@@ -1882,7 +1902,7 @@
     listaTicket.innerHTML = '';
     figuras.forEach(f => {
       const li = document.createElement('li');
-      li.textContent = 'Página ' + f.pagina + ': ' + (f.pie_figura || 'gráfico de líneas sin pie de figura');
+      li.textContent = tituloGrafico(f) + ' (página ' + f.pagina + ')';
       listaTicket.appendChild(li);
     });
     document.getElementById('confirm-status').textContent =
@@ -1893,6 +1913,11 @@
   // ---------------------------------------------------------------
   // Estado de solicitudes: ESTUDIANTE
   // ---------------------------------------------------------------
+  // El título del estudio (del PDF); si no se encontró, el nombre del archivo.
+  function tituloDocumento(s) {
+    return s.documento_titulo || s.archivo_nombre || '';
+  }
+
   function etiquetaSupervisor(estado) {
     if (estado === 'aprobada') return { texto: 'Solicitud aprobada', clase: 'ok' };
     if (estado === 'rechazada') return { texto: 'Solicitud rechazada', clase: 'error' };
@@ -1923,10 +1948,12 @@
       const sup = etiquetaSupervisor(s.estado_supervisor);
       const imp = etiquetaImprenta(s.estado_imprenta);
       const cantidad = s.figuras.length;
+      const documento = tituloDocumento(s);
       li.innerHTML =
         '<div class="request-summary">' +
           '<strong>Solicitud #' + String(s.id).padStart(5, '0') + '</strong>' +
           '<span class="meta">' + cantidad + (cantidad === 1 ? ' lámina' : ' láminas') + ' · ' + new Date(s.creado_en).toLocaleDateString('es-PE') + '</span>' +
+          (documento ? '<span class="doc-titulo">' + escapeHtml(documento) + '</span>' : '') +
           '<span class="badges">' +
             '<span class="badge ' + sup.clase + '">Supervisor: ' + sup.texto + '</span>' +
             (s.estado_supervisor === 'rechazada' ? '' : '<span class="badge ' + imp.clase + '">Imprenta: ' + imp.texto + '</span>') +
@@ -2015,7 +2042,7 @@
 
   // ---- panel izquierdo: estudiante y PDF original ----
   function crearEnlacePdf(s) {
-    const nombre = s.archivo_nombre || 'documento.pdf';
+    const nombre = tituloDocumento(s) || 'Documento sin título';
     const envoltorio = crearEl('div');
     const a = crearEl('a', 'doc-link');
     a.href = API_BASE + '/api/solicitudes/' + s.id + '/pdf';
@@ -2396,10 +2423,12 @@
     btnResumen.setAttribute('aria-expanded', 'false');
     btnResumen.setAttribute('aria-controls', detailId);
     const visibles = s.figuras.filter(f => !f.quitada).length;
+    const documento = tituloDocumento(s);
     btnResumen.innerHTML =
       '<strong>' + escapeHtml(s.estudiante.nombre) + '</strong>' +
       '<span class="meta">' + visibles + (visibles === 1 ? ' lámina' : ' láminas') + ' · ' + escapeHtml(fechaCorta(s.creado_en)) + '</span>' +
-      '<span class="badges">' + badgeSupervisor(s) + '</span>';
+      '<span class="badges">' + badgeSupervisor(s) + '</span>' +
+      (documento ? '<span class="doc-titulo">' + escapeHtml(documento) + '</span>' : '');
 
     const detalle = crearEl('div', 'request-detail');
     detalle.id = detailId;
@@ -2505,14 +2534,15 @@
   }
 
   // ---- listado ----
-  //  pendientes: siempre visibles (en espera, por orden de llegada);
+  // Todas las listas como una pila: la solicitud más reciente, arriba.
+  //  pendientes: siempre visibles (en espera);
   //  en curso: autorizadas aún no impresas, siempre visibles (falta una acción);
   //  terminadas (impresas + rechazadas): solo las MAX_RECIENTES más recientes;
   //  el resto de las terminadas, en el historial.
   function repartirSolicitudesSupervisor(propias) {
-    const masReciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
-    const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera')
-      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+    // creado_en tiene resolución de segundos: a igual fecha, el id más alto es la más nueva
+    const masReciente = (a, b) => (new Date(b.creado_en) - new Date(a.creado_en)) || (b.id - a.id);
+    const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera').sort(masReciente);
     const enCurso = propias.filter(s => s.estado_supervisor === 'aprobada' && s.estado_imprenta !== 'impreso').sort(masReciente);
     const terminadas = propias.filter(s => s.estado_supervisor === 'rechazada' ||
       (s.estado_supervisor === 'aprobada' && s.estado_imprenta === 'impreso')).sort(masReciente);
@@ -3705,6 +3735,7 @@
     const laminas = s.figuras.map((f, i) => ({ f, i })).filter(x => !x.f.quitada && !x.f.error);
 
     li.appendChild(crearEl('strong', null, s.estudiante.nombre));
+    if (tituloDocumento(s)) li.appendChild(crearEl('p', 'print-meta', tituloDocumento(s)));
     li.appendChild(crearEl('p', 'print-meta', (s.estudiante.carrera || '') + ' · ' + (s.estudiante.facultad || '')));
     li.appendChild(crearEl('p', 'print-meta',
       'Orden ' + (s.orden || String(s.id).padStart(5, '0')) + ' · ' + laminas.length +
@@ -3818,7 +3849,8 @@
     if (esSupervisor && filtro !== 'todas') items = items.filter(s => s.estado_supervisor === filtro);
     const consulta = normalizarTexto(histBuscar.value.trim());
     if (consulta) {
-      items = items.filter(s => normalizarTexto([s.estudiante.nombre, s.estudiante.codigo, s.estudiante.carrera].join(' ')).includes(consulta));
+      items = items.filter(s => normalizarTexto([s.estudiante.nombre, s.estudiante.codigo, s.estudiante.carrera,
+                                                 tituloDocumento(s)].join(' ')).includes(consulta));
     }
 
     const grupos = [];

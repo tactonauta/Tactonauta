@@ -205,14 +205,86 @@ def extraer_contexto(bloques, pagina, bbox, pie):
     }
 
 
+TITULO_LARGO_MAX = 200
+# Títulos de metadatos que no dicen nada del estudio: los pone el programa
+# con que se hizo el PDF.
+_TITULO_GENERICO = re.compile(
+    r"^(untitled|sin t[ií]tulo|t[ií]tulo|documento\d*|document\d*|presentaci[oó]n de powerpoint"
+    r"|powerpoint presentation|microsoft word|slide \d+)$", re.IGNORECASE)
+
+
+def _titulo_metadatos(meta):
+    """El título de los metadatos, si es un título de verdad ("" si no)."""
+    t = " ".join((meta.get("title") or "").split())
+    t = re.sub(r"^microsoft (word|powerpoint) - ", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\.(docx?|pdf|tex|odt|pptx?)$", "", t, flags=re.IGNORECASE)
+    if len(t) < 4 or not re.search(r"[^\W\d_]{3}", t) or _TITULO_GENERICO.match(t):
+        return ""
+    if " " not in t and re.search(r"[_.]", t):     # un nombre de archivo ("tesis_final_v2")
+        return ""
+    return t
+
+
+def _titulo_primera_pagina(doc):
+    """El texto de letra más grande en la parte de arriba de la primera
+    página (los renglones seguidos de ese tamaño: un título suele ocupar
+    dos). "" si la página no tiene texto."""
+    if not doc.page_count:
+        return ""
+    page = doc[0]
+    renglones = []   # (tamaño, y0, y1, texto)
+    for bloque in page.get_text("dict")["blocks"]:
+        for linea in bloque.get("lines", []):
+            spans = [s for s in linea.get("spans", []) if s["text"].strip()]
+            texto = " ".join(" ".join(s["text"] for s in spans).split())
+            if not spans or not re.search(r"[^\W\d_]{3}", texto):
+                continue
+            y0, y1 = linea["bbox"][1], linea["bbox"][3]
+            if y0 > page.rect.height * 0.6:
+                continue
+            renglones.append((round(max(s["size"] for s in spans), 1), y0, y1, texto))
+    if not renglones:
+        return ""
+    mayor = max(r[0] for r in renglones)
+    elegidos = sorted((r for r in renglones if r[0] >= mayor - 0.5), key=lambda r: r[1])
+    partes, ultimo_y1 = [], None
+    for tam, y0, y1, texto in elegidos:
+        if ultimo_y1 is not None and y0 - ultimo_y1 > 1.5 * tam:
+            break
+        partes.append(texto)
+        ultimo_y1 = y1
+    return _recortar(" ".join(partes), TITULO_LARGO_MAX)
+
+
 def datos_documento(doc):
-    """Lo que identifica al PDF (sin su nombre de archivo, que lo pone la API)."""
+    """Lo que identifica al PDF (sin su nombre de archivo, que lo pone la API).
+    "titulo" es el título del estudio: el de los metadatos si es uno de
+    verdad; si no, el texto más grande del principio de la primera página."""
     meta = doc.metadata or {}
     return {
-        "titulo": (meta.get("title") or "").strip(),
+        "titulo": _titulo_metadatos(meta) or _titulo_primera_pagina(doc),
         "autor": (meta.get("author") or "").strip(),
         "paginas": doc.page_count,
     }
+
+
+def titulo_en_figura(palabras, alto_px):
+    """El título escrito dentro de la figura (el renglón de letra más grande
+    en su cuarto superior, con letras y no solo números), a partir de las
+    palabras del PDF de extraer_palabras. "" si no hay (imagen sin texto)."""
+    renglones = {}
+    for p in palabras or []:
+        if p.get("vertical"):
+            continue
+        renglones.setdefault(tuple(p["orden"][:2]), []).append(p)
+    candidatos = []
+    for ps in renglones.values():
+        texto = " ".join(p["texto"] for p in sorted(ps, key=lambda p: p["px"]))
+        arriba = min(p["py"] for p in ps)
+        if arriba > 0.25 * alto_px or not re.search(r"[^\W\d_]{3}", texto):
+            continue
+        candidatos.append((max(p["ph"] for p in ps), -arriba, texto))
+    return _recortar(max(candidatos)[2], TITULO_LARGO_MAX) if candidatos else ""
 
 
 # Texto alrededor de un dibujo vectorial que se considera parte del gráfico
@@ -386,11 +458,13 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bl
         ruta = os.path.join(output_dir, nombre)
         pix.save(ruta)
         pie = extraer_pie_de_figura(page, clip)
+        palabras = extraer_palabras(page, clip, pix.width, pix.height)
         extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height,
                           "origen": "vectorial",
                           "pie_figura": pie,
+                          "titulo_grafico": titulo_en_figura(palabras, pix.height),
                           "contexto": extraer_contexto(bloques, page_num + 1, clip, pie),
-                          "palabras": extraer_palabras(page, clip, pix.width, pix.height)})
+                          "palabras": palabras})
 
     return extraidas, contador
 
@@ -440,11 +514,13 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             ruta = os.path.join(output_dir, nombre)
             pix.save(ruta)
             pie = extraer_pie_de_figura(page, im["bbox"])
+            palabras = extraer_palabras(page, im["bbox"], pix.width, pix.height)
             extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
                               "origen": "imagen",
                               "pie_figura": pie,
+                              "titulo_grafico": titulo_en_figura(palabras, pix.height),
                               "contexto": extraer_contexto(bloques, page_num + 1, im["bbox"], pie),
-                              "palabras": extraer_palabras(page, im["bbox"], pix.width, pix.height)})
+                              "palabras": palabras})
 
         # 2. Dibujos vectoriales (gráficos hechos con matplotlib/R/LaTeX directo en el PDF)
         vectoriales, _ = extraer_dibujos_vectoriales(page, page_num, output_dir, 0, bloques)
@@ -467,8 +543,10 @@ def detectar_graficos(pdf_path, output_dir):
 
     Devuelve una lista de dicts (uno por figura que pasó los filtros
     baratos de tamaño/duplicado/logo), cada uno con:
-      file_path, page, width, height, origen, pie_figura, contexto,
-      documento, palabras, tipo, confianza, es_lineal
+      file_path, page, width, height, origen, pie_figura, titulo_grafico,
+      contexto, documento, palabras, tipo, confianza, es_lineal
+    "titulo_grafico" es el título escrito dentro del gráfico, si el PDF lo
+    trae como texto ("" si no).
     "pie_figura" es el texto "Figura N. ..." que el PDF pone junto a la
     figura ("" si no se encontró): es la base de la descripción narrada.
     "contexto" son los párrafos que la rodean y los que la citan (ver

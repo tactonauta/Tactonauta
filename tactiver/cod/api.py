@@ -337,6 +337,7 @@ def crear_solicitud():
         lote_id=str(datos.get("lote_id") or ""),
         archivo_nombre=str(datos.get("archivo_nombre") or ""),
         figuras=figuras,
+        documento_titulo=_titulo_documento(figuras),
     )
     return jsonify({"ok": True, "solicitud": solicitud}), 201
 
@@ -369,8 +370,20 @@ def _figuras_de_solicitud(figuras):
             "pagina": pagina,
             "imagen_url": f"/api/resultados/{nombre}",
             "pie_figura": pie,
+            "titulo_grafico": ext.get("titulo_grafico") or "",
+            "contexto_breve": _contexto_breve(ext.get("contexto")),
         })
     return limpias
+
+
+def _titulo_documento(figuras):
+    """Título del estudio de una solicitud, de lo extraído del PDF junto a
+    sus figuras ("" si no se encontró)."""
+    for f in figuras:
+        titulo = (_extraccion(os.path.join(RESULTADOS_DIR, f["id"])).get("documento") or {}).get("titulo")
+        if titulo:
+            return str(titulo)[:LARGO_MAX_CAMPO]
+    return ""
 
 
 @app.route("/api/solicitudes/mias", methods=["GET"])
@@ -846,8 +859,11 @@ def pdf_de_solicitud(id_solicitud):
             "error": "El PDF ya no está en el servidor (se borra al reiniciarse). "
                      "Pídele al estudiante que lo vuelva a enviar si lo necesitas.",
         }), 404
+    # con el título del estudio, como lo ve el supervisor en la solicitud
+    titulo = re.sub(r'[\\/:*?"<>|\s]+', " ", solicitud.get("documento_titulo") or "").strip()[:100]
     return send_from_directory(UPLOAD_DIR, os.path.basename(candidatos[0]), as_attachment=True,
-                               download_name=solicitud.get("archivo_nombre") or "documento.pdf",
+                               download_name=(f"{titulo}.pdf" if titulo else
+                                              solicitud.get("archivo_nombre") or "documento.pdf"),
                                mimetype="application/pdf")
 
 
@@ -1259,6 +1275,7 @@ def _guardar_extraccion(ruta_imagen, detectado, archivo_pdf=""):
             "pagina": detectado.get("page"),
             "origen": detectado.get("origen"),
             "pie_figura": detectado.get("pie_figura", ""),
+            "titulo_grafico": detectado.get("titulo_grafico", ""),
             "contexto": detectado.get("contexto"),
             "documento": {"archivo": archivo_pdf, **(detectado.get("documento") or {})},
             "palabras": detectado.get("palabras") or [],
@@ -1272,6 +1289,20 @@ def _extraccion(ruta_imagen):
             return json.load(f)
     except (OSError, ValueError):
         return {}
+
+
+CONTEXTO_BREVE_MAX = 220
+
+
+def _contexto_breve(contexto):
+    """Una frase de contexto para quien elige qué gráficas enviar: el primer
+    párrafo que cita la figura o, si no hay, el de justo antes o después."""
+    contexto = contexto or {}
+    menciones = contexto.get("menciones") or []
+    texto = (menciones[0]["texto"] if menciones else "") or contexto.get("antes") or contexto.get("despues") or ""
+    if len(texto) > CONTEXTO_BREVE_MAX:
+        texto = texto[:CONTEXTO_BREVE_MAX].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return texto
 
 
 def segmentar_figura(ruta_imagen, palabras=None):
@@ -1326,12 +1357,14 @@ def clasificar():
         return jsonify({"ok": False, "error": f"Error al analizar el PDF: {e}"}), 500
 
     graficos = []
+    documento = {}
     for d in detectados:
         nombre_original = os.path.basename(d["file_path"])
         nombre_servido = f"{lote_id}_{nombre_original}"
         ruta_servida = os.path.join(RESULTADOS_DIR, nombre_servido)
         shutil.copy(d["file_path"], ruta_servida)
         _guardar_extraccion(ruta_servida, d, archivo.filename)
+        documento = d.get("documento") or documento
         graficos.append({
             "id": nombre_servido,
             "pagina": d["page"],
@@ -1343,10 +1376,16 @@ def clasificar():
             # "Figura N. ..." junto a la figura en el PDF ("" si no hay):
             # el frontend lo guarda en la solicitud y abre la descripción narrada
             "pie_figura": d.get("pie_figura", ""),
+            # para el estudiante (puede ser ciego: no ve la imagen): título,
+            # dónde está y de qué habla el documento alrededor
+            "titulo_grafico": d.get("titulo_grafico", ""),
+            "contexto_breve": _contexto_breve(d.get("contexto")),
             "preview_url": f"/api/resultados/{nombre_servido}",
         })
 
-    return jsonify({"ok": True, "lote_id": lote_id, "graficos": graficos})
+    return jsonify({"ok": True, "lote_id": lote_id, "graficos": graficos,
+                    "documento_titulo": documento.get("titulo", ""),
+                    "paginas": documento.get("paginas")})
 
 
 # ------------------------------------------------------------------

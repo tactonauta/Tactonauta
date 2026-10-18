@@ -97,6 +97,9 @@ _COLUMNAS_NUEVAS = [
     # estado_supervisor tiene un CHECK que no se puede ampliar sin migrar).
     ("solicitudes", "rechazo TEXT"),
     ("solicitudes", "rechazado_en TEXT"),
+    # Título del estudio (del PDF, ver pipeline_rapido.datos_documento): es
+    # lo que el supervisor ve para seguir la solicitud, no el nombre del archivo.
+    ("solicitudes", "documento_titulo TEXT"),
 ]
 
 
@@ -373,6 +376,7 @@ def _fila_a_solicitud(fila):
         "imprenta_id": fila.get("imprenta_id"),
         "lote_id": fila.get("lote_id"),
         "archivo_nombre": fila.get("archivo_nombre"),
+        "documento_titulo": fila.get("documento_titulo") or "",
         "figuras": json.loads(figuras_json) if figuras_json else [],
         # "rechazada" no está en la columna (ver _COLUMNAS_NUEVAS): se deduce.
         "estado_supervisor": "rechazada" if fila.get("rechazo") is not None else fila.get("estado_supervisor"),
@@ -386,19 +390,21 @@ def _fila_a_solicitud(fila):
     }
 
 
-def crear_solicitud(estudiante_id, supervisor_id, lote_id, archivo_nombre, figuras):
+def crear_solicitud(estudiante_id, supervisor_id, lote_id, archivo_nombre, figuras,
+                    documento_titulo=""):
     con = _obtener_conexion()
     id_creado = con.ejecutar_escritura(
         """
         INSERT INTO solicitudes (
             estudiante_id, supervisor_id, lote_id, archivo_nombre, figuras_json,
-            creado_en
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            creado_en, documento_titulo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             estudiante_id, supervisor_id, lote_id, archivo_nombre,
             json.dumps(figuras, ensure_ascii=False),
             time.strftime("%Y-%m-%dT%H:%M:%S"),
+            documento_titulo,
         ),
     )
     return buscar_solicitud(id_creado)
