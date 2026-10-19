@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puntito</title>
+<title>TactiVerso</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
@@ -783,7 +783,7 @@
 <a class="skip-link" href="#main-heading-target">Saltar al contenido principal</a>
 
 <header class="top">
-  <span class="wordmark">puntito</span>
+  <span class="wordmark">TactiVerso</span>
   <span class="tagline">Gráficos táctiles en braille, de tu PDF a la imprenta</span>
 </header>
 
@@ -799,7 +799,7 @@
 
   <!-- PANTALLA DE INICIO: elegir rol -->
   <section class="screen active no-border" id="screen-landing" aria-labelledby="landing-heading">
-    <h1 id="landing-heading" tabindex="-1">Bienvenido a Puntito</h1>
+    <h1 id="landing-heading" tabindex="-1">Bienvenido a TactiVerso</h1>
     <p class="lede">Convierte los gráficos de tus documentos en láminas táctiles en braille. Elige cómo quieres ingresar.</p>
 
     <div class="role-buttons">
@@ -895,12 +895,12 @@
   <!-- PASO 1: Instrucciones (estudiante) -->
   <section class="step" id="step-1" aria-labelledby="step-1-heading">
     <span class="step-eyebrow">Paso 1 de 3</span>
-    <h1 id="step-1-heading" tabindex="-1">Bienvenido a Puntito</h1>
+    <h1 id="step-1-heading" tabindex="-1">Bienvenido a TactiVerso</h1>
     <p class="lede" id="step-1-lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
 
     <ol class="instructions">
       <li>Sube el PDF que tiene los gráficos.</li>
-      <li>Puntito encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
+      <li>TactiVerso encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
       <li>Eliges cuáles enviar: vienen todos marcados, desmarca los que no necesites.</li>
       <li>Se envía una solicitud a tu supervisor, que la revisa y la manda a imprimir en relieve.</li>
     </ol>
@@ -916,7 +916,7 @@
   <section class="step" id="step-2" aria-labelledby="step-2-heading">
     <span class="step-eyebrow">Paso 2 de 3</span>
     <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
-    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
+    <p class="lede">Elige el PDF. En cuanto lo elijas, TactiVerso busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
 
     <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
       <span class="icon" aria-hidden="true">
@@ -1047,7 +1047,7 @@
   <!-- ESPERANDO IMPRENTA (supervisor) -->
   <section class="screen no-border" id="screen-esperando-imprenta" aria-labelledby="esperando-imprenta-heading">
     <h1 id="esperando-imprenta-heading" tabindex="-1">Conectando con una imprenta</h1>
-    <p class="lede">Todavía no hay ninguna imprenta registrada en Puntito. En cuanto se registre una, tu cuenta se va a conectar con ella automáticamente.</p>
+    <p class="lede">Todavía no hay ninguna imprenta registrada en TactiVerso. En cuanto se registre una, tu cuenta se va a conectar con ella automáticamente.</p>
     <div class="actions">
       <button type="button" class="primary" id="reintentar-conexion-imprenta">Ya se registró, reintentar</button>
     </div>
@@ -1571,7 +1571,7 @@
     }
     const { resp, datos } = await postJson('/api/auth/conectar-supervisor', { codigo: codigo });
     if (!resp.ok || !datos.ok) {
-      status.textContent = datos.error || 'Ese código no corresponde a ningún supervisor registrado en Puntito.';
+      status.textContent = datos.error || 'Ese código no corresponde a ningún supervisor registrado en TactiVerso.';
       status.classList.add('error');
       return;
     }
