@@ -717,7 +717,9 @@ def tokens_de_palabras_pdf(palabras):
     con el mismo formato que los tokens del OCR de `detectar_textos`."""
     tokens = []
     for p in palabras or []:
-        if p.get("vertical"):
+        # rotadas (título del eje Y) o inclinadas (rótulos a 45°: ver
+        # categorias_inclinadas_de_palabras) no son texto horizontal
+        if p.get("vertical") or abs((p.get("dir") or (1, 0))[1]) > 0.3:
             continue
         texto = p["texto"].strip()
         b, l, w = (list(p.get("orden") or []) + [0, 0, 0])[:3]
@@ -730,6 +732,41 @@ def tokens_de_palabras_pdf(palabras):
             "orden": (b, 0, l, w),
         })
     return tokens
+
+
+def categorias_inclinadas_de_palabras(palabras, eje_x_fila, x_min=None):
+    """Como detectar_categorias_inclinadas, con el texto real del PDF: las
+    líneas inclinadas o verticales bajo el eje X ("dir" de
+    pipeline_rapido.extraer_palabras). Cada rótulo se ubica en su marca por
+    la punta de la línea más cercana al eje."""
+    if eje_x_fila is None:
+        return []
+    lineas = {}
+    for p in palabras or []:
+        dx, dy = (p.get("dir") or (1, 0))[:2]
+        if abs(dy) <= 0.3 or p["py"] + p["ph"] / 2 < eje_x_fila:
+            continue
+        lineas.setdefault(tuple((p.get("orden") or [0, 0])[:2]), []).append((p, dx, dy))
+    rotulos = []
+    for grupo in lineas.values():
+        px = min(p["px"] for p, _, _ in grupo)
+        py = min(p["py"] for p, _, _ in grupo)
+        x1 = max(p["px"] + p["pw"] for p, _, _ in grupo)
+        y1 = max(p["py"] + p["ph"] for p, _, _ in grupo)
+        _, dx, dy = grupo[0]
+        # la punta de arriba (la más cercana al eje): vertical, el centro;
+        # si sube hacia la derecha o baja hacia la izquierda, el borde
+        # derecho; si no, el izquierdo
+        punta_x = (px + x1) / 2 if abs(dx) < 0.2 else (x1 if dx * dy < 0 else px)
+        orden = sorted(grupo, key=lambda g: g[0]["orden"])
+        rotulos.append({"texto": " ".join(p["texto"] for p, _, _ in orden), "centro_x": float(punta_x),
+                        "px": int(px), "py": int(py), "pw": int(math.ceil(x1 - px)),
+                        "ph": int(math.ceil(y1 - py)), "tokens": [],
+                        "angulo": int(round(math.degrees(math.atan2(-dy, dx))))})
+    if x_min is not None:
+        rotulos = [r for r in rotulos if r["centro_x"] >= x_min - 5]
+    rotulos.sort(key=lambda r: r["centro_x"])
+    return _rotulos_equiespaciados(rotulos)
 
 
 def titulo_vertical_de_palabras(palabras, x_limite):
@@ -1299,6 +1336,170 @@ def detectar_texto_vertical(gris, x_limite, margen=6, ancho_minimo=15, lang=None
             mejor_texto, mejor_puntaje = texto_final, puntaje
 
     return mejor_texto, mejor_bbox
+
+
+# ---------- 3b') RÓTULOS INCLINADOS DEL EJE X ("España", "México"... a 45°) ----------
+
+# Ángulos (grados, antihorario) en que se prueba enderezar la franja bajo el
+# eje X, en dos tandas: primero los habituales (rótulos a 45° que suben o
+# bajan hacia la derecha, y verticales); los otros solo si esos no leen nada.
+ANGULOS_ROTULOS = ((-45, 45, -90, 90), (-30, 30, -60, 60))
+# Escalas a las que se lee cada ángulo: Tesseract lee distinto la misma
+# palabra según su tamaño ("México" 83 % a una y 19 % a otra), así que se
+# queda con la mejor lectura de cada rótulo.
+ESCALAS_ROTULOS = (2.0, 3.0)
+
+
+def _rotar_con_margen(imagen, angulo, fondo):
+    """Gira `imagen` `angulo` grados (antihorario) sin recortarla. Devuelve
+    (girada, M): M lleva un punto de `imagen` a la girada."""
+    alto, ancho = imagen.shape[:2]
+    M = cv2.getRotationMatrix2D((ancho / 2.0, alto / 2.0), angulo, 1.0)
+    cos, sen = abs(M[0, 0]), abs(M[0, 1])
+    nuevo_ancho, nuevo_alto = int(alto * sen + ancho * cos) + 2, int(alto * cos + ancho * sen) + 2
+    M[0, 2] += nuevo_ancho / 2.0 - ancho / 2.0
+    M[1, 2] += nuevo_alto / 2.0 - alto / 2.0
+    girada = cv2.warpAffine(imagen, M, (nuevo_ancho, nuevo_alto), flags=cv2.INTER_CUBIC,
+                            borderMode=cv2.BORDER_CONSTANT, borderValue=int(fondo))
+    return girada, M
+
+
+def _leer_rotulos_girados(franja0, y0, angulo, esc, fondo, idioma):
+    """Renglones de texto de la franja bajo el eje (que empieza en la fila
+    `y0` de la imagen) leídos con la franja girada `angulo` grados, a escala
+    `esc`. Cada uno con su "punta": el extremo del renglón más cercano al
+    eje, en coordenadas de la imagen."""
+    franja = cv2.resize(franja0, None, fx=esc, fy=esc, interpolation=cv2.INTER_CUBIC)
+    girada, M = _rotar_con_margen(franja, angulo, fondo)
+    inversa = cv2.invertAffineTransform(M)
+    datos = pytesseract.image_to_data(girada, output_type=Output.DICT,
+                                      config="--psm 11", lang=idioma)
+    lineas = {}
+    for i in range(len(datos["text"])):
+        texto = datos["text"][i].strip()
+        try:
+            conf = float(datos["conf"][i])
+        except (ValueError, TypeError):
+            conf = -1.0
+        if not texto or conf < 20 or len(re.findall(_RE_LETRA, texto)) < 2:
+            continue
+        clave = (datos["block_num"][i], datos["par_num"][i], datos["line_num"][i])
+        lineas.setdefault(clave, []).append(
+            (datos["left"][i], datos["top"][i], datos["width"][i], datos["height"][i], texto, conf))
+
+    rotulos = []
+    for palabras in lineas.values():
+        palabras.sort()
+        texto = re.sub(r"[,;:.]+$", "", " ".join(p[4] for p in palabras)).strip()
+        if len(re.findall(_RE_LETRA, texto)) < 2 or not _texto_plausible(texto):
+            continue
+        x_a, x_b = min(p[0] for p in palabras), max(p[0] + p[2] for p in palabras)
+        y_a, y_b = min(p[1] for p in palabras), max(p[1] + p[3] for p in palabras)
+        # las dos puntas del renglón y sus esquinas, de vuelta en la imagen
+        puntos = np.array([[x_a, (y_a + y_b) / 2], [x_b, (y_a + y_b) / 2],
+                           [x_a, y_a], [x_b, y_a], [x_a, y_b], [x_b, y_b]], dtype=float)
+        orig = (puntos @ inversa[:, :2].T + inversa[:, 2]) / esc
+        orig[:, 1] += y0
+        punta = orig[0] if orig[0][1] <= orig[1][1] else orig[1]
+        xs, ys = orig[2:, 0], orig[2:, 1]
+        rotulos.append({
+            "texto": texto, "centro_x": float(punta[0]), "punta_y": float(punta[1]),
+            "px": int(max(0, xs.min())), "py": int(max(y0, ys.min())),
+            "pw": int(math.ceil(xs.max() - max(0, xs.min()))),
+            "ph": int(math.ceil(ys.max() - max(y0, ys.min()))),
+            "alto_texto": (y_b - y_a) / esc,
+            "conf": float(np.mean([p[5] for p in palabras])), "tokens": [], "angulo": angulo,
+        })
+    return rotulos
+
+
+def _rotulos_equiespaciados(rotulos):
+    """Los rótulos de un eje de categorías, uno por marca y equiespaciados.
+    Si falta uno en el medio (el OCR no lo leyó), su lugar queda con un
+    rótulo "Categoría N" ("faltante": True) para que el supervisor lo
+    complete en la pizarra: saltearlo correría todas las categorías que
+    siguen a la marca de al lado. [] si no parecen rótulos de un eje."""
+    if len(rotulos) < 3:
+        return []
+    pasos = np.diff([r["centro_x"] for r in rotulos])
+    if pasos.min() <= 0:
+        return []
+    paso = float(np.median(pasos))
+    for p in pasos:
+        if p < 0.75 * paso:                 # dos rótulos en una sola marca
+            return []
+    multiplos = [p / paso for p in pasos]
+    if any(abs(m - round(m)) > 0.2 for m in multiplos) or sum(round(m) - 1 for m in multiplos) > 2:
+        return []
+    completos = [rotulos[0]]
+    for r, m in zip(rotulos[1:], multiplos):
+        for k in range(1, int(round(m))):
+            x = completos[-1]["centro_x"] + paso
+            completos.append({"texto": "", "centro_x": x, "px": int(x - 5), "py": r["py"],
+                              "pw": 10, "ph": 10, "tokens": [], "angulo": r["angulo"],
+                              "faltante": True})
+        completos.append(r)
+    for n, r in enumerate(completos, start=1):
+        if r.get("faltante"):
+            r["texto"] = f"Categoría {n}"
+    return completos
+
+
+def detectar_categorias_inclinadas(gris, eje_x_fila, x_min=None, lang=None):
+    """Rótulos de categoría del eje X escritos inclinados o verticales. El
+    OCR de toda la imagen solo lee texto horizontal: un "España" a 45° salía
+    como basura ("& y s Oy") y el eje quedaba sin categorías.
+
+    Se recorta la franja bajo el eje, se la gira para que el texto quede
+    horizontal (ANGULOS_ROTULOS) y se la lee; gana el ángulo que lee más
+    texto con más confianza. Cada rótulo se ubica en su marca por su punta
+    más cercana al eje (de ahí cuelga el texto), no por el centro de su
+    recuadro, que con texto inclinado queda corrido según su largo.
+
+    Mismo formato que _categorias_en_linea (con "tokens" vacío, "angulo" y,
+    en un rótulo que no se pudo leer, "faltante"), o []."""
+    if eje_x_fila is None:
+        return []
+    alto_img, ancho_img = gris.shape[:2]
+    y0 = int(eje_x_fila) + 2
+    franja0 = gris[y0:, :]
+    if franja0.shape[0] < 10:
+        return []
+    fondo = int(np.median(franja0))
+    idioma = _idioma_ocr(lang)
+
+    mejor, mejor_puntaje = [], 0.0
+    for tanda in ANGULOS_ROTULOS:
+        for angulo in tanda:
+            lecturas = [r for esc in ESCALAS_ROTULOS
+                        for r in _leer_rotulos_girados(franja0, y0, angulo, esc, fondo, idioma)]
+            if not lecturas:
+                continue
+            # la misma marca leída a distintas escalas: queda la lectura más segura
+            alto_texto = float(np.median([r["alto_texto"] for r in lecturas]))
+            lecturas.sort(key=lambda r: r["centro_x"])
+            rotulos = []
+            for r in lecturas:
+                if rotulos and r["centro_x"] - rotulos[-1]["centro_x"] < 1.5 * alto_texto:
+                    if r["conf"] > rotulos[-1]["conf"]:
+                        rotulos[-1] = r
+                    continue
+                rotulos.append(r)
+            # solo los que cuelgan del eje: la punta cerca de la fila del eje
+            # (no el título del eje X, que va más abajo)
+            punta_min = min(r["punta_y"] for r in rotulos)
+            rotulos = [r for r in rotulos if r["punta_y"] - punta_min <= 2 * alto_texto
+                       and (x_min is None or r["centro_x"] >= x_min - 0.02 * ancho_img)]
+            puntaje = sum(r["conf"] * len(r["texto"]) for r in rotulos)
+            rotulos = _rotulos_equiespaciados(rotulos)
+            if rotulos and puntaje > mejor_puntaje:
+                mejor, mejor_puntaje = rotulos, puntaje
+        if mejor:
+            break
+    for r in mejor:
+        for clave in ("punta_y", "conf", "alto_texto"):
+            r.pop(clave, None)
+    return mejor
 
 
 # ---------- 3c) TEXTOS CORTOS Y SÍMBOLOS: título del eje X y leyenda ----------
@@ -2528,6 +2729,37 @@ def procesar_imagen(ruta_imagen, dir_resultados, n_puntos=300, max_series=3, lan
                 "de la izquierda, así que las curvas que se leen con el eje derecho quedan "
                 "con valores incorrectos. Revisar antes de imprimir."
             )
+
+    # --- Rótulos de categoría inclinados o verticales ---
+    if len(etiquetas_x) < 2 and not txt.get("categorias_x") and eje_x_fila is not None:
+        if usa_pdf:
+            inclinadas = categorias_inclinadas_de_palabras(palabras, eje_x_fila, x_min=eje_y_col)
+        else:
+            inclinadas = detectar_categorias_inclinadas(gris, eje_x_fila, x_min=eje_y_col, lang=lang)
+        if inclinadas:
+            txt["categorias_x"] = inclinadas
+            # lo que el OCR horizontal había sacado de esos rótulos era basura
+            # (un "título del eje X" o un número sueltos)
+            zx0 = min(c["px"] for c in inclinadas)
+            zx1 = max(c["px"] + c["pw"] for c in inclinadas)
+            zy1 = max(c["py"] + c["ph"] for c in inclinadas)
+
+            def _en_rotulos(b):
+                return (b is not None and zx0 - 5 <= b["px"] + b["pw"] / 2 <= zx1 + 5
+                        and b["py"] + b["ph"] / 2 <= zy1 + 5)
+            if _en_rotulos(txt.get("titulo_x_bbox")):
+                txt["titulo_x"], txt["titulo_x_bbox"] = "", None
+            etiquetas_x = [e for e in etiquetas_x if not _en_rotulos(e)]
+            if not _texto_plausible(txt.get("leyenda")):
+                txt["leyenda"] = ""
+            advertencias.append(
+                f"Eje X: {len(inclinadas)} rótulos inclinados leídos girando la imagen "
+                f"({abs(inclinadas[0]['angulo'])}°); verifícalos en el overlay.")
+            faltantes = [c["texto"] for c in inclinadas if c.get("faltante")]
+            if faltantes:
+                advertencias.append(
+                    "Eje X: no se pudo leer el rótulo de " + ", ".join(faltantes)
+                    + ". Escríbelo en la pizarra antes de autorizar.")
 
     # --- Eje X de categorías ("Ene", "Feb"...): cada rótulo es la posición
     # 0, 1, 2...; la lámina y la narración usan el nombre ---

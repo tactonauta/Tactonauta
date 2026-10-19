@@ -396,15 +396,18 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
     # dirección de escritura no es horizontal): así se reconoce también una
     # palabra corta como "mm" o "%", que por su forma no se distingue.
     rotadas = []
+    # dirección de escritura de cada línea (rótulos del eje X a 45°...)
+    direcciones = []
     # Potencias de diez escritas con exponente elevado y más chico ("10" +
     # "³", típico de un eje logarítmico o de un multiplicador "×10⁶"): como
     # palabra salen pegadas, "103", que se leía como ciento tres.
     potencias = []   # (recuadro, texto_pegado, texto_correcto)
     for bloque in page.get_text("dict", clip=clip)["blocks"]:
         for linea in bloque.get("lines", []):
-            dx, _ = linea.get("dir", (1, 0))
+            dx, dy = linea.get("dir", (1, 0))
             if abs(dx) < 0.5:
                 rotadas.append(fitz.Rect(linea["bbox"]))
+            direcciones.append((fitz.Rect(linea["bbox"]), (round(dx, 3), round(dy, 3))))
             spans = linea.get("spans", [])
             for base, exp in zip(spans, spans[1:]):
                 b_txt, e_txt = base["text"].strip(), exp["text"].strip().replace("−", "-")
@@ -427,6 +430,8 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
         if signo is not None:
             texto, x0 = "-" + texto, signo.x0
         w, h = x1 - x0, y1 - y0
+        centro = fitz.Point((x0 + x1) / 2, (y0 + y1) / 2)
+        direccion = next((d for r, d in direcciones if r.contains(centro)), (1.0, 0.0))
         palabras.append({
             "texto": texto,
             "px": round((x0 - clip.x0) * sx, 1), "py": round((y0 - clip.y0) * sy, 1),
@@ -434,6 +439,8 @@ def extraer_palabras(page, clip, ancho_px, alto_px):
             "vertical": (len(texto) > 1 and h > 1.5 * w)
                         or any(r.contains(fitz.Point((x0 + x1) / 2, (y0 + y1) / 2)) for r in rotadas),
             "orden": [bloque, linea, num],
+            # (dx, dy) de la línea, con la y hacia abajo: (1, 0) es horizontal
+            "dir": list(direccion),
         })
     # Una palabra corta ("de") no se distingue sola: si otra de su misma
     # línea está rotada, la línea entera es vertical.

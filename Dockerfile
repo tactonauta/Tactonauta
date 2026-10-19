@@ -1,9 +1,11 @@
 FROM python:3.11-slim
 
-# Instalar Tesseract OCR
+# Instalar Tesseract OCR, con español (ñ, tildes: "España", "Perú"; sin él
+# salían "Espafia", "Pert"). segmentador._idioma_ocr usa spa+eng si están.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tesseract-ocr \
+        tesseract-ocr-spa \
         libgl1 \
     && rm -rf /var/lib/apt/lists/*
 # Directorio de trabajo
