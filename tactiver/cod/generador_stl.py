@@ -250,14 +250,55 @@ def _malla_prisma(poligono, altura, z0=0.0):
     return np.array(tris, dtype=float)
 
 
-def contorno_placa(ancho, alto, chaflan):
+def contorno_placa(ancho, alto, chaflan, radio=0.0):
     """Contorno de la placa (antihorario): un rectángulo al que le falta un
     triángulo de `chaflan` mm de lado en la esquina SUPERIOR DERECHA. Esa
     esquina cortada permite orientar la lámina al tacto (saber cuál es el
-    "arriba") antes de empezar a leerla."""
+    "arriba") antes de empezar a leerla.
+
+    `radio` (mm): cada esquina, también las dos del recorte, se redondea
+    hacia adentro con ese radio. La placa sigue midiendo `ancho` x `alto`."""
     if chaflan <= 0:
-        return [(0.0, 0.0), (ancho, 0.0), (ancho, alto), (0.0, alto)]
-    return [(0.0, 0.0), (ancho, 0.0), (ancho, alto - chaflan), (ancho - chaflan, alto), (0.0, alto)]
+        vertices = [(0.0, 0.0), (ancho, 0.0), (ancho, alto), (0.0, alto)]
+    else:
+        vertices = [(0.0, 0.0), (ancho, 0.0), (ancho, alto - chaflan), (ancho - chaflan, alto), (0.0, alto)]
+    return _redondear_esquinas(vertices, radio)
+
+
+# Lados de arco por cada 90° de giro de una esquina redondeada.
+ESQUINA_LADOS_90 = 8
+
+
+def _redondear_esquinas(vertices, radio):
+    """Cambia cada vértice de un polígono CONVEXO antihorario por un arco de
+    `radio` mm tangente a sus dos lados. El arco queda dentro del polígono
+    original (no lo agranda) y el resultado sigue siendo convexo, como lo
+    necesita `_malla_prisma`."""
+    if radio <= 0:
+        return list(vertices)
+    n = len(vertices)
+    contorno = []
+    for i in range(n):
+        p = np.array(vertices[i], dtype=float)
+        hacia_a = np.array(vertices[i - 1], dtype=float) - p
+        hacia_b = np.array(vertices[(i + 1) % n], dtype=float) - p
+        la, lb = np.linalg.norm(hacia_a), np.linalg.norm(hacia_b)
+        u, v = hacia_a / la, hacia_b / lb
+        angulo = math.acos(float(np.clip(np.dot(u, v), -1.0, 1.0)))   # ángulo interior
+        # distancia del vértice a los puntos de tangencia; sin pasar de la
+        # mitad de cada lado (un lado corto achica el radio de esa esquina)
+        t = min(radio / math.tan(angulo / 2), la / 2, lb / 2)
+        r = t * math.tan(angulo / 2)
+        bisectriz = (u + v) / np.linalg.norm(u + v)
+        centro = p + bisectriz * (r / math.sin(angulo / 2))
+        a1 = math.atan2(*(p + u * t - centro)[::-1])
+        a2 = math.atan2(*(p + v * t - centro)[::-1])
+        giro = (a2 - a1) % (2 * math.pi)          # antihorario, como el polígono
+        lados = max(2, math.ceil(ESQUINA_LADOS_90 * giro / (math.pi / 2)))
+        for k in range(lados + 1):
+            a = a1 + giro * k / lados
+            contorno.append((float(centro[0] + r * math.cos(a)), float(centro[1] + r * math.sin(a))))
+    return contorno
 
 
 def _malla_cilindro(radio, altura, cx=0.0, cy=0.0, z0=0.0, lados=CILINDRO_LADOS):
@@ -1188,10 +1229,12 @@ def _ancho_numero(valor, decimales=0):
 # Formato de la lámina, FIJO: placa cuadrada de 22 x 22 cm con la esquina
 # superior derecha recortada (orientación al tacto). El gráfico va ARRIBA
 # (con sus títulos, números y rótulos) y lo que sobra abajo es para la
-# leyenda. Para otro formato, cambiar solo estas constantes.
+# leyenda. Las esquinas van redondeadas (PLACA_RADIO_ESQUINA), sin cambiar
+# el tamaño total. Para otro formato, cambiar solo estas constantes.
 PLACA_ANCHO = 220.0
 PLACA_ALTO = 220.0
 PLACA_CHAFLAN = 10.0
+PLACA_RADIO_ESQUINA = 3.0
 
 
 def generar_modelo_desde_recta(
@@ -2293,7 +2336,7 @@ def generar_modelo_desde_recta(
     if diseno is not None:
         diseno.update({
             "placa": {"ancho_mm": dim_x, "alto_mm": dim_y, "chaflan_mm": chaflan,
-                      "contorno": [list(p) for p in contorno_placa(dim_x, dim_y, chaflan)]},
+                      "contorno": [list(p) for p in contorno_placa(dim_x, dim_y, chaflan, PLACA_RADIO_ESQUINA)]},
             "area": {"izquierda": izquierda, "abajo": abajo, "ancho": ancho_plot, "alto": alto_plot},
             # zona del gráfico (arriba, con títulos y rótulos) y de la leyenda
             # (abajo): [x0, y0, x1, y1] en mm
@@ -2343,7 +2386,7 @@ def generar_modelo_desde_recta(
     # (no unión booleana una por una): ver _ensamblar más arriba.
 
     print(f"[STL] Ensamblando {len(piezas)} piezas en relieve...", flush=True)
-    modelo = _malla_prisma(contorno_placa(dim_x, dim_y, chaflan), BASE_THICKNESS)
+    modelo = _malla_prisma(contorno_placa(dim_x, dim_y, chaflan, PLACA_RADIO_ESQUINA), BASE_THICKNESS)
     triangulos = _ensamblar(modelo, piezas)
     _guardar_stl(triangulos, archivo_salida)
 
