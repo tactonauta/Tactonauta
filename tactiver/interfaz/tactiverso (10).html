@@ -208,6 +208,13 @@
     transition: border-color 0.15s ease, background 0.15s ease;
   }
   .role-btn:hover { border-color: var(--gold); background: #efdcae; }
+  /* Modo exploración */
+  .explorar-acciones { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0; }
+  .explorar-acciones button { font-size: 1.1rem; padding: 0.85rem 1.3rem; }
+  .explorar-camara video { width: 100%; max-width: 32rem; border-radius: 12px; border: 2px solid var(--line); background: #000; }
+  .explorar-manual { margin: 1rem 0; }
+  .explorar-manual form { display: flex; flex-direction: column; gap: 0.5rem; max-width: 28rem; margin-top: 0.6rem; }
+  .explorar-lista { font-size: 1.15rem; line-height: 1.6; padding-left: 1.2rem; }
   .role-btn .role-title { display: block; font-family: 'Fraunces', serif; font-size: 1.3rem; font-weight: 700; color: var(--night); }
   .role-btn .role-desc { display: block; margin-top: 0.3rem; color: #3a362e; font-size: 0.98rem; }
 
@@ -815,7 +822,50 @@
         <span class="role-title">Soy de imprenta</span>
         <span class="role-desc">Recibe los modelos ya autorizados y márcalos como impresos.</span>
       </button>
+      <button type="button" class="role-btn" data-goto="screen-exploracion">
+        <span class="role-title">Modo exploración</span>
+        <span class="role-desc">Escanea el código QR de una lámina y escucha su leyenda, desde donde estés. No necesitas cuenta.</span>
+      </button>
     </div>
+  </section>
+
+  <!-- MODO EXPLORACIÓN: escanear el QR de una lámina y escuchar su leyenda
+       (sin cuenta: el estudiante puede estar fuera del campus) -->
+  <section class="screen no-border" id="screen-exploracion" aria-labelledby="exploracion-heading">
+    <h1 id="exploracion-heading" tabindex="-1">Modo exploración</h1>
+    <p class="lede">El código QR está en la esquina superior izquierda de la lámina. Al leerlo vas a escuchar su leyenda: qué es cada eje, qué curva es cada textura y qué significa cada letra.</p>
+
+    <div class="explorar-acciones">
+      <button type="button" class="primary" id="explorar-escanear">Escanear código QR</button>
+      <button type="button" class="secondary" id="explorar-detener" hidden>Detener la cámara</button>
+    </div>
+    <div class="explorar-camara" id="explorar-camara" hidden>
+      <video id="explorar-video" playsinline muted aria-label="Imagen de la cámara"></video>
+    </div>
+    <p class="status" id="explorar-estado" role="status" aria-live="polite"></p>
+
+    <details class="explorar-manual">
+      <summary>No puedo usar la cámara: escribir el código de la lámina</summary>
+      <form id="explorar-form" class="fila">
+        <label for="explorar-codigo">Código o enlace de la lámina (por ejemplo 0A1B2C3D4E)</label>
+        <input type="text" id="explorar-codigo" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button type="submit" class="secondary">Abrir lámina</button>
+      </form>
+    </details>
+
+    <section id="explorar-resultado" hidden aria-labelledby="explorar-titulo">
+      <h2 id="explorar-titulo" tabindex="-1"></h2>
+      <div class="explorar-acciones">
+        <button type="button" class="primary" id="explorar-repetir">Repetir la leyenda</button>
+        <button type="button" class="secondary" id="explorar-descripcion">Escuchar la descripción completa</button>
+        <button type="button" class="secondary" id="explorar-callar">Detener el audio</button>
+      </div>
+      <h3>Leyenda</h3>
+      <ul id="explorar-leyenda" class="explorar-lista"></ul>
+      <p><a id="explorar-mas" href="#" target="_blank" rel="noopener">Ver todos los datos de la lámina</a></p>
+    </section>
+
+    <button type="button" class="secondary" data-goto="screen-landing">Volver al inicio</button>
   </section>
 
   <!-- AUTENTICACIÓN: ESTUDIANTE -->
@@ -3912,11 +3962,202 @@
   });
 
   // ---------------------------------------------------------------
+  // Modo exploración: el estudiante (sin cuenta, desde donde esté) escanea
+  // el QR de la lámina y escucha su leyenda: qué es cada eje, qué curva es
+  // cada textura y qué significa cada letra ("A: España"), que en la lámina
+  // no van impresos. Los datos son los mismos que abre el QR (/q/<código>,
+  // en JSON: narracion.exportar_datos_lamina, campo "leyenda").
+  // ---------------------------------------------------------------
+  const Exploracion = (() => {
+    const btnEscanear = document.getElementById('explorar-escanear');
+    const btnDetener = document.getElementById('explorar-detener');
+    const camara = document.getElementById('explorar-camara');
+    const video = document.getElementById('explorar-video');
+    const estado = document.getElementById('explorar-estado');
+    const form = document.getElementById('explorar-form');
+    const inputCodigo = document.getElementById('explorar-codigo');
+    const resultado = document.getElementById('explorar-resultado');
+    const titulo = document.getElementById('explorar-titulo');
+    const lista = document.getElementById('explorar-leyenda');
+    const enlaceMas = document.getElementById('explorar-mas');
+    // jsQR: lector de QR para los navegadores sin BarcodeDetector (Safari, Firefox)
+    const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    let flujo = null, buscando = false, datosLamina = null, lienzo = null;
+
+    function decir(texto) {
+      if (!('speechSynthesis' in window) || !texto) return;
+      speechSynthesis.cancel();
+      const frase = new SpeechSynthesisUtterance(texto);
+      frase.lang = 'es-ES';
+      const voz = speechSynthesis.getVoices().find(v => /^es/i.test(v.lang));
+      if (voz) frase.voice = voz;
+      frase.rate = 0.95;
+      speechSynthesis.speak(frase);
+    }
+
+    function avisar(texto, error) {
+      estado.textContent = texto;
+      estado.classList.toggle('error', !!error);
+    }
+
+    // "HTTPS://SERVIDOR/Q/0A1B2C3D4E", "/q/0a1b2c3d4e" o solo "0A1B2C3D4E"
+    function codigoDe(texto) {
+      const m = /(?:\/q\/)?([0-9a-f]{10})\b/i.exec(String(texto || '').trim());
+      return m ? m[1].toLowerCase() : null;
+    }
+
+    function cargarJsQR() {
+      if (window.jsQR) return Promise.resolve();
+      return new Promise((ok, falla) => {
+        const script = document.createElement('script');
+        script.src = JSQR_URL;
+        script.onload = ok;
+        script.onerror = () => falla(new Error('No se pudo cargar el lector de QR.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    function detenerCamara() {
+      buscando = false;
+      if (flujo) flujo.getTracks().forEach(t => t.stop());
+      flujo = null;
+      video.srcObject = null;
+      camara.hidden = true;
+      btnDetener.hidden = true;
+      btnEscanear.hidden = false;
+    }
+
+    async function escanear() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        avisar('Este navegador no permite usar la cámara. Escribe el código de la lámina más abajo.', true);
+        return;
+      }
+      let detector = null;
+      try {
+        if ('BarcodeDetector' in window) detector = new BarcodeDetector({ formats: ['qr_code'] });
+        else await cargarJsQR();
+      } catch (e) {
+        avisar(e.message + ' Escribe el código de la lámina más abajo.', true);
+        return;
+      }
+      try {
+        flujo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      } catch (e) {
+        avisar('No se pudo abrir la cámara (¿diste permiso?). También puedes escribir el código de la lámina más abajo.', true);
+        return;
+      }
+      video.srcObject = flujo;
+      await video.play();
+      camara.hidden = false;
+      btnDetener.hidden = false;
+      btnEscanear.hidden = true;
+      avisar('Cámara abierta. Acerca la esquina superior izquierda de la lámina, donde está el código QR, y muévela despacio.');
+      decir('Cámara abierta. Acerca la esquina superior izquierda de la lámina, donde está el código QR.');
+      buscando = true;
+      lienzo = lienzo || document.createElement('canvas');
+      const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+      let ultimoAviso = Date.now();
+      while (buscando) {
+        let texto = null;
+        try {
+          if (detector) {
+            const hallados = await detector.detect(video);
+            texto = hallados.length ? hallados[0].rawValue : null;
+          } else if (video.videoWidth) {
+            lienzo.width = video.videoWidth;
+            lienzo.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const img = ctx.getImageData(0, 0, lienzo.width, lienzo.height);
+            const qr = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+            texto = qr ? qr.data : null;
+          }
+        } catch (e) { texto = null; }
+        const codigo = codigoDe(texto);
+        if (codigo) {
+          detenerCamara();
+          await abrir(codigo);
+          return;
+        }
+        if (Date.now() - ultimoAviso > 12000) {
+          ultimoAviso = Date.now();
+          decir('Todavía no encuentro el código. Prueba alejando o acercando un poco la lámina.');
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
+    function pintar(d) {
+      const ley = d.leyenda || {};
+      titulo.textContent = ley.titulo || (d.grafica && d.grafica.titulo) || 'Lámina táctil';
+      lista.textContent = '';
+      const entradas = [];
+      (ley.ejes || []).forEach(e => entradas.push(`${e.letra}: eje ${e.eje}${e.texto ? ', ' + e.texto : ''}.`));
+      if ((ley.series || []).length > 1) {
+        ley.series.forEach(s => entradas.push(`${s.etiqueta}, textura ${s.textura}: ${s.nombre}` +
+          (s.color ? `, línea ${s.color} en el original` : '') + '.'));
+      }
+      (ley.letras || []).forEach(l => entradas.push(`${l.letra}: ${l.texto}.`));
+      if (!entradas.length && d.descripcion) entradas.push(d.descripcion);
+      entradas.forEach(t => lista.appendChild(crearEl('li', null, t)));
+      resultado.hidden = false;
+    }
+
+    async function abrir(texto) {
+      const codigo = codigoDe(texto);
+      if (!codigo) {
+        avisar('Ese no parece un código de lámina: son 10 letras y números, como 0A1B2C3D4E.', true);
+        return;
+      }
+      avisar('Código leído. Buscando la lámina…');
+      let datos = null;
+      try {
+        const resp = await fetch(`${API_BASE}/q/${codigo}?formato=json`, { headers: { Accept: 'application/json' } });
+        if (resp.ok) datos = await resp.json();
+      } catch (e) { datos = null; }
+      if (!datos) {
+        avisar('No se encontraron los datos de esa lámina (puede que todavía no la hayan autorizado). Revisa tu conexión e inténtalo de nuevo.', true);
+        decir('No se encontraron los datos de esa lámina.');
+        return;
+      }
+      datosLamina = datos;
+      enlaceMas.href = `${API_BASE}/q/${codigo}`;
+      pintar(datos);
+      avisar('Lámina cargada. Leyendo la leyenda.');
+      titulo.focus();
+      decir((datos.leyenda && datos.leyenda.texto) || datos.descripcion);
+    }
+
+    btnEscanear.addEventListener('click', escanear);
+    btnDetener.addEventListener('click', () => { detenerCamara(); avisar('Cámara detenida.'); });
+    form.addEventListener('submit', ev => { ev.preventDefault(); abrir(inputCodigo.value); });
+    document.getElementById('explorar-repetir').addEventListener('click', () =>
+      datosLamina && decir((datosLamina.leyenda && datosLamina.leyenda.texto) || datosLamina.descripcion));
+    document.getElementById('explorar-descripcion').addEventListener('click', () =>
+      datosLamina && decir(datosLamina.descripcion));
+    document.getElementById('explorar-callar').addEventListener('click', () => {
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+    });
+    // al salir de la pantalla, apagar la cámara y la voz
+    document.querySelectorAll('#screen-exploracion [data-goto]').forEach(b => b.addEventListener('click', () => {
+      detenerCamara();
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+    }));
+
+    return { abrir };
+  })();
+
+  // ---------------------------------------------------------------
   // Arranque: si ya hay una sesión de verdad en el servidor (cookie), entrar
   // directo a la pantalla que corresponda. Antes esto leía localStorage de
   // forma síncrona; ahora depende de una consulta al backend.
   // ---------------------------------------------------------------
   (async function iniciar() {
+    if (/^#explorar\b/.test(location.hash)) {
+      goTo('screen-exploracion');
+      const codigo = (location.hash.split('=')[1] || '').trim();
+      if (codigo) Exploracion.abrir(codigo);
+      return;
+    }
     const { datos } = await llamarApi('/api/auth/yo', { method: 'GET' });
     if (!datos.ok) {
       usuarioActual = null;

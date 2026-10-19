@@ -285,7 +285,7 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
         nombre = nombre_de_serie(serie.get("nombre"), i)
         sujeto = f"La curva «{nombre}»" if n > 1 else "La curva"
         if i in texturas and n > 1:
-            sujeto += f" (textura {texturas[i]} en la lámina)"
+            sujeto += f" (Leyenda {i + 1} en la lámina, textura {texturas[i]})"
         vals = _valores_serie(serie)
         if len(vals) < 2:
             frases.append(f"{sujeto} no tiene escala legible para leer sus valores.")
@@ -302,13 +302,18 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
             grupos.setdefault(a["donde"] or "texto", []).append(a)
         partes = []
         for donde, lista in grupos.items():
-            if donde.startswith("número del eje"):
-                partes.append(donde.replace("número", "números") + ": "
+            if donde.startswith(("número del eje", "categoría del eje")):
+                plural = donde.replace("número", "números").replace("categoría", "categorías")
+                partes.append(plural + ": "
                               + ", ".join(f"{a['identificador']} es {a['texto']}" for a in lista))
             else:
                 partes += [f"{a['identificador']}, {donde}: «{a['texto']}»" for a in lista]
-        frases.append("En la lámina, algunos textos van con una letra que se explica en la "
-                      "leyenda de abajo. " + "; ".join(partes) + ".")
+        explicacion = "; ".join(partes)
+        frases.append("En la lámina, algunos textos van con una letra. "
+                      + explicacion[:1].upper() + explicacion[1:] + ".")
+    if diseno:
+        frases.append("En la lámina, el eje horizontal lleva la letra X y el vertical la letra Y; "
+                      "la leyenda de abajo dice qué es cada uno.")
     if (diseno or {}).get("qr"):
         frases.append(TEXTO_QR)
     return " ".join(frases)
@@ -429,7 +434,17 @@ def exportar_hand_tracking(datos, diseno, descripcion):
         segmentos.append({
             "id": f"leyenda_{entrada['indice'] + 1}", "tipo": "leyenda", "serie": entrada["nombre"],
             "x1": ax, "y1": ay, "x2": bx, "y2": by,
-            "texto": f"Leyenda: la textura {entrada['textura']} es {entrada['nombre']}.",
+            "texto": f"{entrada.get('etiqueta') or 'Leyenda'}, textura {entrada['textura']}: "
+                     f"{entrada['nombre']}.",
+        })
+    for entrada in diseno.get("leyenda_ejes") or []:
+        x0, y0, x1, y1 = entrada["recuadro"]
+        (ax, ay), (bx, by) = a_hoja(x0, (y0 + y1) / 2), a_hoja(x1, (y0 + y1) / 2)
+        nombre_eje = "horizontal" if entrada["eje"] == "X" else "vertical"
+        segmentos.append({
+            "id": f"leyenda_eje_{entrada['eje'].lower()}", "tipo": "leyenda", "serie": None,
+            "x1": ax, "y1": ay, "x2": bx, "y2": by,
+            "texto": f"Leyenda: {entrada['eje']} es el eje {nombre_eje}, {entrada['texto']}.",
         })
 
     # Textos escritos en la lámina (títulos, categorías, números de los ejes,
@@ -442,14 +457,19 @@ def exportar_hand_tracking(datos, diseno, descripcion):
     for k, txt in enumerate(diseno.get("textos") or [], start=1):
         x0, y0, x1, y1 = txt["recuadro"]
         (ax, ay), (bx, by) = a_hoja(x0, (y0 + y1) / 2), a_hoja(x1, (y0 + y1) / 2)
-        que = {"titulo": "Título", "titulo_eje_x": "Título del eje X",
-               "titulo_eje_y": "Título del eje Y", "categoria": "Categoría",
+        que = {"titulo": "Título", "categoria": "Categoría del eje horizontal",
                "numero_x": _eje("horizontal", textos.get("titulo_eje_x")),
                "numero_y": _eje("vertical", textos.get("titulo_eje_y")),
                "dato": "Valor anotado junto a la curva"}.get(txt["tipo"], "Texto")
-        texto = f"{que}: {txt['texto_completo']}."
-        if txt.get("identificador"):
-            texto = f"{que}, abreviado con la letra {txt['identificador']}: {txt['texto_completo']}."
+        completo = txt["texto_completo"]
+        if txt["tipo"] in ("titulo_eje_x", "titulo_eje_y"):
+            # en la placa, solo la letra del eje
+            nombre_eje = "horizontal" if txt["tipo"] == "titulo_eje_x" else "vertical"
+            texto = f"Letra {txt['texto']}: eje {nombre_eje}" + (f", {completo}." if completo else ".")
+        elif txt.get("identificador"):
+            texto = f"Letra {txt['identificador']}, {que.lower()}: {completo}."
+        else:
+            texto = f"{que}: {completo}."
         segmentos.append({"id": f"texto_{k}", "tipo": "texto", "serie": None,
                           "x1": ax, "y1": ay, "x2": bx, "y2": by, "texto": texto})
     for a in diseno.get("abreviaturas") or []:
@@ -594,6 +614,59 @@ def _eje_datos(datos, eje, rango):
     }
 
 
+def nombre_color(serie):
+    """Color de la curva en el gráfico original, en palabras ("verde"), a
+    partir del tono que midió el segmentador (OpenCV: 0-179). None si no se
+    sabe; "negra" si se separó por intensidad (sin color)."""
+    if serie.get("modo") == "intensidad":
+        return "negra"
+    hue = serie.get("hue")
+    if not isinstance(hue, numbers.Real):
+        return None
+    for limite, nombre in ((8, "roja"), (19, "naranja"), (33, "amarilla"), (80, "verde"),
+                           (100, "celeste"), (130, "azul"), (150, "morada"), (169, "rosada")):
+        if hue <= limite:
+            return nombre
+    return "roja"
+
+
+def leyenda_lamina(datos, diseno):
+    """La leyenda completa de la lámina, lo que se escucha en el modo
+    exploración y en Hand_Tracking: lo impreso abajo ("X- ...", "Y- ...",
+    "Leyenda 1"...) con el nombre y el color de cada curva, y lo que en la
+    placa va con una letra y NO se imprime ("A es España").
+
+    Devuelve {"titulo", "ejes", "series", "letras", "texto"}; "texto" es todo
+    junto, listo para leer en voz alta."""
+    textos = datos.get("textos") or {}
+    figura = (diseno.get("figura") or "").strip()
+    titulo = (textos.get("titulo") or "").strip()
+    titulo_completo = ". ".join(t for t in (figura, titulo) if t)
+    ejes = [{"letra": letra, "eje": nombre, "texto": (textos.get(clave) or "").strip()}
+            for letra, nombre, clave in (("X", "horizontal", "titulo_eje_x"),
+                                         ("Y", "vertical", "titulo_eje_y"))]
+    datos_series = [s for s in datos.get("series") or [] if s.get("puntos")]
+    series = []
+    for s in diseno.get("series") or []:
+        original = datos_series[s["indice"]] if s["indice"] < len(datos_series) else {}
+        series.append({"etiqueta": f"Leyenda {s['indice'] + 1}", "nombre": s["nombre"],
+                       "textura": s["textura"], "color": nombre_color(original)})
+    letras = [{"letra": a["identificador"], "texto": a["texto"], "donde": a.get("donde") or ""}
+              for a in diseno.get("abreviaturas") or []]
+
+    frases = [titulo_completo + "." if titulo_completo else "Lámina táctil."]
+    for e in ejes:
+        frases.append(f"{e['letra']}: eje {e['eje']}" + (f", {e['texto']}." if e["texto"] else "."))
+    if len(series) > 1:
+        for s in series:
+            color = f", línea {s['color']} en el original" if s["color"] else ""
+            frases.append(f"{s['etiqueta']}, textura {s['textura']}: {s['nombre']}{color}.")
+    for l in letras:
+        frases.append(f"{l['letra']}: {l['texto']}.")
+    return {"titulo": titulo_completo, "ejes": ejes, "series": series, "letras": letras,
+            "texto": " ".join(frases)}
+
+
 def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
     """Dict con todo lo que se sabe de una lámina (ver el docstring del módulo).
 
@@ -641,6 +714,8 @@ def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
         },
         "contexto": figura.get("contexto") or {"antes": "", "despues": "", "menciones": []},
         "descripcion": descripcion,
+        # lo que se escucha en el modo exploración (ver leyenda_lamina)
+        "leyenda": leyenda_lamina(datos, diseno),
         "grafica": {
             "titulo": (textos.get("titulo") or "").strip(),
             "calibrada": bool(dom.get("calibrado")),

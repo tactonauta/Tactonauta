@@ -935,7 +935,10 @@ def index():
 
 @app.route("/api/salud", methods=["GET"])
 def salud():
-    return jsonify({"ok": True})
+    # base_persistente: False = SQLite en el disco del servidor, que en Render
+    # se borra al reiniciar (y con él cuentas, solicitudes y los datos de los
+    # QR ya impresos). En producción tiene que ser True (Turso, ver db.py).
+    return jsonify({"ok": True, "base_persistente": db.USANDO_TURSO})
 
 
 # ------------------------------------------------------------------
@@ -1038,6 +1041,7 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
         diseno=diseno,
         ajustes=ajustes,
         url_qr=url_qr,
+        figura=_etiqueta_figura(_info_figura(resultado, figura, pie_figura)),
     )
     advertencias.extend(diseno.get("avisos") or [])
 
@@ -1131,6 +1135,17 @@ def _info_figura(resultado, figura=None, pie_figura=None):
     return info
 
 
+def _etiqueta_figura(info):
+    """Lo que va delante del título de la lámina: "Figura 4" si el pie de
+    figura del PDF la numera ("Fig. 4", "Figura 4.", "Gráfico 4"...); si no,
+    "Página 3"; "" si no se sabe de dónde salió la imagen."""
+    pie = (info.get("pie_figura") or "").strip()
+    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*(\d+)", pie, re.IGNORECASE)
+    if m:
+        return f"Figura {m.group(1)}"
+    return f"Página {info['pagina']}" if info.get("pagina") else ""
+
+
 def _no_encontrada_qr():
     return ("Esta lámina todavía no tiene datos publicados (falta que el supervisor "
             "la autorice) o el enlace no es válido.", 404,
@@ -1210,6 +1225,8 @@ _PAGINA_QR = """<!doctype html>
   a { color: #0b4f9c; }
   .descargas a { display: block; padding: .75rem 1rem; margin: .5rem 0; border: 2px solid #0b4f9c;
                  border-radius: .5rem; text-decoration: none; font-weight: 600; }
+  .boton { font: inherit; font-weight: 600; padding: .75rem 1.2rem; border-radius: .5rem;
+           border: 2px solid #0b4f9c; background: #0b4f9c; color: #fff; }
   blockquote { margin: .5rem 0; padding-left: 1rem; border-left: 4px solid #c9c2b0; }
   @media (prefers-color-scheme: dark) {
     body { background: #1d1d1f; color: #f5f5f0; } a { color: #8cc4ff; }
@@ -1225,6 +1242,29 @@ _PAGINA_QR = """<!doctype html>
   {% if d.figura.pagina %}Página {{ d.figura.pagina }}{% if d.documento.paginas %} de {{ d.documento.paginas }}{% endif %}.{% endif %}
 </p>
 {% if d.figura.pie_figura and d.figura.pie_figura != d.grafica.titulo %}<p>{{ d.figura.pie_figura }}</p>{% endif %}
+
+{% if d.leyenda %}
+<h2>Leyenda</h2>
+<p><button type="button" id="escuchar" class="boton" hidden>Escuchar la leyenda</button></p>
+<ul>
+{% for e in d.leyenda.ejes %}  <li>{{ e.letra }}: eje {{ e.eje }}{% if e.texto %}, {{ e.texto }}{% endif %}.</li>
+{% endfor %}{% if d.leyenda.series|length > 1 %}{% for s in d.leyenda.series %}  <li>{{ s.etiqueta }}, textura {{ s.textura }}: {{ s.nombre }}{% if s.color %}, línea {{ s.color }} en el original{% endif %}.</li>
+{% endfor %}{% endif %}{% for l in d.leyenda.letras %}  <li>{{ l.letra }}: {{ l.texto }}.</li>
+{% endfor %}</ul>
+<script>
+  (function () {
+    var boton = document.getElementById("escuchar");
+    if (!("speechSynthesis" in window)) return;
+    boton.hidden = false;
+    boton.addEventListener("click", function () {
+      var frase = new SpeechSynthesisUtterance({{ d.leyenda.texto|tojson }});
+      frase.lang = "es-ES";
+      speechSynthesis.cancel();
+      speechSynthesis.speak(frase);
+    });
+  })();
+</script>
+{% endif %}
 
 <h2>Descripción</h2>
 <p>{{ d.descripcion }}</p>
@@ -1453,7 +1493,8 @@ def vista_lamina():
     url_qr = _url_qr(_token_qr(resultado))
     try:
         generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
-                                   diseno=diseno, ajustes=ajustes, url_qr=url_qr)
+                                   diseno=diseno, ajustes=ajustes, url_qr=url_qr,
+                                   figura=_etiqueta_figura(_info_figura(resultado)))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({
