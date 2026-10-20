@@ -1,0 +1,36 @@
+# Explorador de gráficas impresas con textura  -  dependencias
+# Python 3.9 a 3.14 (mediapipe actual publica ruedas para Windows x64/ARM64,
+# Linux x64/ARM64 y macOS con chip Apple; NO para Mac Intel)
+#
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)   |   source .venv/bin/activate   (Linux/macOS)
+#   pip install -r requirements.txt
+#
+# tkinter NO se instala con pip: viene con Python en Windows/macOS.
+# En Linux:  sudo apt install python3-tk
+
+# --- Seguimiento de la mano ---
+# El programa usa la API actual de MediaPipe (Tasks · HandLandmarker). Las versiones
+# recientes ya no traen mp.solutions.hands; por eso ya no hace falta fijar 0.10.14.
+# La primera vez descarga el modelo hand_landmarker.task (~8 MB) a la carpeta "modelos".
+mediapipe>=0.10.30
+
+# --- Imagen / cámara ---
+# mediapipe ya instala opencv-contrib-python y numpy. Se listan sin tope de versión
+# (funcionan numpy 2.x y OpenCV 4.10+ / 5.x). No instales además "opencv-python":
+# dos paquetes de OpenCV a la vez suelen chocar.
+opencv-contrib-python>=4.10
+numpy>=1.26
+
+# --- Voz ---
+pyttsx3>=2.90
+
+# --- Cámara por nombre (solo Windows; opcional) ---
+# Permite elegir la cámara por su nombre ("nombre_camara" en config_exploracion.json).
+# Sin ella se usa el índice 0.
+pygrabber>=0.2; sys_platform == "win32"
+
+# --- Lectura de QR más robusta (opcional) ---
+# Mejora la lectura del QR a distintas alturas/inclinaciones. Si no está, se usa OpenCV.
+# En Windows funciona directo; en Linux requiere:  sudo apt install libzbar0
+pyzbar>=0.1.9
