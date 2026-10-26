@@ -401,8 +401,40 @@ def _figuras_de_solicitud(figuras):
             "pie_figura": pie,
             "titulo_grafico": ext.get("titulo_grafico") or "",
             "contexto_breve": _contexto_breve(ext.get("contexto")),
+            "grupo": ext.get("grupo"),
+            "orden_panel": ext.get("orden_panel") or 0,
         })
-    return limpias
+    return _numerar_figuras(limpias)
+
+
+def _numerar_figuras(figuras):
+    """"numero" de cada gráfica para el supervisor: "1", "2"... por figura
+    del PDF y, si de una figura llegaron varios paneles, "2.1", "2.2"...
+    (de arriba abajo). Las figuras quedan juntas, en el orden del PDF."""
+    grupos = {}
+    for f in figuras:
+        clave = f.get("grupo") if f.get("grupo") is not None else ("suelta", f["id"])
+        grupos.setdefault(clave, []).append(f)
+    ordenadas = []
+    for n, paneles in enumerate(grupos.values(), start=1):
+        paneles.sort(key=lambda f: f.get("orden_panel") or 0)
+        for k, f in enumerate(paneles, start=1):
+            f["numero"] = f"{n}.{k}" if len(paneles) > 1 else str(n)
+            f["paneles"] = len(paneles)
+            ordenadas.append(f)
+    return ordenadas
+
+
+def _siguiente_numero(figuras):
+    """Número para una gráfica agregada por el supervisor: la figura que
+    sigue a la última."""
+    mayor = 0
+    for f in figuras:
+        try:
+            mayor = max(mayor, int(str(f.get("numero") or "0").split(".")[0]))
+        except ValueError:
+            pass
+    return str(mayor + 1)
 
 
 def _titulo_documento(figuras):
@@ -891,6 +923,7 @@ def agregar_figura(id_solicitud):
         "id": nombre, "titulo": "Gráfico de línea", "pagina": None,
         "caption": texto or "Imagen agregada por el supervisor.",
         "imagen_url": f"/api/resultados/{nombre}", "pie_figura": texto, "agregada": True,
+        "numero": _siguiente_numero(figuras),
     }
     figuras.append(_segmentar_para_revision(figura))
     solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
@@ -1386,6 +1419,8 @@ def _guardar_extraccion(ruta_imagen, detectado, archivo_pdf=""):
             "pagina": detectado.get("page"),
             "origen": detectado.get("origen"),
             "pie_figura": detectado.get("pie_figura", ""),
+            "grupo": detectado.get("grupo"),
+            "orden_panel": detectado.get("orden_panel"),
             "titulo_grafico": detectado.get("titulo_grafico", ""),
             "contexto": detectado.get("contexto"),
             "documento": {"archivo": archivo_pdf, **(detectado.get("documento") or {})},
@@ -1488,6 +1523,10 @@ def clasificar():
             # "Figura N. ..." junto a la figura en el PDF ("" si no hay):
             # el frontend lo guarda en la solicitud y abre la descripción narrada
             "pie_figura": d.get("pie_figura", ""),
+            # paneles de una misma figura (Fig. 2 A, B...): mismo "grupo";
+            # el estudiante elige la figura entera, el supervisor ve 2.1, 2.2...
+            "grupo": d.get("grupo"),
+            "orden_panel": d.get("orden_panel"),
             # para el estudiante (puede ser ciego: no ve la imagen): título,
             # dónde está y de qué habla el documento alrededor
             "titulo_grafico": d.get("titulo_grafico", ""),

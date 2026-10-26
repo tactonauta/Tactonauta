@@ -1829,16 +1829,18 @@
           pie_figura: g.pie_figura || '',
           titulo_grafico: g.titulo_grafico || '',
           contexto_breve: g.contexto_breve || '',
+          grupo: g.grupo,
+          orden_panel: g.orden_panel,
         })),
       };
       pintarEleccion();
       progress.style.display = 'none';
       formEleccion.hidden = false;
-      const n = encontrados.figuras.length;
+      const n = gruposEleccion().length;
       avisar((encontrados.documento ? 'Documento: ' + encontrados.documento + '. ' : '') +
-        (n === 1 ? 'Se encontró 1 gráfico de líneas. Está marcado.'
-        : 'Se encontraron ' + n + ' gráficos de líneas. Todos están marcados.') +
-        ' Desmarca los que no quieras enviar y pulsa "Enviar a mi supervisor".' +
+        (n === 1 ? 'Se encontró 1 figura con gráficos de líneas. Está marcada.'
+        : 'Se encontraron ' + n + ' figuras con gráficos de líneas. Todas están marcadas.') +
+        ' Desmarca las que no quieras enviar y pulsa "Enviar a mi supervisor".' +
         (encontrados.otras > 0 ? ' El documento tiene además ' + encontrados.otras +
           ' figura(s) que no son gráficos de líneas; esas no se pueden convertir por ahora.' : ''));
       listaEleccion.querySelector('input')?.focus();
@@ -1861,16 +1863,33 @@
     return 'Página ' + f.pagina + (paginas ? ' de ' + paginas : '') + ' del documento';
   }
 
+  // Los paneles de una misma figura del PDF (Fig. 2 A, B...) comparten
+  // "grupo": el estudiante elige la figura entera, una sola vez, y se envían
+  // todos sus paneles (el supervisor los ve como 2.1, 2.2...). Antes oía el
+  // mismo pie de figura repetido por cada panel, sin saber cuál era cuál.
+  function gruposEleccion() {
+    const grupos = [];
+    const porClave = {};
+    encontrados.figuras.forEach(f => {
+      const clave = f.grupo != null ? 'g' + f.grupo : 'id' + f.id;
+      if (!porClave[clave]) { porClave[clave] = { clave, figuras: [] }; grupos.push(porClave[clave]); }
+      porClave[clave].figuras.push(f);
+    });
+    grupos.forEach(g => g.figuras.sort((a, b) => (a.orden_panel || 0) - (b.orden_panel || 0)));
+    return grupos;
+  }
+
   function pintarEleccion() {
     listaEleccion.innerHTML = '';
-    encontrados.figuras.forEach((f, i) => {
+    gruposEleccion().forEach((grupo, i) => {
+      const f = grupo.figuras[0];
       const li = document.createElement('li');
       li.className = 'marcada';
       const label = document.createElement('label');
       const check = document.createElement('input');
       check.type = 'checkbox';
       check.checked = true;
-      check.value = f.id;
+      check.value = grupo.clave;
       check.addEventListener('change', () => {
         li.classList.toggle('marcada', check.checked);
         actualizarEleccion();
@@ -1883,6 +1902,12 @@
       ubicacion.textContent = ubicacionGrafico(f, encontrados.paginas);
       texto.appendChild(titulo);
       texto.appendChild(ubicacion);
+      if (grupo.figuras.length > 1) {
+        const paneles = document.createElement('span');
+        paneles.textContent = 'Esta figura tiene ' + grupo.figuras.length +
+          ' paneles con gráficos de líneas; se envían juntos.';
+        texto.appendChild(paneles);
+      }
       label.appendChild(check);
       label.appendChild(texto);
       li.appendChild(label);
@@ -1901,16 +1926,17 @@
     actualizarEleccion();
   }
 
+  // Todos los paneles de las figuras marcadas.
   function elegidas() {
-    const ids = Array.from(listaEleccion.querySelectorAll('input:checked')).map(c => c.value);
-    return encontrados.figuras.filter(f => ids.includes(f.id));
+    const claves = Array.from(listaEleccion.querySelectorAll('input:checked')).map(c => c.value);
+    return gruposEleccion().filter(g => claves.includes(g.clave)).flatMap(g => g.figuras);
   }
 
   function actualizarEleccion() {
-    const n = elegidas().length;
+    const n = listaEleccion.querySelectorAll('input:checked').length;
     btnEnviarEleccion.disabled = n === 0;
-    btnEnviarEleccion.textContent = n === 0 ? 'Marca al menos un gráfico'
-      : (n === 1 ? 'Enviar 1 gráfico a mi supervisor' : 'Enviar ' + n + ' gráficos a mi supervisor');
+    btnEnviarEleccion.textContent = n === 0 ? 'Marca al menos una figura'
+      : (n === 1 ? 'Enviar 1 figura a mi supervisor' : 'Enviar ' + n + ' figuras a mi supervisor');
   }
 
   formEleccion.addEventListener('submit', async (e) => {
@@ -1926,8 +1952,9 @@
         figuras: figuras,
       });
       if (!envio.resp.ok || !envio.datos.ok) throw new Error(envio.datos.error || 'No se pudo enviar la solicitud.');
-      mostrarSolicitudEnviada(envio.datos.solicitud, figuras,
-        encontrados.otras, encontrados.figuras.length - figuras.length);
+      const marcadas = gruposEleccion().filter(g => figuras.includes(g.figuras[0]));
+      mostrarSolicitudEnviada(envio.datos.solicitud, marcadas,
+        encontrados.otras, gruposEleccion().length - marcadas.length);
     } catch (err) {
       detectStatus.textContent = 'No se pudo enviar: ' + err.message;
       detectStatus.classList.add('error');
@@ -1935,24 +1962,27 @@
     }
   });
 
-  function mostrarSolicitudEnviada(solicitud, figuras, otrasFiguras, noElegidas = 0) {
-    const n = figuras.length;
+  // `grupos`: las figuras enviadas (cada una con sus paneles), de gruposEleccion().
+  function mostrarSolicitudEnviada(solicitud, grupos, otrasFiguras, noElegidas = 0) {
+    const n = grupos.length;
     document.getElementById('ticket-number').textContent = 'Solicitud #' + String(solicitud.id).padStart(5, '0');
     document.getElementById('ticket-detail').textContent =
-      (n === 1 ? 'Se envió 1 gráfico de líneas' : 'Se enviaron ' + n + ' gráficos de líneas') +
+      (n === 1 ? 'Se envió 1 figura con gráficos de líneas' : 'Se enviaron ' + n + ' figuras con gráficos de líneas') +
       ' a tu supervisor (' + (usuarioActual.supervisor_codigo || 'sin definir') + ')' +
-      (n === 1 ? ' para convertirlo en lámina táctil.' : ' para convertirlos en láminas táctiles.') +
+      (n === 1 ? ' para convertirla en lámina táctil.' : ' para convertirlas en láminas táctiles.') +
       (noElegidas > 0
-        ? (noElegidas === 1 ? ' No se envió 1 gráfico que desmarcaste.' : ' No se enviaron ' + noElegidas + ' gráficos que desmarcaste.')
+        ? (noElegidas === 1 ? ' No se envió 1 figura que desmarcaste.' : ' No se enviaron ' + noElegidas + ' figuras que desmarcaste.')
         : '') +
       (otrasFiguras > 0
         ? ' El documento tenía ' + otrasFiguras + ' figura(s) más que no son gráficos de líneas; esas no se pueden convertir por ahora.'
         : '');
     const listaTicket = document.getElementById('ticket-list');
     listaTicket.innerHTML = '';
-    figuras.forEach(f => {
+    grupos.forEach(g => {
+      const f = g.figuras[0];
       const li = document.createElement('li');
-      li.textContent = tituloGrafico(f) + ' (página ' + f.pagina + ')';
+      li.textContent = tituloGrafico(f) + ' (página ' + f.pagina +
+        (g.figuras.length > 1 ? ', ' + g.figuras.length + ' paneles' : '') + ')';
       listaTicket.appendChild(li);
     });
     document.getElementById('confirm-status').textContent =
@@ -2055,8 +2085,11 @@
     return d && !isNaN(d) ? d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   }
 
+  // "Gráfica 2.1, página 5": f.numero lo arma el servidor (paneles de una
+  // misma figura del PDF: 2.1, 2.2...); las solicitudes anteriores no lo
+  // tienen y siguen con su número de orden.
   function tituloFigura(f, n) {
-    return 'Gráfica ' + n + (f.pagina ? ', página ' + f.pagina : '');
+    return 'Gráfica ' + (f.numero || n) + (f.pagina ? ', página ' + f.pagina : '');
   }
 
   // ---- visor de imagen ampliada ----
@@ -2300,7 +2333,7 @@
         si.disabled = no.disabled = true;
         const { resp, datos } = await postJson('/api/solicitudes/' + s.id + '/figuras/' + i + '/quitar');
         if (!resp.ok || !datos.ok) { estado.textContent = datos.error || 'No se pudo quitar.'; estado.classList.add('error'); normal(); return; }
-        await recargarSolicitud(s.id, 'restaurar-' + s.id + '-' + i, 'Gráfica ' + n + ' quitada de la solicitud. Puedes restaurarla en "Gráficas quitadas".');
+        await recargarSolicitud(s.id, 'restaurar-' + s.id + '-' + i, 'Gráfica ' + (f.numero || n) + ' quitada de la solicitud. Puedes restaurarla en "Gráficas quitadas".');
       });
       no.addEventListener('click', () => { normal(); cont.querySelector('[data-foco^="quitar-"]').focus(); });
       cont.append(pregunta, si, no);
