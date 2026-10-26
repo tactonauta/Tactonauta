@@ -54,6 +54,7 @@ Salud:      GET /api/salud -> {"ok": true}
 ------------------------------------------------------------------
 """
 
+import functools
 import glob
 import hashlib
 import os
@@ -61,6 +62,7 @@ import json
 import math
 import re
 import secrets
+import threading
 import shutil
 import time
 import urllib.parse
@@ -111,6 +113,32 @@ if not _SECRET_KEY:
     )
     _SECRET_KEY = secrets.token_hex(32)
 app.secret_key = _SECRET_KEY
+
+
+# Memoria: el plan gratuito de Render tiene 512 MB. La app usa ~220 MB solo
+# al arrancar y procesar un PDF o leer una gráfica la lleva a ~350 MB; dos
+# de esos procesos a la vez pasan el límite y Render reinicia el servidor
+# (se corta todo lo que estaba en curso y se borran los archivos de
+# resultados/). Por eso las tareas pesadas van de a una: la siguiente espera
+# su turno y, si la espera se alarga, se avisa en vez de quedar colgada.
+_TAREA_PESADA = threading.Semaphore(1)
+ESPERA_MAX_TAREA_PESADA = 240   # s
+
+
+def una_tarea_pesada(funcion):
+    @functools.wraps(funcion)
+    def envoltura(*args, **kwargs):
+        if not _TAREA_PESADA.acquire(timeout=ESPERA_MAX_TAREA_PESADA):
+            return jsonify({
+                "ok": False,
+                "error": "El servidor está ocupado procesando otro documento. "
+                         "Vuelve a intentarlo en unos minutos.",
+            }), 503
+        try:
+            return funcion(*args, **kwargs)
+        finally:
+            _TAREA_PESADA.release()
+    return envoltura
 
 
 @app.after_request
@@ -511,6 +539,7 @@ def _campos_figura(resultado, nombre_stl, advertencias, narracion_info):
 # no en una columna nueva: no hace falta migrar la base (SQLite ni Turso).
 
 @app.route("/api/solicitudes/<int:id_solicitud>/revisar", methods=["POST"])
+@una_tarea_pesada
 def revisar_solicitud(id_solicitud):
     solicitud, error = _solicitud_del_supervisor(id_solicitud)
     if error:
@@ -530,6 +559,7 @@ def revisar_solicitud(id_solicitud):
 # gráfica queda guardada apenas se lee, y volver a pulsar "Revisar" sigue
 # desde la primera que falte.
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/revisar", methods=["POST"])
+@una_tarea_pesada
 def revisar_figura_solicitud(id_solicitud, indice):
     solicitud, error = _solicitud_del_supervisor(id_solicitud)
     if error:
@@ -589,6 +619,7 @@ def visto_bueno_figura(id_solicitud, indice):
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/autorizar", methods=["POST"])
+@una_tarea_pesada
 def autorizar_solicitud(id_solicitud):
     solicitud, error = _solicitud_del_supervisor(id_solicitud)
     if error:
@@ -651,6 +682,7 @@ def autorizar_solicitud(id_solicitud):
 # Después de enviada a la imprenta no se puede: la imprenta ya podría estar
 # usando el STL anterior.
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/corregir", methods=["POST"])
+@una_tarea_pesada
 def corregir_figura_solicitud(id_solicitud, indice):
     solicitud, error = _solicitud_del_supervisor(id_solicitud)
     if error:
@@ -806,6 +838,7 @@ def quitar_figura(id_solicitud, indice):
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/restaurar", methods=["POST"])
+@una_tarea_pesada
 def restaurar_figura(id_solicitud, indice):
     solicitud, figuras, error = _figura_en_revision(id_solicitud, indice)
     if error:
@@ -823,6 +856,7 @@ def restaurar_figura(id_solicitud, indice):
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/reemplazar", methods=["POST"])
+@una_tarea_pesada
 def reemplazar_figura(id_solicitud, indice):
     """Se copió la figura equivocada: el supervisor sube la correcta (por
     ejemplo, un recorte del PDF). Se segmenta de nuevo y vuelve a revisión."""
@@ -840,6 +874,7 @@ def reemplazar_figura(id_solicitud, indice):
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/agregar", methods=["POST"])
+@una_tarea_pesada
 def agregar_figura(id_solicitud):
     """Una figura que el sistema no detectó: el supervisor la sube, con un
     texto opcional que hace de pie de figura (abre la descripción narrada)."""
@@ -1411,6 +1446,7 @@ def _respuesta_segmentacion(resultado):
 # Paso 1: subir el PDF completo y detectar qué tipo de gráficas hay
 # ------------------------------------------------------------------
 @app.route("/api/clasificar", methods=["POST"])
+@una_tarea_pesada
 def clasificar():
     archivo = request.files.get("pdf")
 
@@ -1500,6 +1536,7 @@ def _ajustes_validos(ajustes):
 # mallas), con los ajustes del supervisor. `correccion_id` es el JSON de la
 # lectura: la guardada en la figura o la recién recalculada en la pizarra.
 @app.route("/api/lamina/vista", methods=["POST"])
+@una_tarea_pesada
 def vista_lamina():
     if session.get("rol") != "supervisor":
         return jsonify({"ok": False, "error": "Iniciá sesión como supervisor primero."}), 401
@@ -1533,6 +1570,7 @@ def vista_lamina():
 
 
 @app.route("/api/corregir/<path:correccion_id>", methods=["POST"])
+@una_tarea_pesada
 def corregir(correccion_id):
     correcciones = request.get_json(silent=True)
     if not isinstance(correcciones, dict):
