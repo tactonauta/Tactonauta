@@ -2646,18 +2646,35 @@
     else if (resumen) resumen.focus();
   }
 
+  // Las gráficas se leen de a una (un pedido por gráfica): todas juntas en
+  // un solo pedido tardaban más que el límite del servidor en Render y la
+  // pantalla se quedaba cargando sin guardar nada. Cada una queda guardada
+  // apenas se lee; si algo falla, volver a pulsar "Revisar" sigue desde la
+  // que falta.
   async function revisarSolicitud(id, boton, status) {
     boton.disabled = true;
     status.classList.remove('error');
-    status.textContent = 'Leyendo las gráficas (ejes, curvas y textos)… puede tardar un momento.';
-    const { resp, datos } = await postJson('/api/solicitudes/' + id + '/revisar');
-    if (!resp.ok || !datos.ok) {
-      status.textContent = datos.error || 'No se pudieron leer las gráficas.';
-      status.classList.add('error');
-      boton.disabled = false;
-      return;
+    let total = null, solicitud = null;
+    for (let i = 0; total === null || i < total; i++) {
+      status.textContent = 'Leyendo las gráficas (ejes, curvas y textos): gráfica ' + (i + 1) +
+        (total ? ' de ' + total : '') + '… cada una puede tardar uno o dos minutos.';
+      let resp, datos;
+      try {
+        ({ resp, datos } = await postJson('/api/solicitudes/' + id + '/figuras/' + i + '/revisar'));
+      } catch (e) {
+        resp = { ok: false }; datos = {};
+      }
+      if (!resp.ok || !datos.ok) {
+        status.textContent = (datos.error || 'No se pudo leer la gráfica ' + (i + 1) + '.') +
+          (i > 0 ? ' Las ' + i + ' anteriores quedaron guardadas: vuelve a pulsar el botón para seguir con las que faltan.' : '');
+        status.classList.add('error');
+        boton.disabled = false;
+        return;
+      }
+      solicitud = datos.solicitud;
+      total = solicitud.figuras.length;
     }
-    const primera = datos.solicitud.figuras.findIndex(f => !f.quitada && !f.error);
+    const primera = solicitud.figuras.findIndex(f => !f.quitada && !f.error);
     await recargarSolicitud(id, 'editar-' + id + '-' + Math.max(primera, 0));
   }
 

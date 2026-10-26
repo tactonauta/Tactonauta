@@ -38,7 +38,7 @@ Estudiante: POST /api/clasificar (PDF, campo "pdf") -> figuras detectadas
 Supervisor: GET /api/solicitudes/supervisor
             POST /api/solicitudes/<id>/revisar | autorizar | rechazar |
                  enviar-imprenta
-            POST /api/solicitudes/<id>/figuras/<i>/visto-bueno | corregir |
+            POST /api/solicitudes/<id>/figuras/<i>/revisar | visto-bueno | corregir |
                  quitar | restaurar | reemplazar
             POST /api/solicitudes/<id>/figuras/agregar
             GET  /api/solicitudes/<id>/pdf
@@ -518,34 +518,56 @@ def revisar_solicitud(id_solicitud):
     if solicitud["estado_supervisor"] != "en_espera":
         return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
 
-    figuras = []
-    for figura in solicitud["figuras"]:
-        figura = dict(figura)
-        # Quitada por el supervisor, o ya segmentada (y quizá corregida): no se toca.
-        if figura.get("quitada") or (figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"])):
-            figuras.append(figura)
-            continue
-        ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
-        if not figura.get("id") or not os.path.isfile(ruta_imagen):
-            figura["error"] = (
-                "La imagen original ya no está disponible en el servidor (pudo "
-                "reiniciarse desde que se subió el PDF). Hay que volver a subir el documento."
-            )
-            figuras.append(figura)
-            continue
-        try:
-            resultado = segmentar_figura(ruta_imagen)
-            figura.pop("error", None)
-            figura.update(_campos_revision(resultado, figura.get("pie_figura")))
-            figura["revisada"] = False
-        except Exception as e:
-            print(f"ERROR REVISANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
-            print(traceback.format_exc(), flush=True)
-            figura["error"] = f"No se pudo segmentar esta gráfica: {e}"
-        figuras.append(figura)
-
+    figuras = [_revisar_figura(f, id_solicitud) for f in solicitud["figuras"]]
     solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+# "Revisar" de UNA gráfica. La interfaz revisa así, de a una, mostrando el
+# avance: todas juntas en un solo pedido (/revisar) superaban el --timeout de
+# 300 s de gunicorn en Render (Prueba8.pdf, 6 gráficas: ~40 s en una PC,
+# ~400 s en Render) y el pedido se cortaba sin guardar nada. De a una, cada
+# gráfica queda guardada apenas se lee, y volver a pulsar "Revisar" sigue
+# desde la primera que falte.
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/revisar", methods=["POST"])
+def revisar_figura_solicitud(id_solicitud, indice):
+    solicitud, error = _solicitud_del_supervisor(id_solicitud)
+    if error:
+        return error
+    if solicitud["estado_supervisor"] != "en_espera":
+        return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
+    figuras = list(solicitud["figuras"])
+    if not 0 <= indice < len(figuras):
+        return jsonify({"ok": False, "error": "No se encontró esa figura."}), 404
+    figuras[indice] = _revisar_figura(figuras[indice], id_solicitud)
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+def _revisar_figura(figura, id_solicitud):
+    """Segmenta una figura para la revisión del supervisor (sin STL todavía).
+    Devuelve la figura actualizada; si no se puede, con su "error"."""
+    figura = dict(figura)
+    # Quitada por el supervisor, o ya segmentada (y quizá corregida): no se toca.
+    if figura.get("quitada") or (figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"])):
+        return figura
+    ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
+    if not figura.get("id") or not os.path.isfile(ruta_imagen):
+        figura["error"] = (
+            "La imagen original ya no está disponible en el servidor (pudo "
+            "reiniciarse desde que se subió el PDF). Hay que volver a subir el documento."
+        )
+        return figura
+    try:
+        resultado = segmentar_figura(ruta_imagen)
+        figura.pop("error", None)
+        figura.update(_campos_revision(resultado, figura.get("pie_figura")))
+        figura["revisada"] = False
+    except Exception as e:
+        print(f"ERROR REVISANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
+        print(traceback.format_exc(), flush=True)
+        figura["error"] = f"No se pudo segmentar esta gráfica: {e}"
+    return figura
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/visto-bueno", methods=["POST"])
