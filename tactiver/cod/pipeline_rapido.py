@@ -529,8 +529,15 @@ def _pixmap_sobre_blanco(doc, xref):
     gráfico entero queda negro: el segmentador no encuentra ni ejes ni curva.
     """
     pix = fitz.Pixmap(doc, xref)
-    if pix.n - pix.alpha >= 4:                      # CMYK -> RGB
-        pix = fitz.Pixmap(fitz.csRGB, pix)
+    # PNG solo admite gris o RGB. Además de CMYK, las revistas suelen traer
+    # imágenes en "Separation" (una tinta de imprenta, p. ej. solo negro),
+    # DeviceN, Lab o índice: sin convertirlas, pix.save() falla con "pixmap
+    # must be grayscale or rgb" y se rechazaba el PDF entero.
+    cs = pix.colorspace
+    if cs is None:
+        raise ValueError("imagen sin espacio de color (máscara)")
+    if cs.name not in (fitz.csRGB.name, fitz.csGRAY.name):
+        pix = fitz.Pixmap(fitz.csGRAY if cs.n == 1 else fitz.csRGB, pix)
     smask = doc.extract_image(xref).get("smask") or 0
     if smask and not pix.alpha:
         try:
@@ -559,10 +566,16 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             xref = im["xref"]
             w = im["bbox"][2] - im["bbox"][0]
             h = im["bbox"][3] - im["bbox"][1]
-            pix = _pixmap_sobre_blanco(doc, xref)
             nombre = f"page{page_num+1}_img{i+1}.png"
             ruta = os.path.join(output_dir, nombre)
-            pix.save(ruta)
+            try:
+                pix = _pixmap_sobre_blanco(doc, xref)
+                pix.save(ruta)
+            except (RuntimeError, ValueError) as e:
+                # una imagen ilegible no tira abajo el resto del documento
+                print(f"[AVISO] Página {page_num+1}, imagen {i+1}: no se pudo leer ({e}); se omite.",
+                      flush=True)
+                continue
             pie = extraer_pie_de_figura(page, im["bbox"])
             palabras = extraer_palabras(page, im["bbox"], pix.width, pix.height)
             extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
