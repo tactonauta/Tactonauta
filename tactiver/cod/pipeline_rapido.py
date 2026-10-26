@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 
+import cv2
 import fitz  # PyMuPDF
 import numpy as np
 from PIL import Image
@@ -79,30 +80,131 @@ PIE_DISTANCIA_MAX = 60     # puntos PDF (~2 cm) entre la figura y su pie
 PIE_LARGO_MAX = 600        # caracteres: un pie no es un párrafo entero
 
 
+def _lineas_texto(page):
+    """Cada línea de texto de la página: (rect, texto, tamaño de letra,
+    número de bloque o None si no es la primera línea de su bloque), y los
+    bloques. Se calcula una vez por página: get_text("dict") es lento y se
+    pide para cada figura de la página."""
+    guardado = getattr(page, "_lineas_tactiverso", None)
+    if guardado is not None:
+        return guardado
+    bloques = page.get_text("dict")["blocks"]
+    lineas = []
+    for n, bloque in enumerate(bloques):
+        primera = True
+        for linea in bloque.get("lines", []):
+            spans = [sp for sp in linea["spans"] if sp["text"].strip()]
+            if not spans:
+                continue
+            # los spans ya traen sus espacios: unirlos con " " partía
+            # palabras ("con ﬁ dence", "( A )")
+            texto = " ".join("".join(sp["text"] for sp in linea["spans"]).split())
+            lineas.append((fitz.Rect(linea["bbox"]), texto, max(sp["size"] for sp in spans),
+                           n if primera else None))
+            primera = False
+    page._lineas_tactiverso = (lineas, bloques)
+    return page._lineas_tactiverso
+
+
+def _tamano_cuerpo(lineas):
+    """Tamaño de letra del texto corrido de la página (el más usado, por
+    cantidad de caracteres)."""
+    cuenta = {}
+    for _, texto, tam, _ in lineas:
+        cuenta[round(tam, 1)] = cuenta.get(round(tam, 1), 0) + len(texto)
+    return max(cuenta, key=cuenta.get) if cuenta else 0
+
+
+def _pies_de_la_pagina(lineas, bloques):
+    """Los pies de figura de la página como (rect, texto), armados LÍNEA POR
+    LÍNEA: una línea que empieza con "Fig. N" / "Figura N"... más las que
+    siguen justo debajo con el mismo margen izquierdo y tamaño de letra.
+
+    No se usan los bloques de get_text("blocks"): en revistas a dos
+    columnas PyMuPDF a veces junta el pie de una columna con el párrafo de
+    la otra en un solo bloque (Prueba8.pdf, Fig. 1), y ese bloque ya no
+    empieza con "Fig." aunque el pie esté ahí."""
+    cuerpo = _tamano_cuerpo(lineas)
+    pies = []
+    for rect, texto, tam, bloque in lineas:
+        if not _PATRON_PIE.match(texto):
+            continue
+        if bloque is not None:
+            # empieza su propio bloque: el pie es el bloque entero (como
+            # siempre se hizo)
+            b = bloques[bloque]
+            pies.append((fitz.Rect(b["bbox"]), " ".join(
+                "".join(sp["text"] for ln in b["lines"] for sp in ln["spans"] + [{"text": " "}]).split())))
+            continue
+        # "Fig. N" a mitad de un párrafo ("...como muestra la\nFigure 5.1
+        # illustrates...") no es un pie; uno metido en un bloque ajeno sí,
+        # si va en letra más chica que el cuerpo (Prueba8, Fig. 1: 7,2 vs 8).
+        if tam >= cuerpo - 0.3:
+            continue
+        caja, partes, renglon = fitz.Rect(rect), [texto], fitz.Rect(rect)
+        while True:
+            # el resto del mismo renglón (un superíndice o un cambio de
+            # letra puede partirlo en varias "líneas"), pegado a la derecha
+            mismo = [l for l in lineas if l[0] != renglon and abs(l[0].y0 - renglon.y0) < 2
+                     and renglon.x1 - 1 <= l[0].x0 <= caja.x1 + 6 and l[0] not in (caja,)]
+            for r, t, _, _ in sorted(mismo, key=lambda l: l[0].x0):
+                if r.x0 > caja.x1 + 6:
+                    break
+                partes.append(t); caja |= r
+            # el renglón siguiente: mismo margen izquierdo y tamaño de letra
+            # (los renglones de un pie pueden superponerse apenas en alto:
+            # se pide que empiece más abajo que la mitad del renglón actual)
+            siguientes = [l for l in lineas if abs(l[0].x0 - caja.x0) < 4 and abs(l[2] - tam) < 0.6
+                          and l[0].y0 > renglon.y0 + 0.5 * tam and l[0].y0 - renglon.y1 < 0.8 * tam
+                          and not _PATRON_PIE.match(l[1])]
+            if not siguientes:
+                break
+            r, t, _, _ = min(siguientes, key=lambda l: l[0].y0)
+            partes.append(t); caja |= r; renglon = fitz.Rect(r)
+        pies.append((caja, " ".join(partes)))
+    return pies
+
+
+def _solo_figuras_entre(lineas, r, pie):
+    """True si entre la figura `r` y su pie de abajo no hay ningún párrafo
+    del texto (renglones de 6 palabras o más) en esa columna: solo otros
+    paneles de la misma figura ("A", "B", rótulos de ejes...)."""
+    for rect, texto, _, _ in lineas:
+        if rect.y0 < r.y1 - 2 or rect.y1 > pie.y0 + 2:
+            continue
+        if min(rect.x1, r.x1) - max(rect.x0, r.x0) <= 0:
+            continue
+        if len(texto.split()) >= 6:
+            return False
+    return True
+
+
 def extraer_pie_de_figura(page, bbox):
     """Texto del pie (o título) de la figura que ocupa `bbox` en la página:
-    el bloque de texto más cercano, debajo o encima, que empiece con
-    "Figura N" / "Gráfico N" / "Fig. N"... y se solape horizontalmente con
-    la figura. Se prefiere el de abajo (convención habitual en papers); el
-    de arriba cubre el estilo "Gráfico 1: título" de informes. "" si no hay.
-    """
+    el pie más cercano, debajo o encima, que empiece con "Figura N" /
+    "Gráfico N" / "Fig. N"... y se solape horizontalmente con la figura. Se
+    prefiere el de abajo (convención habitual en papers); el de arriba
+    cubre el estilo "Gráfico 1: título" de informes. Un pie de abajo más
+    lejano también vale si entre la figura y él solo hay otros paneles de
+    la misma figura (Fig. 2 A y B, con un solo pie debajo de todo). "" si
+    no hay."""
     r = fitz.Rect(bbox)
+    lineas, bloques = _lineas_texto(page)
     mejor, mejor_puntaje = "", None
-    for bloque in page.get_text("blocks"):
-        x0, y0, x1, y1, texto = bloque[:5]
-        if len(bloque) > 6 and bloque[6] != 0:   # bloque de imagen, no de texto
+    for caja, texto in _pies_de_la_pagina(lineas, bloques):
+        solape = min(caja.x1, r.x1) - max(caja.x0, r.x0)
+        if solape < 0.3 * min(caja.width, r.width):
             continue
-        texto = " ".join(str(texto).split())
-        if not texto or not _PATRON_PIE.match(texto):
-            continue
-        solape = min(x1, r.x1) - max(x0, r.x0)
-        if solape < 0.3 * min(x1 - x0, r.width):
-            continue
-        if y0 >= r.y1 - 2:              # debajo
-            puntaje = y0 - r.y1
-        elif y1 <= r.y0 + 2:            # encima
-            puntaje = (r.y0 - y1) + 10
-        else:                           # dentro del recuadro (dibujo vectorial)
+        if caja.y0 >= r.y1 - 2:              # debajo
+            puntaje = caja.y0 - r.y1
+            # (no para lo que está en la cabecera de la página: el logo de
+            # la revista quedaba como "panel" de la primera figura)
+            if (puntaje > PIE_DISTANCIA_MAX and r.y1 > 0.1 * page.rect.height
+                    and _solo_figuras_entre(lineas, r, caja)):
+                puntaje = PIE_DISTANCIA_MAX   # panel de arriba de una figura compuesta
+        elif caja.y1 <= r.y0 + 2:            # encima
+            puntaje = (r.y0 - caja.y1) + 10
+        else:                                # dentro del recuadro (dibujo vectorial)
             puntaje = 5
         if puntaje - 10 > PIE_DISTANCIA_MAX:
             continue
@@ -554,11 +656,45 @@ def _pixmap_sobre_blanco(doc, xref):
     return pix
 
 
+# Imágenes ocultas: algunos PDFs dibujan una imagen entera pero solo dejan
+# ver un pedacito a través de un recorte (Prueba8.pdf, página 5: una copia
+# del espectro FTIR de la Fig. 2 de la que solo se ve la palabra "PEC" del
+# panel B). Sin esto, al estudiante le aparecía como un gráfico más, sin
+# pie y repetido. Se mide qué parte de la tinta de la imagen llega a la
+# página: renderizando la zona con y sin la imagen. En los PDFs de prueba
+# las ocultas mostraban 0-21 % de su tinta y las reales 43-116 %.
+VISIBLE_MIN = 0.30
+
+
+def _fraccion_visible(pagina_copia, xref, rect, pix):
+    """Parte de la tinta de la imagen que se ve en la página (0 = oculta).
+    None si no se puede medir (se la trata como visible).
+
+    `pagina_copia` es la página en una COPIA del documento: la imagen se
+    borra de ahí (para comparar con y sin ella) y queda borrada. Llamando
+    en el orden en que se dibujan las imágenes, lo que tapa a cada una (se
+    dibuja después) sigue en la copia al medirla; una sola copia para todo
+    el documento (abrir una por imagen duplicaba el tiempo de /clasificar)."""
+    def gris():
+        p = pagina_copia.get_pixmap(clip=rect, dpi=72, colorspace=fitz.csGRAY, alpha=False)
+        return np.frombuffer(p.samples, np.uint8).reshape(p.height, p.width).astype(np.int16)
+    con = gris()
+    pagina_copia.delete_image(xref)
+    visibles = int((np.abs(con - gris()) > 30).sum())
+    muestras = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, pix.n)[:, :, 0]
+    muestras = cv2.resize(muestras, (con.shape[1], con.shape[0]), interpolation=cv2.INTER_AREA)
+    tinta = int((muestras < 200).sum())
+    return visibles / tinta if tinta >= 50 else None
+
+
 def extraer_imagenes_crudas(pdf_path, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     doc = fitz.open(pdf_path)
     extraidas = []
     bloques = bloques_documento(doc)
+    copia = fitz.open("pdf", doc.tobytes())    # para medir qué imágenes se ven
+    visibilidad = {}   # xref -> fracción visible: delete_image() la borra en TODAS
+                       # las páginas, así que una imagen repetida se mide una vez
 
     for page_num, page in enumerate(doc):
         # 1. Imágenes raster embebidas (fotos/capturas pegadas, ej. exportadas de Excel)
@@ -570,6 +706,15 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             ruta = os.path.join(output_dir, nombre)
             try:
                 pix = _pixmap_sobre_blanco(doc, xref)
+                rect = fitz.Rect(im["bbox"])
+                if rect.width >= 3 and rect.height >= 3 and rect in page.rect:
+                    if xref not in visibilidad:
+                        visibilidad[xref] = _fraccion_visible(copia[page_num], xref, rect, pix)
+                    visible = visibilidad[xref]
+                    if visible is not None and visible < VISIBLE_MIN:
+                        print(f"[AVISO] Página {page_num+1}, imagen {i+1}: oculta en la página "
+                              f"(se ve el {visible:.0%} de ella); se omite.", flush=True)
+                        continue
                 pix.save(ruta)
             except (RuntimeError, ValueError) as e:
                 # una imagen ilegible no tira abajo el resto del documento
