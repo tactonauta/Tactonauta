@@ -612,6 +612,10 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bl
         pie = extraer_pie_de_figura(page, clip)
         palabras = extraer_palabras(page, clip, pix.width, pix.height)
         extraidas.append({"file_path": ruta, "page": page_num + 1, "width": clip.width, "height": clip.height,
+                          "bbox": [round(v, 1) for v in clip],
+                          # los trazos del dibujo: para saber si es solo un
+                          # recuadro alrededor de otra figura (_sin_duplicados)
+                          "trazos": [[round(v, 1) for v in r] for r in rects if r in clip][:500],
                           "origen": "vectorial",
                           "pie_figura": pie,
                           "titulo_grafico": titulo_en_figura(palabras, pix.width, pix.height),
@@ -724,6 +728,7 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
             pie = extraer_pie_de_figura(page, im["bbox"])
             palabras = extraer_palabras(page, im["bbox"], pix.width, pix.height)
             extraidas.append({"file_path": ruta, "page": page_num + 1, "width": w, "height": h,
+                              "bbox": [round(v, 1) for v in im["bbox"]],
                               "origen": "imagen",
                               "pie_figura": pie,
                               "titulo_grafico": titulo_en_figura(palabras, pix.width, pix.height),
@@ -803,7 +808,95 @@ def detectar_graficos(pdf_path, output_dir):
             r["es_lineal"] = tipo == "linea"
         resultados.append(r)
 
-    return resultados
+    resultados = _sin_duplicados(resultados)
+    _agrupar_paneles(resultados)
+    return sorted(resultados, key=lambda r: (r["grupo"], r["orden_panel"]))
+
+
+# Una misma figura puede llegar dos veces en la misma página:
+#  - como imagen y como dibujo vectorial que la contiene con sus rótulos
+#    (Prueba8.pdf, Fig. 1: las barras son una imagen y los nombres de los
+#    azúcares, texto del PDF): miden parecido; queda la grande.
+#  - dentro de un recuadro de fondo del libro, con párrafos alrededor
+#    (Prueba11.pdf, Fig. 5.1, 5.3, 5.19): el recuadro es mucho mayor y
+#    contiene solo esa figura, con el mismo pie; queda la figura.
+# Un dibujo que contiene VARIOS paneles (toda la Fig. 2 de Prueba8
+# alrededor de A y B) no es una copia: los paneles se agrupan aparte.
+DUPLICADO_DENTRO_MIN = 0.85    # parte de la chica dentro de la grande
+DUPLICADO_TAMANO_MIN = 0.6     # área de la chica / área de la grande
+
+
+def _sin_duplicados(resultados):
+    """Quita la copia de una figura que aparece dos veces en la misma
+    página (ver arriba). Si solo una de las dos es de líneas (las que el
+    estudiante puede elegir), queda esa."""
+    def rect(r):
+        return fitz.Rect(r.get("bbox") or (0, 0, 0, 0))
+
+    def dentro(chica, grande):
+        rc = rect(chica)
+        return not rc.is_empty and (rc & rect(grande)).get_area() / rc.get_area() >= DUPLICADO_DENTRO_MIN
+
+    quitar = set()
+    for i, a in enumerate(resultados):
+        for j, b in enumerate(resultados):
+            if j <= i or i in quitar or j in quitar or a["page"] != b["page"]:
+                continue
+            if rect(a).is_empty or rect(b).is_empty:
+                continue
+            chica, grande = (i, j) if rect(a).get_area() <= rect(b).get_area() else (j, i)
+            rc, rg = resultados[chica], resultados[grande]
+            if not dentro(rc, rg):
+                continue
+            if rect(rc).get_area() / rect(rg).get_area() >= DUPLICADO_TAMANO_MIN:
+                sobra = chica                                   # misma figura, con rótulos
+            else:
+                pie = (rc.get("pie_figura") or "").strip()
+                otros = [k for k, r in enumerate(resultados) if k not in (chica, grande)
+                         and r["page"] == rg["page"] and dentro(r, rg)]
+                if not pie or pie != (rg.get("pie_figura") or "").strip() or otros:
+                    continue                                    # paneles distintos
+                # un recuadro de verdad no tiene dibujos propios fuera de la
+                # figura (solo su fondo y el texto); si los tiene, es otro
+                # panel (Prueba8, Fig. 9: barras en A, fotos en B)
+                fuera = [t for t in rg.get("trazos") or []
+                         if not fitz.Rect(t).intersects(rect(rc))
+                         and fitz.Rect(t).get_area() < 0.9 * rect(rg).get_area()]
+                if len(fuera) > 3:
+                    continue
+                sobra = grande                                  # recuadro alrededor
+            otra = grande if sobra == chica else chica
+            if resultados[sobra].get("es_lineal") and not resultados[otra].get("es_lineal"):
+                sobra = otra
+            quitar.add(sobra)
+    return [r for k, r in enumerate(resultados) if k not in quitar]
+
+
+def _agrupar_paneles(resultados):
+    """Los paneles de una misma figura (Fig. 2 A, B...) comparten el pie:
+    cada resultado recibe "grupo" (1, 2... en el orden del documento: por
+    página y, dentro de ella, por el número del pie "Fig. N" si lo tiene;
+    si no, de arriba abajo) y "orden_panel" (1, 2... dentro de su figura,
+    de arriba abajo y de izquierda a derecha). Sin pie, cada uno es su
+    propia figura."""
+    def lectura(r):
+        x0, y0 = (r.get("bbox") or (0, 0))[:2]
+        return (r["page"], round(y0 / 20), x0)
+    grupos = {}
+    for r in sorted(resultados, key=lectura):
+        pie = (r.get("pie_figura") or "").strip()
+        clave = (r["page"], pie) if pie else ("solo", r["file_path"])
+        grupos.setdefault(clave, []).append(r)
+
+    def orden_figura(paneles):
+        m = _PATRON_PIE.match(paneles[0].get("pie_figura") or "")
+        numero = float("inf")
+        if m and m.group(4).isdigit():
+            numero = int(m.group(4))
+        return (paneles[0]["page"], numero, lectura(paneles[0]))
+    for numero, paneles in enumerate(sorted(grupos.values(), key=orden_figura), start=1):
+        for orden, r in enumerate(paneles, start=1):
+            r["grupo"], r["orden_panel"] = numero, orden
 
 
 def procesar_pdf(pdf_path):
