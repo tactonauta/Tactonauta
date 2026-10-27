@@ -18,6 +18,21 @@ Windows se busca en `C:\Program Files\Tesseract-OCR\tesseract.exe`;
 para verificarlo: `python -c "import segmentador; segmentador.diagnostico()"`.
 En Render lo instala el `Dockerfile`.
 
+## Variables de entorno (Render → Environment)
+
+| Variable | Para qué |
+|---|---|
+| `SECRET_KEY` | firma la sesión; sin ella, cada reinicio cierra la sesión de todos |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | base de datos persistente (ver `db.py`) |
+| `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | copia en Cloudflare R2 de los PDF, imágenes, lecturas y STL (ver `almacen.py`) |
+
+El disco de Render se borra en cada reinicio: sin Turso se pierden las
+cuentas y solicitudes, y sin R2 los archivos. `/api/salud` dice si las dos
+están activas (`base_persistente`, `archivos_persistentes`).
+
+En una computadora, las variables `R2_*` también se pueden poner en un
+archivo `.env` en esta carpeta (está en `.gitignore`: no se sube).
+
 ## Flujo
 
 1. **Estudiante**: sube el PDF; se detectan las gráficas de líneas y elige
@@ -47,6 +62,7 @@ En Render lo instala el `Dockerfile`.
 ```
 api.py              servidor Flask: sesiones, solicitudes, revisión, imprenta
 db.py               base de datos (SQLite local o Turso)
+almacen.py          copia de los archivos en Cloudflare R2
 pipeline_rapido.py  extrae las figuras del PDF (y su texto real)
 classify_charts.py  clasifica cada figura (líneas, barras, torta, dispersión...)
 segmentador.py      lee la gráfica: ejes, escala, curvas, títulos, leyenda

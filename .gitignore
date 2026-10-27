@@ -14,3 +14,7 @@ __pycache__/
 # Basura de sistema operativo
 .DS_Store
 Thumbs.db
+
+# Llaves y secretos (nunca subir a GitHub)
+.env
+.env.*
