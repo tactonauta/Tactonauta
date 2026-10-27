@@ -830,7 +830,7 @@
     <div class="role-buttons">
       <button type="button" class="role-btn guia-btn" data-goto="screen-guia">
         <span class="role-title">Guía para usar Puntito</span>
-        <span class="role-desc">Escucha, paso a paso, cómo usar Puntito: crear tu cuenta, iniciar sesión, subir un PDF, conocer tu lámina, el modo exploración y más.</span>
+        <span class="role-desc">Escucha en unos 3 minutos cómo usar Puntito: tu cuenta, cómo pedir una lámina y cómo explorarla.</span>
       </button>
       <button type="button" class="role-btn" data-role="estudiante">
         <span class="role-title">Soy estudiante</span>
@@ -897,7 +897,7 @@
        guia/audio/<id>.m4a), pensada para personas ciegas; sin cuenta. -->
   <section class="screen no-border" id="screen-guia" aria-labelledby="guia-heading">
     <h1 id="guia-heading" tabindex="-1">Guía para usar Puntito</h1>
-    <p class="lede">Elige una guía para escucharla. Cada una explica un paso, con los nombres exactos de los botones y los campos. Mientras suena, puedes pausarla, volver a empezarla o pasar a la siguiente.</p>
+    <p class="lede">Son 4 guías cortas, de menos de un minuto cada una. Puedes escucharlas en orden o ir directo a la que necesites. Mientras suena, puedes pausarla, volver a empezarla o pasar a la siguiente.</p>
 
     <div class="guia-reproductor" id="guia-reproductor" hidden>
       <h2 id="guia-actual" tabindex="-1"></h2>
@@ -4314,9 +4314,9 @@
   })();
 
   // ---------------------------------------------------------------
-  // Guía para usar Puntito: una grabación por tema. Los textos y los
-  // nombres de los audios están en guia/guias.json (los audios se generan
-  // con guia/generar_audios.py, o se reemplazan por grabaciones propias).
+  // Guía para usar Puntito: una grabación corta por tema (voz Camila). Los
+  // textos están en guia/guias.json y los audios en guia/audio/<id>.mp3 (se
+  // generan con guia/generar_audios.py, o se reemplazan por grabaciones propias).
   // Si un audio no carga, el texto se lee con la voz del navegador.
   // ---------------------------------------------------------------
   const Guia = (() => {
@@ -4378,7 +4378,7 @@
       actual.textContent = (i + 1) + '. ' + g.titulo;
       texto.textContent = g.texto;
       btnSiguiente.hidden = i >= guias.length - 1;
-      audio.src = `${API_BASE}/guia/audio/${encodeURIComponent(g.id)}.m4a`;
+      audio.src = `${API_BASE}/guia/audio/${encodeURIComponent(g.id)}.mp3`;
       avisar('Reproduciendo: ' + g.titulo + '.');
       const mio = ++turno;
       audio.play().then(refrescarPausa).catch(e => {
