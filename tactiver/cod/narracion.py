@@ -38,7 +38,9 @@ import csv
 import io
 import math
 import numbers
+import re
 import time
+import unicodedata
 
 import numpy as np
 
@@ -737,3 +739,292 @@ def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
                         for k, v in dom.items()},
         },
     }
+
+
+# ------------------------------------------------------------------
+# Audio del modo exploración
+# ------------------------------------------------------------------
+# Lo que se escucha al escanear el QR de la lámina: todo lo que la lámina no
+# puede mostrar en relieve, en cuatro partes que se pueden repetir por
+# separado (botones en la app y en la página del QR):
+#   1. Qué es esta gráfica: pie de figura, documento y página.
+#   2. Leyenda: ejes, curvas (con su color en el original) y las letras A, B...
+#   3. Qué muestra: forma de cada curva, máximos y mínimos.
+#   4. Qué dice el documento: los párrafos que citan la figura.
+# Se arma con los datos ya guardados de la lámina (exportar_datos_lamina), así
+# que sirve también para las láminas generadas antes de este cambio.
+#
+# El texto leído de imágenes (OCR) a veces sale roto ("Tim e(h(;"): para quien
+# no ve la lámina, escucharlo confunde más de lo que ayuda, así que lo que no
+# parece texto legible no se lee (_legible).
+
+AUDIO_CONTEXTO_MAX = 700        # caracteres del documento que se leen
+_RE_PALABRA = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][a-záéíóúüñ'’]+[.,;:!?]?|[A-ZÁÉÍÓÚÑ]{2,}[.,;:]?")
+_RE_NUMERO = re.compile(r"[-−+]?\d+([.,]\d+)*%?[.,;:]?|\d+%?[A-Za-z]{1,4}")
+_RE_UNIDAD = re.compile(r"\([^()\s]{1,12}\)[.,;:]?")
+_SUELTAS_OK = {"a", "e", "o", "y", "u", "x", "i"}
+_CORTAS_OK = {"de", "la", "el", "en", "un", "of", "in", "to", "on", "by", "at", "an", "vs", "per", "and", "the"}
+_ENCABEZADOS = {"introduction", "introducción", "abstract", "resumen", "contents", "índice",
+                "references", "referencias", "conclusion", "conclusiones", "methods", "métodos"}
+
+
+def _normalizar(texto):
+    """Ligaduras del PDF (ﬁ -> fi), guiones de corte de línea ("man- agement")
+    y espacios repetidos."""
+    texto = unicodedata.normalize("NFKC", str(texto or "")).replace("\u200b", "").replace("\xad", "")
+    texto = re.sub(r"([a-záéíóúñ])- ([a-záéíóúñ])", r"\1\2", texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def _limpiar(texto):
+    """Quita restos de OCR en los bordes ("gu e Sophie's..." -> "Sophie's...",
+    "swelling (%) >" -> "swelling (%)") y repeticiones ("Time (min) Time (min)")."""
+    texto = _normalizar(texto).strip(" -—–_|•■●▪*>~=.,;:")
+    palabras = texto.split()
+    while len(palabras) > 2 and len(palabras[0]) <= 2 and palabras[0].lower() not in _CORTAS_OK \
+            and palabras[0].lower() not in _SUELTAS_OK and palabras[0].islower():
+        palabras.pop(0)
+    while len(palabras) > 2 and len(palabras[0]) == 1 and palabras[0].islower():
+        palabras.pop(0)
+    while len(palabras) > 1 and palabras[0] in _CORTAS_OK:     # "of SPEED" -> "SPEED"
+        palabras.pop(0)
+    mitad = len(palabras) // 2
+    if len(palabras) % 2 == 0 and mitad and palabras[:mitad] == palabras[mitad:]:
+        palabras = palabras[:mitad]
+    return " ".join(palabras)
+
+
+def _legible(texto, corto_ok=True):
+    """¿Parece texto de verdad y no un resto de OCR? Un nombre corto (r, Ω,
+    pH) vale; "OO OOO", "Tim e(h(;" o "Condition Condition Condition" no.
+    corto_ok="mayuscula": una sola letra solo si es mayúscula o griega (el
+    nombre de una curva "e" suele ser un resto de OCR; el de un eje "r", no)."""
+    texto = (texto or "").strip()
+    if not texto:
+        return False
+    if corto_ok == "mayuscula" and len(texto) == 1 and texto.islower() and texto.isascii():
+        return False
+    if len(texto) <= 3 and " " not in texto:
+        return corto_ok and (texto.isascii() and texto.isalnum() or
+                             all(unicodedata.category(c).startswith("L") and not c.isascii()
+                                 and unicodedata.name(c, "").startswith("GREEK") for c in texto))
+    palabras = texto.split()
+    buenas = 0
+    for w in palabras:
+        if len(w) == 1:
+            buenas += w.lower() in _SUELTAS_OK and len(palabras) <= 6
+        elif len(set(w.lower())) == 1 and w.isalpha():
+            continue                        # "OO", "ooo"
+        elif _RE_PALABRA.fullmatch(w) or _RE_NUMERO.fullmatch(w) or _RE_UNIDAD.fullmatch(w):
+            buenas += 1
+        elif "-" in w and all(_RE_PALABRA.fullmatch(p) or _RE_NUMERO.fullmatch(p) for p in w.split("-") if p):
+            buenas += 1                     # "HA-g-pHEA", "PEGMA-PEGDA"
+    if buenas / len(palabras) < 0.75:
+        return False
+    # la misma palabra una y otra vez: varias etiquetas pegadas por el OCR
+    mas_repetida = max(palabras.count(w) for w in palabras)
+    return not (len(palabras) >= 4 and mas_repetida / len(palabras) > 0.3)
+
+
+def _texto_legible(texto, corto_ok=True):
+    """El texto limpio si es legible; "" si no."""
+    limpio = _limpiar(texto)
+    return limpio if _legible(limpio, corto_ok) else ""
+
+
+def _para_leer(texto):
+    """Ajustes para la voz: "Fig. 2" se lee "Figura 2"."""
+    texto = re.sub(r"\bFigs?\.\s*(?=\d)", "Figura ", texto)
+    return re.sub(r"\bFig\s+(?=\d)", "Figura ", texto)
+
+
+def _oracion(texto):
+    texto = texto.strip()
+    return texto if not texto or texto.endswith((".", "!", "?", "…")) else texto + "."
+
+
+def _parrafo_de_texto(texto):
+    """Un párrafo del documento y no un encabezado de página, una referencia
+    o una fila de tabla: mayoría de palabras comunes en minúscula."""
+    palabras = texto.split()
+    if len(palabras) < 15:          # encabezados ("3.3. Laponite nanocomposite...")
+        return False
+    comunes = sum(1 for w in palabras if re.fullmatch(r"[a-záéíóúñ]{3,}[.,;:]?", w))
+    return comunes / len(palabras) >= 0.45
+
+
+def _audio_que_es(d):
+    figura, doc = d.get("figura") or {}, d.get("documento") or {}
+    frases = []
+    pie = _normalizar(figura.get("pie_figura"))
+    titulo = _texto_legible((d.get("grafica") or {}).get("titulo"), corto_ok=False)
+    if pie:
+        frases.append(_oracion(_para_leer(pie)))
+        if titulo and titulo.lower() not in pie.lower():
+            frases.append(f"Título de la gráfica: {_oracion(titulo)}")
+    elif titulo:
+        frases.append(f"Gráfica titulada: {_oracion(titulo)}")
+    else:
+        frases.append("Gráfica de líneas sin pie de figura.")
+    titulo_doc = _limpiar(re.sub(r"^(research|original|review)\s+article\s+", "", _normalizar(doc.get("titulo")),
+                                 flags=re.IGNORECASE))
+    if not _legible(titulo_doc, corto_ok=False) or titulo_doc.lower() in _ENCABEZADOS:
+        titulo_doc = ""
+    archivo = re.sub(r"\.pdf$", "", _normalizar(doc.get("archivo")), flags=re.IGNORECASE)
+    pagina, paginas = figura.get("pagina"), doc.get("paginas")
+    donde = f"en la página {pagina}" + (f" de {paginas}" if paginas else "") if pagina else ""
+    if titulo_doc:
+        frases.append(f"Es del documento «{titulo_doc}»" + (f", {donde}." if donde else "."))
+    elif archivo:
+        frases.append(f"Es del archivo {archivo}" + (f", {donde}." if donde else "."))
+    elif donde:
+        frases.append(f"Está {donde} del documento.")
+    return " ".join(frases)
+
+
+def _nombre_curva(nombre):
+    """Nombre legible de una curva, o "" (también para los genéricos "Serie A")."""
+    nombre = _texto_legible(nombre, corto_ok="mayuscula")
+    return "" if re.fullmatch(r"Serie [A-Z]", nombre) else nombre
+
+
+def _audio_eje(info, letra):
+    nombre = "Eje horizontal, letra X" if letra == "X" else "Eje vertical, letra Y"
+    titulo = _texto_legible(info.get("titulo"))
+    partes = [nombre + (f": {titulo}" if titulo else ", sin título legible")]
+    if info.get("escala") == "log":
+        partes.append("en escala logarítmica")
+    cats = [c for c in info.get("categorias") or [] if c]
+    marcas = info.get("marcas") or []
+    if cats:
+        partes.append(f"con {len(cats)} categorías, de {cats[0]} a {cats[-1]}" if len(cats) > 1
+                      else f"con la categoría {cats[0]}")
+    elif len(marcas) >= 2:
+        fmt = _fmt_significativo if info.get("escala") == "log" else (lambda v: _fmt(v, 3))
+        partes.append(f"con marcas de {fmt(marcas[0])} a {fmt(marcas[-1])}")
+    return ", ".join(partes) + "."
+
+
+def _audio_leyenda(d):
+    ley, graf = d.get("leyenda") or {}, d.get("grafica") or {}
+    frases = [_audio_eje(graf.get("eje_x") or {}, "X"), _audio_eje(graf.get("eje_y") or {}, "Y")]
+    series = ley.get("series") or []
+    if len(series) == 1:
+        s = series[0]
+        nombre = _nombre_curva(s.get("nombre"))
+        frases.append("Hay una sola curva" + (f", «{nombre}»" if nombre else "")
+                      + (f"; en el original es una línea {s['color']}" if s.get("color") else "") + ".")
+    elif series:
+        frases.append(f"Hay {len(series)} curvas, cada una con su textura.")
+        for s in series:
+            nombre = _nombre_curva(s.get("nombre")) or "sin nombre legible"
+            frases.append(f"{s['etiqueta']}, textura {s['textura']}: {nombre}"
+                          + (f", línea {s['color']} en el original" if s.get("color") else "") + ".")
+    grupos = {}
+    for l in ley.get("letras") or []:
+        grupos.setdefault(l.get("donde") or "", []).append(l)
+    for donde, lista in grupos.items():
+        if donde.startswith(("número del eje", "categoría del eje")):
+            plural = donde.replace("número", "Números").replace("categoría", "Categorías")
+            frases.append(f"{plural}, que en la lámina van con letras: "
+                          + ", ".join(f"{l['letra']} es {l['texto']}" for l in lista) + ".")
+        else:
+            for l in lista:
+                texto = _texto_legible(l.get("texto")) or "un texto que no se pudo leer bien"
+                frases.append(f"Letra {l['letra']}" + (f", {donde}" if donde else "") + f": {_oracion(texto)}")
+    return " ".join(frases)
+
+
+def _audio_que_muestra(d):
+    graf = d.get("grafica") or {}
+    ex, ey = graf.get("eje_x") or {}, graf.get("eje_y") or {}
+    log_y = ey.get("escala") == "log"
+    rango_y = (ey["max"] - ey["min"]) if ey.get("max") is not None and ey.get("min") is not None else None
+    # decimales según cuánto varían los valores, no solo el rango del eje
+    # (una curva entre 9,5 y 10,2 en un eje de 0 a 20 no es "de 10 a 10")
+    ys = [y for s in graf.get("series") or [] for _, y in s.get("valores") or [] if y is not None]
+    variacion = (max(ys) - min(ys)) if len(ys) >= 2 else None
+    rangos = [r for r in (rango_y, variacion) if r]
+    fmt_y = _fmt_significativo if log_y else _formato_lineal(min(rangos) if rangos else None)
+    fmt_x = _fmt_significativo if ex.get("escala") == "log" else _formato_lineal(
+        (ex["max"] - ex["min"]) if ex.get("max") is not None and ex.get("min") is not None else None)
+    eje = _EjeX(_texto_legible(ex.get("titulo")) or "el eje horizontal", fmt_x, ex.get("categorias") or [])
+    series = graf.get("series") or []
+    frases = []
+    if not graf.get("calibrada"):
+        frases.append("La escala de la gráfica no se pudo leer bien: los valores son aproximados.")
+    for i, s in enumerate(series):
+        vals = sorted((x, y) for x, y in s.get("valores") or [] if x is not None and y is not None)
+        nombre = _nombre_curva(s.get("nombre"))
+        sujeto = "La curva" if len(series) == 1 else f"La curva {i + 1}" + (f", «{nombre}»," if nombre else "")
+        if len(vals) < 2:
+            frases.append(f"{sujeto} no tiene una escala legible para leer sus valores.")
+            continue
+        frases.append(f"{sujeto} {_forma(vals, rango_y, eje, fmt_y)}")
+    if not series:
+        frases.append("No se pudieron leer los valores de la gráfica.")
+    texto = " ".join(frases)
+    # "cuando el eje horizontal vale 5" se entiende; "cuando x vale 5", también
+    return texto.replace("cuando el eje horizontal vale", "cuando el eje horizontal está en")
+
+
+_RE_CITA_FIGURA = re.compile(r"\bfig(?:ura|ure)?s?\.?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+))?", re.IGNORECASE)
+
+
+def _cita_otra_figura(texto, numero):
+    """True si el párrafo cita figuras y ninguna es `numero` ("5.3"): la
+    búsqueda de menciones a veces trae el párrafo de la figura 5.1 para la 5.3."""
+    if not numero:
+        return False
+    citadas = set()
+    for desde, hasta in _RE_CITA_FIGURA.findall(texto):
+        citadas.add(desde)
+        if hasta and desde.isdigit() and int(hasta) - int(desde) < 20:
+            citadas.update(str(n) for n in range(int(desde), int(hasta) + 1))
+    return bool(citadas) and numero not in citadas
+
+
+def _audio_documento(d):
+    ctx = d.get("contexto") or {}
+    m_num = _RE_CITA_FIGURA.match(_normalizar((d.get("figura") or {}).get("pie_figura")))
+    numero = m_num.group(1) if m_num else None
+    partes, total = [], 0
+    for m in ctx.get("menciones") or []:
+        texto = _normalizar(m.get("texto"))
+        if not _parrafo_de_texto(texto) or _cita_otra_figura(texto, numero):
+            continue
+        if texto[:1].islower():
+            texto = "…" + texto         # empieza a mitad de frase (cambio de columna o de página)
+        if total + len(texto) > AUDIO_CONTEXTO_MAX:
+            texto = texto[:max(0, AUDIO_CONTEXTO_MAX - total)].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+        pag = m.get("pagina")
+        partes.append((f"En la página {pag}, el documento dice: " if pag else "El documento dice: ") + texto)
+        total += len(texto)
+        if total >= AUDIO_CONTEXTO_MAX:
+            break
+    if not partes:
+        for clave, intro in (("antes", "Antes de la figura, el documento dice: "),
+                             ("despues", "Después de la figura, el documento dice: ")):
+            texto = _normalizar(ctx.get(clave))
+            if _parrafo_de_texto(texto):
+                partes.append(intro + (texto[:AUDIO_CONTEXTO_MAX].rsplit(" ", 1)[0] + "…"
+                                       if len(texto) > AUDIO_CONTEXTO_MAX else texto))
+                break
+    if not partes:
+        return "No se encontró en el documento un párrafo que hable de esta figura."
+    return " ".join(_oracion(p) for p in partes)
+
+
+def audio_exploracion(datos):
+    """El audio del modo exploración de una lámina, a partir de sus datos
+    (exportar_datos_lamina). Devuelve {"secciones": [{"id", "titulo",
+    "texto"}], "texto": todo junto, con el nombre de cada parte}."""
+    secciones = [
+        {"id": "que_es", "titulo": "Qué es esta gráfica", "texto": _audio_que_es(datos)},
+        {"id": "leyenda", "titulo": "Leyenda", "texto": _audio_leyenda(datos)},
+        {"id": "que_muestra", "titulo": "Qué muestra", "texto": _audio_que_muestra(datos)},
+        {"id": "documento", "titulo": "Qué dice el documento", "texto": _audio_documento(datos)},
+    ]
+    texto = " ".join([secciones[0]["texto"]] + [f"{s['titulo']}. {s['texto']}" for s in secciones[1:]])
+    return {"secciones": secciones, "texto": texto}
+

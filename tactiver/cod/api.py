@@ -1301,6 +1301,14 @@ def csv_por_qr(token):
             return respuesta
         return _no_encontrada_qr()
 
+    if formato in ("json", "html"):
+        # el audio del modo exploración (4 partes, ver narracion.audio_exploracion):
+        # se arma al pedirlo, así también lo tienen las láminas ya impresas
+        try:
+            datos = {**datos, "audio": narracion.audio_exploracion(datos)}
+        except Exception:
+            print(f"ERROR ARMANDO EL AUDIO de la lámina {token}:", flush=True)
+            print(traceback.format_exc(), flush=True)
     if formato == "json":
         respuesta = app.response_class(json.dumps(datos, ensure_ascii=False, indent=1),
                                        mimetype="application/json")
@@ -1313,7 +1321,8 @@ def csv_por_qr(token):
         nombre = f"lamina_{token}.csv"
         descargar = True
     else:
-        respuesta = app.response_class(render_template_string(_PAGINA_QR, d=datos, token=token),
+        respuesta = app.response_class(render_template_string(_PAGINA_QR, d=datos, token=token,
+                                                              audio=datos.get("audio")),
                                        mimetype="text/html")
         nombre = None
     if descargar and nombre:
@@ -1341,6 +1350,9 @@ _PAGINA_QR = """<!doctype html>
                  border-radius: .5rem; text-decoration: none; font-weight: 600; }
   .boton { font: inherit; font-weight: 600; padding: .75rem 1.2rem; border-radius: .5rem;
            border: 2px solid #0b4f9c; background: #0b4f9c; color: #fff; }
+  .boton.secundario { background: transparent; color: #0b4f9c; }
+  .botones { display: flex; flex-wrap: wrap; gap: .5rem; }
+  @media (prefers-color-scheme: dark) { .boton.secundario { color: #8cc4ff; border-color: #8cc4ff; } }
   blockquote { margin: .5rem 0; padding-left: 1rem; border-left: 4px solid #c9c2b0; }
   @media (prefers-color-scheme: dark) {
     body { background: #1d1d1f; color: #f5f5f0; } a { color: #8cc4ff; }
@@ -1355,26 +1367,62 @@ _PAGINA_QR = """<!doctype html>
   {% if d.documento.titulo or d.documento.archivo %}Documento: {{ d.documento.titulo or d.documento.archivo }}.{% endif %}
   {% if d.figura.pagina %}Página {{ d.figura.pagina }}{% if d.documento.paginas %} de {{ d.documento.paginas }}{% endif %}.{% endif %}
 </p>
-{% if d.figura.pie_figura and d.figura.pie_figura != d.grafica.titulo %}<p>{{ d.figura.pie_figura }}</p>{% endif %}
+{% if d.grafica.titulo and d.figura.pie_figura and d.figura.pie_figura != d.grafica.titulo %}<p>{{ d.figura.pie_figura }}</p>{% endif %}
+
+{% if audio %}
+<section aria-labelledby="titulo-audio" id="audio" hidden>
+<h2 id="titulo-audio">Escuchar la lámina</h2>
+<p class="botones">
+  <button type="button" class="boton" data-parte="todo">Escuchar todo</button>
+  {% for s in audio.secciones %}<button type="button" class="boton secundario" data-parte="{{ loop.index0 }}">{{ loop.index }}. {{ s.titulo }}</button>
+  {% endfor %}<button type="button" class="boton secundario" data-parte="detener">Detener</button>
+</p>
+</section>
+{% endif %}
+<p><a href="/#explorar={{ token }}">Abrir en el modo exploración de Tactiverso</a></p>
 
 {% if d.leyenda %}
 <h2>Leyenda</h2>
-<p><button type="button" id="escuchar" class="boton" hidden>Escuchar la leyenda</button></p>
 <ul>
 {% for e in d.leyenda.ejes %}  <li>{{ e.letra }}: eje {{ e.eje }}{% if e.texto %}, {{ e.texto }}{% endif %}.</li>
 {% endfor %}{% if d.leyenda.series|length > 1 %}{% for s in d.leyenda.series %}  <li>{{ s.etiqueta }}, textura {{ s.textura }}: {{ s.nombre }}{% if s.color %}, línea {{ s.color }} en el original{% endif %}.</li>
 {% endfor %}{% endif %}{% for l in d.leyenda.letras %}  <li>{{ l.letra }}: {{ l.texto }}.</li>
 {% endfor %}</ul>
+{% endif %}
+{% if audio %}
 <script>
   (function () {
-    var boton = document.getElementById("escuchar");
+    // Mismo audio que el modo exploración: "Escuchar todo" lee las 4 partes
+    // seguidas; cada botón, una sola. Frase por frase: algunos navegadores
+    // cortan una lectura larga a los ~15 s.
+    var audio = {{ audio|tojson }};
     if (!("speechSynthesis" in window)) return;
-    boton.hidden = false;
-    boton.addEventListener("click", function () {
-      var frase = new SpeechSynthesisUtterance({{ d.leyenda.texto|tojson }});
-      frase.lang = "es-ES";
+    document.getElementById("audio").hidden = false;
+    // se corta solo donde un punto va seguido de un espacio ("pH 7.0" no se corta)
+    function frases(texto) {
+      return texto.replace(/([.!?…])\\s+/g, "$1\\u0001").split("\\u0001").filter(function (f) { return f.trim(); });
+    }
+    function decir(textos) {
       speechSynthesis.cancel();
-      speechSynthesis.speak(frase);
+      var voz = speechSynthesis.getVoices().filter(function (v) { return /^es/i.test(v.lang); })[0];
+      textos.forEach(function (t) {
+        frases(t).forEach(function (f) {
+          var u = new SpeechSynthesisUtterance(f.trim());
+          u.lang = "es-ES"; u.rate = 0.95; if (voz) u.voice = voz;
+          speechSynthesis.speak(u);
+        });
+      });
+    }
+    document.querySelectorAll("[data-parte]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = b.getAttribute("data-parte");
+        if (p === "detener") { speechSynthesis.cancel(); return; }
+        if (p === "todo") {
+          decir(audio.secciones.map(function (s, i) { return (i ? s.titulo + ". " : "") + s.texto; }));
+        } else {
+          var s = audio.secciones[+p]; decir([s.titulo + ". " + s.texto]);
+        }
+      });
     });
   })();
 </script>
