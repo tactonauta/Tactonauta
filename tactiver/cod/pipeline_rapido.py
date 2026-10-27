@@ -455,12 +455,29 @@ def _ampliar_con_texto(page, rect):
 _NUMERO = re.compile(r"[0-9]+([.,][0-9]+)?([eE][-+]?[0-9]+)?%?")
 
 
+def _rects_dibujos(page):
+    """El rectángulo de cada trazo vectorial de la página (líneas, rellenos).
+
+    Se calcula una vez por página (antes se llamaba a get_drawings() para
+    cada figura de la página, y otra vez para los dibujos), con
+    get_cdrawings(): los mismos trazos y rectángulos (comprobado en las 186
+    páginas de los PDFs de prueba) con ~1/3 menos de memoria. En una página
+    con 34.000 trazos (Prueba4.pdf, pág. 3) cada llamada eran ~150 MB, y con
+    el límite de 512 MB de Render el servidor se reiniciaba a mitad del
+    análisis. (get_bboxlog() es aún más liviano, pero separa en trazos
+    sueltos las marcas de los ejes y las confundía con signos menos.)"""
+    guardado = getattr(page, "_rects_tactiverso", None)
+    if guardado is None:
+        guardado = [fitz.Rect(d["rect"]) for d in page.get_cdrawings()]
+        page._rects_tactiverso = guardado
+    return guardado
+
+
 def _signos_menos_dibujados(page, clip):
     """Rayitas horizontales cortas y finas dibujadas dentro de `clip`."""
     rayas = []
-    for dibujo in page.get_drawings():
-        r = dibujo.get("rect")
-        if r is None or not fitz.Rect(clip).intersects(r):
+    for r in _rects_dibujos(page):
+        if not fitz.Rect(clip).intersects(r):
             continue
         if r.height <= 1.6 and 1.5 <= r.width <= 12 and r.width >= 3 * max(r.height, 0.1):
             rayas.append(fitz.Rect(r))
@@ -587,11 +604,7 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bl
     agrupando los trazos sueltos (líneas, ejes, leyenda) en bloques y renderizándolos
     como imagen. `bloques`: los de bloques_documento(), para el contexto."""
     extraidas = []
-    drawings = page.get_drawings()
-    if not drawings:
-        return extraidas, contador_inicial
-
-    rects = [d["rect"] for d in drawings if d.get("rect") and d["rect"].width > 2 and d["rect"].height > 2]
+    rects = [r for r in _rects_dibujos(page) if r.width > 2 and r.height > 2]
     if not rects:
         return extraidas, contador_inicial
 
