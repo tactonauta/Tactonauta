@@ -73,9 +73,10 @@ import cv2
 from flask import (Flask, has_request_context, jsonify, render_template_string, request,
                    send_from_directory, session)
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
+from werkzeug.utils import safe_join, secure_filename
 import numpy as np
 
+import almacen
 import db
 from segmentador import aplicar_correcciones, procesar_imagen
 import narracion
@@ -95,6 +96,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULTADOS_DIR, exist_ok=True)
 os.makedirs(STL_DIR, exist_ok=True)
 os.makedirs(CLASIFICACION_DIR, exist_ok=True)
+
+# Copia en Cloudflare R2 de los PDF subidos y de todo lo que se genera por
+# figura (imagen, lectura, overlay, STL...): el disco de Render se borra al
+# reiniciarse. Ver almacen.py. resultados_rapido/ no: es la extracción
+# intermedia de /api/clasificar, que se copia a resultados/.
+almacen.iniciar(BASE_DIR, [UPLOAD_DIR, RESULTADOS_DIR])
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024*1024  # 40 MB máx (PDFs pesan más que una imagen suelta)
@@ -139,6 +146,15 @@ def una_tarea_pesada(funcion):
         finally:
             _TAREA_PESADA.release()
     return envoltura
+
+
+@app.after_request
+def copiar_archivos_nuevos(response):
+    # Los pedidos que crean archivos son POST; la subida a R2 va en segundo
+    # plano y no demora la respuesta.
+    if request.method == "POST":
+        almacen.sincronizar()
+    return response
 
 
 @app.after_request
@@ -384,7 +400,7 @@ def _figuras_de_solicitud(figuras):
             continue
         nombre = secure_filename(str(f.get("id") or ""))
         ruta = os.path.join(RESULTADOS_DIR, nombre)
-        if not nombre or not os.path.isfile(ruta):
+        if not nombre or not almacen.asegurar(ruta):
             continue
         ext = _extraccion(ruta)
         try:
@@ -484,13 +500,12 @@ def solicitudes_supervisor():
 # ====================================================================
 # Nota sobre almacenamiento: la imagen original de cada figura vive en
 # RESULTADOS_DIR desde que se clasificó el PDF (paso 3 del estudiante). Ese
-# disco es efímero en el plan gratuito de Render — si el contenedor se
-# reinició entre que el estudiante subió el PDF y el supervisor autoriza,
-# esa imagen ya no está. Por eso cada figura se procesa en un try/except
-# propio: una que falle (imagen perdida, o cualquier otro error) no tira
-# abajo el resto de la solicitud, y queda marcada con su propio "error" en
-# vez de romper todo silenciosamente. Subir esos archivos a un storage
-# persistente (Cloudflare R2) es el siguiente paso natural, pendiente.
+# disco es efímero en el plan gratuito de Render, así que todo lo que se
+# escribe ahí se copia en Cloudflare R2 y, si falta después de un reinicio,
+# se vuelve a bajar al leerlo (almacen.asegurar). Sin R2 configurado, o si
+# R2 falla, la imagen puede faltar: por eso cada figura se procesa en un
+# try/except propio, y una que falle no tira abajo el resto de la solicitud
+# (queda marcada con su propio "error").
 
 def _solicitud_del_supervisor(id_solicitud):
     """(solicitud, None) si es del supervisor con sesión, o (None, respuesta de error)."""
@@ -510,7 +525,7 @@ def _resultado_guardado(nombre_json):
     correcciones. None si el archivo ya no está (disco efímero)."""
     nombre = secure_filename(nombre_json or "")
     ruta = os.path.join(RESULTADOS_DIR, nombre)
-    if not nombre.startswith("grafica_") or not nombre.endswith(".json") or not os.path.isfile(ruta):
+    if not nombre.startswith("grafica_") or not nombre.endswith(".json") or not almacen.asegurar(ruta):
         return None
     try:
         with open(ruta, encoding="utf-8") as f:
@@ -614,7 +629,7 @@ def _revisar_figura(figura, id_solicitud):
     if figura.get("quitada") or (figura.get("correccion_id") and _resultado_guardado(figura["correccion_id"])):
         return figura
     ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
-    if not figura.get("id") or not os.path.isfile(ruta_imagen):
+    if not figura.get("id") or not almacen.asegurar(ruta_imagen):
         figura["error"] = (
             "La imagen original ya no está disponible en el servidor (pudo "
             "reiniciarse desde que se subió el PDF). Hay que volver a subir el documento."
@@ -740,7 +755,8 @@ def corregir_figura_solicitud(id_solicitud, indice):
 
     ruta_imagen = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("id") or ""))
     ruta_json = os.path.join(RESULTADOS_DIR, secure_filename(figura.get("correccion_id") or ""))
-    if not figura.get("correccion_id") or not os.path.isfile(ruta_imagen) or not os.path.isfile(ruta_json):
+    if (not figura.get("correccion_id") or not almacen.asegurar(ruta_imagen)
+            or not almacen.asegurar(ruta_json)):
         return jsonify({
             "ok": False,
             "error": "Los archivos de esta figura ya no están en el servidor (pudo "
@@ -943,7 +959,11 @@ def pdf_de_solicitud(id_solicitud):
     if not dueno:
         return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
     lote = secure_filename(solicitud.get("lote_id") or "")
-    candidatos = sorted(glob.glob(os.path.join(UPLOAD_DIR, f"{lote}_*.pdf"))) if lote else []
+    candidatos = []
+    if lote:
+        prefijo = os.path.join(UPLOAD_DIR, f"{lote}_")
+        candidatos = sorted(glob.glob(f"{prefijo}*.pdf")) or sorted(
+            r for r in almacen.buscar(prefijo) if r.endswith(".pdf") and almacen.asegurar(r))
     if not candidatos:
         return jsonify({
             "ok": False,
@@ -1028,7 +1048,10 @@ def salud():
     # base_persistente: False = SQLite en el disco del servidor, que en Render
     # se borra al reiniciar (y con él cuentas, solicitudes y los datos de los
     # QR ya impresos). En producción tiene que ser True (Turso, ver db.py).
-    return jsonify({"ok": True, "base_persistente": db.USANDO_TURSO})
+    # archivos_persistentes: lo mismo para los archivos (PDF, imágenes, STL):
+    # True = copiados en Cloudflare R2 (ver almacen.py).
+    return jsonify({"ok": True, "base_persistente": db.USANDO_TURSO,
+                    "archivos_persistentes": almacen.ACTIVO})
 
 
 # ------------------------------------------------------------------
@@ -1051,7 +1074,7 @@ def _leer_json_extra(resultado):
     título y los nombres de los ejes en Braille.
     """
     ruta_json = resultado.get("ruta_json")
-    if not ruta_json or not os.path.isfile(ruta_json):
+    if not ruta_json or not almacen.asegurar(ruta_json):
         return {}, {}
     try:
         with open(ruta_json, encoding="utf-8") as f:
@@ -1189,6 +1212,7 @@ def _base_publica():
 def _imagen_original(resultado):
     """Ruta de la imagen de la figura que se segmentó (None si no se sabe)."""
     try:
+        almacen.asegurar(resultado["ruta_json"])
         with open(resultado["ruta_json"], encoding="utf-8") as f:
             return json.load(f).get("_ruta_imagen_original")
     except (KeyError, TypeError, OSError, ValueError):
@@ -1270,7 +1294,7 @@ def csv_por_qr(token):
 
     if datos is None:
         # láminas generadas antes de que los datos fueran a la base
-        if formato == "csv" and os.path.isfile(os.path.join(STL_DIR, f"qr_{token}.csv")):
+        if formato == "csv" and almacen.asegurar(os.path.join(STL_DIR, f"qr_{token}.csv")):
             respuesta = send_from_directory(STL_DIR, f"qr_{token}.csv", mimetype="text/csv",
                                             as_attachment=True, download_name=f"lamina_{token}.csv")
             respuesta.headers["Cache-Control"] = "no-store"
@@ -1431,6 +1455,7 @@ def _guardar_extraccion(ruta_imagen, detectado, archivo_pdf=""):
 def _extraccion(ruta_imagen):
     """Lo guardado por _guardar_extraccion ({} si no hay: imagen suelta)."""
     try:
+        almacen.asegurar(_ruta_extraccion(ruta_imagen))
         with open(_ruta_extraccion(ruta_imagen), encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
@@ -1616,7 +1641,7 @@ def corregir(correccion_id):
         return jsonify({"ok": False, "error": "Se esperaba un JSON con las correcciones."}), 400
 
     ruta_json = os.path.join(RESULTADOS_DIR, secure_filename(correccion_id))
-    if not os.path.isfile(ruta_json):
+    if not almacen.asegurar(ruta_json):
         return jsonify({"ok": False, "error": "No se encontró ese resultado. Vuelve a segmentar la gráfica."}), 404
 
     try:
@@ -1628,8 +1653,8 @@ def corregir(correccion_id):
     # La ruta viene de un JSON escrito por el segmentador; aun así solo se
     # aceptan imágenes dentro de las carpetas del propio servidor.
     carpetas = (os.path.abspath(RESULTADOS_DIR), os.path.abspath(UPLOAD_DIR))
-    if (not ruta_imagen or not os.path.isfile(ruta_imagen)
-            or os.path.dirname(os.path.abspath(ruta_imagen)) not in carpetas):
+    if (not ruta_imagen or os.path.dirname(os.path.abspath(ruta_imagen)) not in carpetas
+            or not almacen.asegurar(ruta_imagen)):
         return jsonify({"ok": False, "error": "No se encontró la imagen original de ese resultado. Vuelve a segmentar la gráfica."}), 404
 
     try:
@@ -1643,13 +1668,22 @@ def corregir(correccion_id):
     return jsonify(_respuesta_segmentacion(resultado))
 
 
+def _asegurar_resultado(nombre_archivo):
+    """Baja de R2 un archivo de resultados/ que ya no está en el disco."""
+    ruta = safe_join(RESULTADOS_DIR, nombre_archivo)
+    if ruta:
+        almacen.asegurar(ruta)
+
+
 @app.route("/api/resultados/<path:nombre_archivo>", methods=["GET"])
 def servir_resultado(nombre_archivo):
+    _asegurar_resultado(nombre_archivo)
     return send_from_directory(RESULTADOS_DIR, nombre_archivo, as_attachment=False)
 
 
 @app.route("/api/resultados/<path:nombre_archivo>/descargar", methods=["GET"])
 def descargar_resultado(nombre_archivo):
+    _asegurar_resultado(nombre_archivo)
     return send_from_directory(RESULTADOS_DIR, nombre_archivo, as_attachment=True)
 
 
