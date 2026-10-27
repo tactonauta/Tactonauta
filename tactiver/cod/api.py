@@ -1055,7 +1055,10 @@ def archivo_guia(nombre_archivo):
     # tipo explícito: según el sistema, .m4a sale como "audio/mp4a-latm" o
     # sin tipo, y Safari no reproduce un audio que no viene como audio/mp4
     tipo = {".m4a": "audio/mp4", ".mp3": "audio/mpeg"}.get(os.path.splitext(nombre_archivo)[1].lower())
-    return send_from_directory(GUIA_DIR, nombre_archivo, max_age=3600, mimetype=tipo)
+    # max_age=0: el navegador pregunta siempre si cambió (y si no, recibe un
+    # 304 vacío). Con caché, al publicar guías nuevas seguía usando la lista
+    # vieja, pedía audios que ya no existen y leía con la voz del navegador.
+    return send_from_directory(GUIA_DIR, nombre_archivo, max_age=0, mimetype=tipo)
 
 
 @app.route("/api/salud", methods=["GET"])
