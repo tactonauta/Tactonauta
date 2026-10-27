@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TactiVerso</title>
+<title>Puntito</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
@@ -221,6 +221,17 @@
   .explorar-partes button[aria-current="true"] { outline: 3px solid var(--accent, #0b4f9c); outline-offset: 2px; }
   .explorar-textos section { margin: 0.8rem 0; }
   .explorar-textos p { font-size: 1.1rem; line-height: 1.6; }
+
+  /* Guía para usar Puntito */
+  .role-btn.guia-btn { border-width: 2px; border-color: var(--night); }
+  .guia-lista { display: flex; flex-direction: column; gap: 0.6rem; max-width: 36rem; margin: 1rem 0 1.4rem; }
+  .guia-lista button { text-align: left; font-size: 1.1rem; padding: 0.85rem 1.1rem; }
+  .guia-lista button small { display: block; font-weight: 400; font-size: 0.95rem; opacity: 0.85; }
+  .guia-lista button[aria-current="true"] { outline: 3px solid var(--gold, #e8c400); outline-offset: 2px; }
+  .guia-reproductor { border: 1px solid var(--line); border-radius: var(--radius, 12px); padding: 1rem 1.2rem; margin: 0 0 1.4rem; max-width: 36rem; }
+  .guia-reproductor h2 { margin-top: 0; }
+  .guia-reproductor audio { width: 100%; margin: 0.4rem 0 0.8rem; }
+  .guia-reproductor p.guia-texto { font-size: 1.1rem; line-height: 1.6; }
   .role-btn .role-title { display: block; font-family: 'Fraunces', serif; font-size: 1.3rem; font-weight: 700; color: var(--night); }
   .role-btn .role-desc { display: block; margin-top: 0.3rem; color: #3a362e; font-size: 0.98rem; }
 
@@ -796,7 +807,7 @@
 <a class="skip-link" href="#main-heading-target">Saltar al contenido principal</a>
 
 <header class="top">
-  <span class="wordmark">TactiVerso</span>
+  <span class="wordmark">Puntito</span>
   <span class="tagline">Gráficos táctiles en braille, de tu PDF a la imprenta</span>
 </header>
 
@@ -805,6 +816,7 @@
   <span class="role-tag" id="user-bar-role"></span>
   <button type="button" class="linklike" id="nav-ver-estado" hidden>Ver estado de mis solicitudes</button>
   <button type="button" class="linklike" id="nav-cambiar-predeterminado" hidden>Cambiar</button>
+  <button type="button" class="linklike" id="nav-guia">Guía para usar Puntito</button>
   <button type="button" class="linklike" id="nav-cerrar-sesion">Cerrar sesión</button>
 </div>
 
@@ -812,10 +824,14 @@
 
   <!-- PANTALLA DE INICIO: elegir rol -->
   <section class="screen active no-border" id="screen-landing" aria-labelledby="landing-heading">
-    <h1 id="landing-heading" tabindex="-1">Bienvenido a TactiVerso</h1>
-    <p class="lede">Convierte los gráficos de tus documentos en láminas táctiles en braille. Elige cómo quieres ingresar.</p>
+    <h1 id="landing-heading" tabindex="-1">Bienvenido a Puntito</h1>
+    <p class="lede">Convierte los gráficos de tus documentos en láminas táctiles en braille. Si es tu primera vez, empieza por la Guía para usar Puntito. Luego elige cómo quieres ingresar.</p>
 
     <div class="role-buttons">
+      <button type="button" class="role-btn guia-btn" data-goto="screen-guia">
+        <span class="role-title">Guía para usar Puntito</span>
+        <span class="role-desc">Escucha, paso a paso, cómo usar Puntito: crear tu cuenta, iniciar sesión, subir un PDF, conocer tu lámina, el modo exploración y más.</span>
+      </button>
       <button type="button" class="role-btn" data-role="estudiante">
         <span class="role-title">Soy estudiante</span>
         <span class="role-desc">Sube tus documentos y envía solicitudes de láminas táctiles.</span>
@@ -875,6 +891,35 @@
     </section>
 
     <button type="button" class="secondary" data-goto="screen-landing">Volver al inicio</button>
+  </section>
+
+  <!-- GUÍA PARA USAR PUNTITO: una grabación por tema (guia/guias.json y
+       guia/audio/<id>.m4a), pensada para personas ciegas; sin cuenta. -->
+  <section class="screen no-border" id="screen-guia" aria-labelledby="guia-heading">
+    <h1 id="guia-heading" tabindex="-1">Guía para usar Puntito</h1>
+    <p class="lede">Elige una guía para escucharla. Cada una explica un paso, con los nombres exactos de los botones y los campos. Mientras suena, puedes pausarla, volver a empezarla o pasar a la siguiente.</p>
+
+    <div class="guia-reproductor" id="guia-reproductor" hidden>
+      <h2 id="guia-actual" tabindex="-1"></h2>
+      <audio id="guia-audio" controls preload="none"></audio>
+      <div class="explorar-acciones">
+        <button type="button" class="primary" id="guia-pausa">Pausar</button>
+        <button type="button" class="secondary" id="guia-reiniciar">Escuchar desde el principio</button>
+        <button type="button" class="secondary" id="guia-siguiente">Siguiente guía</button>
+      </div>
+      <p class="status" id="guia-estado" role="status" aria-live="polite"></p>
+      <details>
+        <summary>Leer el texto de esta guía</summary>
+        <p class="guia-texto" id="guia-texto"></p>
+      </details>
+    </div>
+
+    <h2 id="guia-lista-titulo">Guías</h2>
+    <div class="guia-lista" id="guia-lista" role="group" aria-labelledby="guia-lista-titulo">
+      <p class="status" id="guia-cargando">Cargando las guías…</p>
+    </div>
+
+    <button type="button" class="secondary" id="guia-volver">Volver</button>
   </section>
 
   <!-- AUTENTICACIÓN: ESTUDIANTE -->
@@ -954,12 +999,12 @@
   <!-- PASO 1: Instrucciones (estudiante) -->
   <section class="step" id="step-1" aria-labelledby="step-1-heading">
     <span class="step-eyebrow">Paso 1 de 3</span>
-    <h1 id="step-1-heading" tabindex="-1">Bienvenido a TactiVerso</h1>
+    <h1 id="step-1-heading" tabindex="-1">Bienvenido a Puntito</h1>
     <p class="lede" id="step-1-lede">Convierte los gráficos de un PDF en láminas táctiles en braille, listas para imprimir.</p>
 
     <ol class="instructions">
       <li>Sube el PDF que tiene los gráficos.</li>
-      <li>TactiVerso encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
+      <li>Puntito encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
       <li>Eliges cuáles enviar: vienen todos marcados, desmarca los que no necesites.</li>
       <li>Se envía una solicitud a tu supervisor, que la revisa y la manda a imprimir en relieve.</li>
     </ol>
@@ -975,7 +1020,7 @@
   <section class="step" id="step-2" aria-labelledby="step-2-heading">
     <span class="step-eyebrow">Paso 2 de 3</span>
     <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
-    <p class="lede">Elige el PDF. En cuanto lo elijas, TactiVerso busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
+    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
 
     <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
       <span class="icon" aria-hidden="true">
@@ -1106,7 +1151,7 @@
   <!-- ESPERANDO IMPRENTA (supervisor) -->
   <section class="screen no-border" id="screen-esperando-imprenta" aria-labelledby="esperando-imprenta-heading">
     <h1 id="esperando-imprenta-heading" tabindex="-1">Conectando con una imprenta</h1>
-    <p class="lede">Todavía no hay ninguna imprenta registrada en TactiVerso. En cuanto se registre una, tu cuenta se va a conectar con ella automáticamente.</p>
+    <p class="lede">Todavía no hay ninguna imprenta registrada en Puntito. En cuanto se registre una, tu cuenta se va a conectar con ella automáticamente.</p>
     <div class="actions">
       <button type="button" class="primary" id="reintentar-conexion-imprenta">Ya se registró, reintentar</button>
     </div>
@@ -1630,7 +1675,7 @@
     }
     const { resp, datos } = await postJson('/api/auth/conectar-supervisor', { codigo: codigo });
     if (!resp.ok || !datos.ok) {
-      status.textContent = datos.error || 'Ese código no corresponde a ningún supervisor registrado en TactiVerso.';
+      status.textContent = datos.error || 'Ese código no corresponde a ningún supervisor registrado en Puntito.';
       status.classList.add('error');
       return;
     }
@@ -4269,11 +4314,155 @@
   })();
 
   // ---------------------------------------------------------------
+  // Guía para usar Puntito: una grabación por tema. Los textos y los
+  // nombres de los audios están en guia/guias.json (los audios se generan
+  // con guia/generar_audios.py, o se reemplazan por grabaciones propias).
+  // Si un audio no carga, el texto se lee con la voz del navegador.
+  // ---------------------------------------------------------------
+  const Guia = (() => {
+    const lista = document.getElementById('guia-lista');
+    const cargando = document.getElementById('guia-cargando');
+    const reproductor = document.getElementById('guia-reproductor');
+    const actual = document.getElementById('guia-actual');
+    const audio = document.getElementById('guia-audio');
+    const btnPausa = document.getElementById('guia-pausa');
+    const btnSiguiente = document.getElementById('guia-siguiente');
+    const estado = document.getElementById('guia-estado');
+    const texto = document.getElementById('guia-texto');
+    let guias = null, indice = -1, botones = [], conVoz = false, volverA = 'screen-landing', turno = 0;
+
+    function avisar(t) { estado.textContent = t; }
+    function hayVoz() { return 'speechSynthesis' in window; }
+    function sonando() { return conVoz ? (speechSynthesis.speaking && !speechSynthesis.paused) : !audio.paused; }
+    function refrescarPausa() { btnPausa.textContent = sonando() ? 'Pausar' : 'Continuar'; }
+
+    function detener() {
+      audio.pause();
+      if (hayVoz()) speechSynthesis.cancel();
+      conVoz = false;
+      refrescarPausa();
+    }
+
+    // sin el audio: la voz del navegador, frase por frase
+    function leerConVoz(t) {
+      if (!hayVoz()) { avisar('No se pudo reproducir el audio. Puedes leer el texto de la guía más abajo.'); return; }
+      conVoz = true;
+      speechSynthesis.cancel();
+      const voz = speechSynthesis.getVoices().find(v => /^es/i.test(v.lang));
+      const frases = String(t).replace(/([.!?…])\s+/g, '$1\u0001').split('\u0001').filter(f => f.trim());
+      frases.forEach((f, k) => {
+        const u = new SpeechSynthesisUtterance(f.trim());
+        u.lang = 'es-ES'; u.rate = 0.95;
+        if (voz) u.voice = voz;
+        if (k === frases.length - 1) u.onend = terminada;
+        speechSynthesis.speak(u);
+      });
+      refrescarPausa();
+    }
+
+    function terminada() {
+      conVoz = false;
+      refrescarPausa();
+      avisar(indice < guias.length - 1
+        ? 'Terminó la guía. Puedes escuchar la siguiente: ' + guias[indice + 1].titulo + '.'
+        : 'Terminó la última guía.');
+    }
+
+    function reproducir(i) {
+      if (!guias || !guias[i]) return;
+      detener();
+      indice = i;
+      const g = guias[i];
+      botones.forEach((b, k) => b.setAttribute('aria-current', k === i ? 'true' : 'false'));
+      reproductor.hidden = false;
+      actual.textContent = (i + 1) + '. ' + g.titulo;
+      texto.textContent = g.texto;
+      btnSiguiente.hidden = i >= guias.length - 1;
+      audio.src = `${API_BASE}/guia/audio/${encodeURIComponent(g.id)}.m4a`;
+      avisar('Reproduciendo: ' + g.titulo + '.');
+      const mio = ++turno;
+      audio.play().then(refrescarPausa).catch(e => {
+        if (mio !== turno) return;                       // se eligió otra guía mientras cargaba
+        if (e && e.name === 'NotAllowedError') { avisar('Presiona Continuar para escuchar la guía.'); refrescarPausa(); return; }
+        if (e && e.name === 'AbortError') return;
+        sinAudio();
+      });
+    }
+
+    // el audio no se puede reproducir (formato o archivo): voz del navegador
+    function sinAudio() {
+      if (conVoz || indice < 0) return;
+      leerConVoz(guias[indice].titulo + '. ' + guias[indice].texto);
+    }
+
+    async function cargar() {
+      if (guias) return;
+      try {
+        const resp = await fetch(`${API_BASE}/guia/guias.json`);
+        guias = (await resp.json()).guias;
+      } catch (e) {
+        cargando.textContent = 'No se pudieron cargar las guías. Revisa tu conexión e inténtalo de nuevo.';
+        return;
+      }
+      lista.textContent = '';
+      botones = guias.map((g, i) => {
+        const b = crearEl('button', 'secondary', `${i + 1}. ${g.titulo}`);
+        b.type = 'button';
+        if (g.detalle) b.appendChild(crearEl('small', null, g.detalle));
+        b.addEventListener('click', () => reproducir(i));
+        lista.appendChild(b);
+        return b;
+      });
+    }
+
+    audio.addEventListener('ended', terminada);
+    audio.addEventListener('play', refrescarPausa);
+    audio.addEventListener('pause', refrescarPausa);
+    audio.addEventListener('error', () => { if (audio.getAttribute('src')) sinAudio(); });
+    btnPausa.addEventListener('click', () => {
+      if (conVoz) {
+        if (speechSynthesis.paused) speechSynthesis.resume(); else speechSynthesis.pause();
+        setTimeout(refrescarPausa, 50);
+      } else if (audio.paused) {
+        audio.play().catch(() => {});
+      } else {
+        audio.pause();
+      }
+    });
+    document.getElementById('guia-reiniciar').addEventListener('click', () => {
+      if (indice < 0) return;
+      if (conVoz) { reproducir(indice); return; }
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      avisar('Reproduciendo desde el principio: ' + guias[indice].titulo + '.');
+    });
+    btnSiguiente.addEventListener('click', () => reproducir(indice + 1));
+
+    // se puede abrir desde la pantalla de inicio o, con sesión, desde la
+    // barra de arriba: "Volver" regresa a donde estaba
+    function abrir() {
+      const activa = document.querySelector('.step.active, .screen.active');
+      volverA = activa && activa.id !== 'screen-guia' ? activa.id : volverA;
+      goTo('screen-guia');
+      cargar();
+    }
+    document.querySelectorAll('[data-goto="screen-guia"]').forEach(b => b.addEventListener('click', cargar));
+    document.getElementById('nav-guia').addEventListener('click', abrir);
+    document.getElementById('guia-volver').addEventListener('click', () => { detener(); goTo(volverA); });
+
+    return { abrir, cargar };
+  })();
+
+  // ---------------------------------------------------------------
   // Arranque: si ya hay una sesión de verdad en el servidor (cookie), entrar
   // directo a la pantalla que corresponda. Antes esto leía localStorage de
   // forma síncrona; ahora depende de una consulta al backend.
   // ---------------------------------------------------------------
   (async function iniciar() {
+    if (/^#guia\b/.test(location.hash)) {
+      Guia.abrir();
+      return;
+    }
     if (/^#explorar\b/.test(location.hash)) {
       goTo('screen-exploracion');
       const codigo = (location.hash.split('=')[1] || '').trim();

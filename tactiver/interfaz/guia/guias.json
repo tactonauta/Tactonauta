@@ -1,0 +1,59 @@
+{
+  "_nota": "Guías de usuario en audio de Puntito. Cada guía tiene su grabación en audio/<id>.m4a. Si cambias un texto, vuelve a generar su audio con generar_audios.py (o reemplaza el .m4a por una grabación propia con el mismo nombre).",
+  "guias": [
+    {
+      "id": "que-es",
+      "titulo": "Qué es Puntito",
+      "detalle": "para qué sirve y cómo funciona",
+      "texto": "Hola, te damos la bienvenida a Puntito. Puntito convierte los gráficos de líneas de tus documentos en PDF en láminas táctiles: placas impresas en 3D, con el gráfico en relieve y los textos en braille. Funciona en cuatro pasos. Primero, tú subes el PDF. Segundo, Puntito busca los gráficos de líneas y te dice de qué trata cada uno, para que elijas cuáles quieres. Tercero, tu supervisor revisa las gráficas y las envía a la imprenta. Cuarto, cuando la lámina está impresa, la recoges. Además, cada lámina tiene un código QR: con el modo exploración de Puntito puedes escanearlo y escuchar todo lo que la lámina no puede mostrar en relieve. En la pantalla de inicio hay cinco botones, en este orden: Guía para usar Puntito, que es esta guía; Soy estudiante; Soy supervisor; Soy de imprenta; y Modo exploración. Si eres estudiante, usa el botón Soy estudiante. En esta guía hay una grabación para cada paso: puedes escucharlas en orden o ir directo a la que necesites."
+    },
+    {
+      "id": "moverte",
+      "titulo": "Cómo moverte por Puntito",
+      "detalle": "con el teclado o tu lector de pantalla",
+      "texto": "Puntito está pensado para usarse con un lector de pantalla, como NVDA, JAWS o VoiceOver. En la computadora, pasa de un elemento al siguiente con la tecla Tab, y vuelve al anterior con Mayúscula más Tab. Para presionar un botón, usa Enter o la barra espaciadora. Para marcar o desmarcar una casilla, usa la barra espaciadora. Cada pantalla empieza con un título, y con tu lector de pantalla puedes saltar de título en título: por ejemplo, con la tecla H en NVDA o en JAWS. En el celular, desliza un dedo hacia la derecha o hacia la izquierda para recorrer la pantalla, y toca dos veces para presionar. Puntito te avisa en voz alta lo que va pasando: por ejemplo, cuando termina de analizar tu documento, o si hay un error. Cuando inicias sesión, arriba de todo de la página aparecen tres botones: Ver estado de mis solicitudes, Cambiar código de supervisor, y Cerrar sesión."
+    },
+    {
+      "id": "crear-cuenta",
+      "titulo": "Cómo crear tu cuenta",
+      "detalle": "registrarte como estudiante",
+      "texto": "Para crear tu cuenta, en la pantalla de inicio presiona Soy estudiante. Se abre la pantalla Cuenta de estudiante, con dos pestañas: Iniciar sesión y Registrarme. Presiona la pestaña Registrarme. Vas a encontrar seis campos, en este orden: Nombre completo, Correo institucional, Código de estudiante, Facultad, Carrera y Contraseña. Escribe tus datos en cada uno: todos son obligatorios. Al final, presiona el botón Crear cuenta. Si ya existe una cuenta con ese correo, Puntito te lo avisa; en ese caso, usa la pestaña Iniciar sesión. Cuando la cuenta se crea, entras directamente, y Puntito te pide el código de tu supervisor. Eso se explica en la guía Cómo conectarte con tu supervisor."
+    },
+    {
+      "id": "iniciar-sesion",
+      "titulo": "Cómo iniciar sesión",
+      "detalle": "entrar a tu cuenta y salir de ella",
+      "texto": "Si ya tienes una cuenta, en la pantalla de inicio presiona Soy estudiante. La pestaña Iniciar sesión ya está seleccionada. Escribe tu Correo institucional y tu Contraseña, y presiona el botón Ingresar. Si alguno de los dos está mal, Puntito te dice: Correo o contraseña incorrectos. Revisa lo que escribiste e inténtalo de nuevo. Al entrar, Puntito te lleva a la pantalla Bienvenido a Puntito, desde donde puedes subir un PDF. Puntito recuerda tu sesión en ese navegador. Para salir, presiona Cerrar sesión, arriba de todo de la página. Si usas una computadora compartida, cierra sesión siempre al terminar."
+    },
+    {
+      "id": "supervisor",
+      "titulo": "Cómo conectarte con tu supervisor",
+      "detalle": "el código que te da tu supervisor",
+      "texto": "Tu supervisor es la persona que revisa tus gráficas antes de mandarlas a imprimir. Para enviarle solicitudes, Puntito necesita su código de conexión. Pídeselo a tu supervisor: lo ve en su propia pantalla de Puntito. La primera vez que entras, Puntito te muestra la pantalla Conéctate con tu supervisor. Escribe el código en el campo Código de tu supervisor y presiona Guardar y continuar. Si el código no corresponde a ningún supervisor, Puntito te lo avisa: revisa que esté bien escrito. Solo hace falta hacerlo una vez. Si más adelante cambias de supervisor, presiona Cambiar código de supervisor, arriba de todo de la página, y escribe el código nuevo."
+    },
+    {
+      "id": "subir-pdf",
+      "titulo": "Cómo subir un PDF y elegir las gráficas",
+      "detalle": "enviar una solicitud a tu supervisor",
+      "texto": "Después de iniciar sesión estás en la pantalla Bienvenido a Puntito, el paso 1 de 3. Presiona el botón Comenzar: subir un PDF. En el paso 2, Sube tu documento, hay un campo para elegir el archivo. Presiona Enter y se abre la ventana para buscar el PDF en tu computadora. Elige el archivo y confirma. No hace falta presionar nada más: Puntito empieza a analizar el documento solo, y te va avisando del avance. Puede tardar un minuto, o algo más si el documento es largo. Luego pasas al paso 3, Gráficos de tu documento. Ahí hay una lista de casillas, una por cada gráfico de líneas que se encontró. Cada una dice su título o su pie de figura, en qué página está, y un poco de lo que dice el documento sobre ella. Todas vienen marcadas: si alguna no la necesitas, desmárcala con la barra espaciadora. Al final de la lista, presiona Enviar a mi supervisor. Puntito te lo confirma con la pantalla Solicitud enviada, y te dice el número de tu solicitud. Ten en cuenta que, por ahora, Puntito solo convierte gráficos de líneas. Si tu documento no tiene ninguno, te lo avisa y puedes elegir otro PDF. Y si te dice que el servidor está ocupado con otro documento, espera unos minutos y vuelve a intentarlo."
+    },
+    {
+      "id": "estado",
+      "titulo": "Cómo ver el estado de tus solicitudes",
+      "detalle": "saber si tu lámina ya está lista",
+      "texto": "Para saber cómo va una solicitud, presiona Ver estado de mis solicitudes. Está arriba de todo de la página, y también en la pantalla Solicitud enviada. Vas a encontrar una lista con tus solicitudes. Cada una dice su número, cuántas láminas tiene, la fecha y el documento. Después dice dos estados. Primero, el del supervisor: solicitud en espera, aprobada o rechazada. Si fue rechazada, también te dice el motivo, y puedes enviar una nueva solicitud. Segundo, el de la imprenta: aún no enviada a imprenta; en cola de impresión; se está imprimiendo tu lámina; o ya está impreso, puedes recogerlo. Cuando escuches esto último, tu lámina está lista. Para regresar, presiona Volver."
+    },
+    {
+      "id": "exploracion",
+      "titulo": "Cómo usar el modo exploración",
+      "detalle": "escanear el QR de una lámina y escucharla",
+      "texto": "El modo exploración sirve para escuchar todo lo que la lámina no puede mostrar en relieve. No necesitas una cuenta. En la pantalla de inicio, presiona Modo exploración, y luego, Escanear código QR. La primera vez, el navegador te pide permiso para usar la cámara: acéptalo. El código QR está en la esquina superior izquierda de la lámina. Para ubicarla, busca con los dedos la esquina recortada: esa es la esquina superior derecha, y el QR está en la otra esquina de arriba. Pon esa esquina frente a la cámara, a unos veinte centímetros, y muévela despacio. Si Puntito no encuentra el código, te pide que acerques o alejes un poco la lámina. Cuando lo lee, empieza a hablar solo, en cuatro partes: qué es la gráfica y de qué documento sale; la leyenda; qué muestra la gráfica; y qué dice el documento sobre ella. Después aparecen botones para repetir cada parte, el botón Escuchar todo, y el botón Detener el audio. También puedes escanear el QR con la cámara de tu celular: se abre una página con los mismos botones."
+    },
+    {
+      "id": "lamina",
+      "titulo": "Cómo es una lámina táctil",
+      "detalle": "cómo orientarte al tocarla",
+      "texto": "La lámina es una placa cuadrada de 22 centímetros por lado. Para orientarla, busca la esquina recortada: tiene que quedar arriba a la derecha. Arriba a la izquierda hay un cuadrado con un relieve de cuadritos: es el código QR, y no es parte del gráfico. El gráfico ocupa la parte de arriba de la lámina, y la leyenda está abajo. El eje horizontal del gráfico tiene la letra X, y el eje vertical, la letra Y. Los números de los ejes están en braille. Cuando un número o un texto no entra en su lugar, va con una letra, y la leyenda o el modo exploración te dicen qué significa. Si el gráfico tiene más de una curva, cada una tiene una textura distinta: en celdas, rayada o punteada. En la leyenda de abajo, X e Y te dicen qué es cada eje, y Leyenda 1, Leyenda 2 y Leyenda 3 te muestran la textura de cada curva. Para escuchar el nombre de cada curva, su color en el original y sus valores, usa el modo exploración."
+    }
+  ]
+}
