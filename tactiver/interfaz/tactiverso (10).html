@@ -215,6 +215,12 @@
   .explorar-manual { margin: 1rem 0; }
   .explorar-manual form { display: flex; flex-direction: column; gap: 0.5rem; max-width: 28rem; margin-top: 0.6rem; }
   .explorar-lista { font-size: 1.15rem; line-height: 1.6; padding-left: 1.2rem; }
+  .explorar-partes { display: flex; flex-direction: column; gap: 0.6rem; max-width: 36rem; margin: 0.6rem 0 1.2rem; }
+  .explorar-partes button { text-align: left; font-size: 1.1rem; padding: 0.85rem 1.1rem; }
+  .explorar-partes button small { display: block; font-weight: 400; font-size: 0.95rem; opacity: 0.85; }
+  .explorar-partes button[aria-current="true"] { outline: 3px solid var(--accent, #0b4f9c); outline-offset: 2px; }
+  .explorar-textos section { margin: 0.8rem 0; }
+  .explorar-textos p { font-size: 1.1rem; line-height: 1.6; }
   .role-btn .role-title { display: block; font-family: 'Fraunces', serif; font-size: 1.3rem; font-weight: 700; color: var(--night); }
   .role-btn .role-desc { display: block; margin-top: 0.3rem; color: #3a362e; font-size: 0.98rem; }
 
@@ -824,7 +830,7 @@
       </button>
       <button type="button" class="role-btn" data-goto="screen-exploracion">
         <span class="role-title">Modo exploración</span>
-        <span class="role-desc">Escanea el código QR de una lámina y escucha su leyenda, desde donde estés. No necesitas cuenta.</span>
+        <span class="role-desc">Escanea el código QR de una lámina y escucha qué es, su leyenda, qué muestra y qué dice el documento, desde donde estés. No necesitas cuenta.</span>
       </button>
     </div>
   </section>
@@ -833,7 +839,7 @@
        (sin cuenta: el estudiante puede estar fuera del campus) -->
   <section class="screen no-border" id="screen-exploracion" aria-labelledby="exploracion-heading">
     <h1 id="exploracion-heading" tabindex="-1">Modo exploración</h1>
-    <p class="lede">El código QR está en la esquina superior izquierda de la lámina. Al leerlo vas a escuchar su leyenda: qué es cada eje, qué curva es cada textura y qué significa cada letra.</p>
+    <p class="lede">El código QR está en la esquina superior izquierda de la lámina. Al leerlo vas a escuchar todo lo que la lámina no puede mostrar en relieve: qué gráfica es y de qué documento, su leyenda (ejes, curvas y letras), qué muestra y qué dice el documento sobre ella. Después puedes repetir cada parte por separado.</p>
 
     <div class="explorar-acciones">
       <button type="button" class="primary" id="explorar-escanear">Escanear código QR</button>
@@ -856,12 +862,15 @@
     <section id="explorar-resultado" hidden aria-labelledby="explorar-titulo">
       <h2 id="explorar-titulo" tabindex="-1"></h2>
       <div class="explorar-acciones">
-        <button type="button" class="primary" id="explorar-repetir">Repetir la leyenda</button>
-        <button type="button" class="secondary" id="explorar-descripcion">Escuchar la descripción completa</button>
+        <button type="button" class="primary" id="explorar-todo">Escuchar todo</button>
         <button type="button" class="secondary" id="explorar-callar">Detener el audio</button>
       </div>
-      <h3>Leyenda</h3>
-      <ul id="explorar-leyenda" class="explorar-lista"></ul>
+      <h3 id="explorar-partes-titulo">Escuchar una parte</h3>
+      <div class="explorar-partes" id="explorar-partes" role="group" aria-labelledby="explorar-partes-titulo"></div>
+      <details>
+        <summary>Ver el texto de cada parte</summary>
+        <div class="explorar-textos" id="explorar-textos"></div>
+      </details>
       <p><a id="explorar-mas" href="#" target="_blank" rel="noopener">Ver todos los datos de la lámina</a></p>
     </section>
 
@@ -4013,10 +4022,13 @@
 
   // ---------------------------------------------------------------
   // Modo exploración: el estudiante (sin cuenta, desde donde esté) escanea
-  // el QR de la lámina y escucha su leyenda: qué es cada eje, qué curva es
-  // cada textura y qué significa cada letra ("A: España"), que en la lámina
-  // no van impresos. Los datos son los mismos que abre el QR (/q/<código>,
-  // en JSON: narracion.exportar_datos_lamina, campo "leyenda").
+  // el QR de la lámina y escucha, de corrido, todo lo que la lámina no puede
+  // mostrar en relieve, en 4 partes que después puede repetir por separado:
+  // qué gráfica es (pie de figura, documento, página), la leyenda (ejes,
+  // curvas con su color, qué significa cada letra), qué muestra (forma,
+  // máximos, mínimos) y qué dice el documento. Los datos son los mismos que
+  // abre el QR (/q/<código>?formato=json, campo "audio": ver
+  // narracion.audio_exploracion).
   // ---------------------------------------------------------------
   const Exploracion = (() => {
     const btnEscanear = document.getElementById('explorar-escanear');
@@ -4028,21 +4040,61 @@
     const inputCodigo = document.getElementById('explorar-codigo');
     const resultado = document.getElementById('explorar-resultado');
     const titulo = document.getElementById('explorar-titulo');
-    const lista = document.getElementById('explorar-leyenda');
+    const contPartes = document.getElementById('explorar-partes');
+    const contTextos = document.getElementById('explorar-textos');
+    const btnTodo = document.getElementById('explorar-todo');
     const enlaceMas = document.getElementById('explorar-mas');
+    const DETALLE_PARTES = {
+      que_es: 'pie de figura, documento y página',
+      leyenda: 'ejes, curvas y colores, letras A, B…',
+      que_muestra: 'si sube o baja, máximos y mínimos',
+      documento: 'el párrafo que habla de la figura',
+    };
     // jsQR: lector de QR para los navegadores sin BarcodeDetector (Safari, Firefox)
     const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-    let flujo = null, buscando = false, datosLamina = null, lienzo = null;
+    let flujo = null, buscando = false, secciones = [], lienzo = null, botonesPartes = [];
 
-    function decir(texto) {
-      if (!('speechSynthesis' in window) || !texto) return;
+    // Una lectura larga se corta en algunos navegadores (~15 s): se lee
+    // frase por frase. `partes`: [{texto, indice}] (indice = botón a marcar).
+    function frases(texto) {
+      // se corta solo donde un punto va seguido de un espacio ("pH 7.0" no se corta)
+      return String(texto).replace(/([.!?…])\s+/g, '$1\u0001').split('\u0001').filter(f => f.trim());
+    }
+    function marcar(indice) {
+      botonesPartes.forEach((b, i) => b.setAttribute('aria-current', i === indice ? 'true' : 'false'));
+    }
+    function decir(texto, partes) {
+      if (!('speechSynthesis' in window)) return;
       speechSynthesis.cancel();
-      const frase = new SpeechSynthesisUtterance(texto);
-      frase.lang = 'es-ES';
+      marcar(-1);
+      partes = partes || (texto ? [{ texto, indice: -1 }] : []);
       const voz = speechSynthesis.getVoices().find(v => /^es/i.test(v.lang));
-      if (voz) frase.voice = voz;
-      frase.rate = 0.95;
-      speechSynthesis.speak(frase);
+      partes.forEach(({ texto: t, indice }, k) => {
+        frases(t).forEach((f, j) => {
+          const frase = new SpeechSynthesisUtterance(f.trim());
+          frase.lang = 'es-ES';
+          if (voz) frase.voice = voz;
+          frase.rate = 0.95;
+          if (j === 0) frase.onstart = () => marcar(indice);
+          if (k === partes.length - 1) frase.onend = () => marcar(-1);
+          speechSynthesis.speak(frase);
+        });
+      });
+    }
+    // iOS solo deja hablar si la primera lectura sale de un toque: se
+    // "desbloquea" la voz en el mismo toque que abre la cámara o el formulario.
+    function desbloquearVoz() {
+      if (!('speechSynthesis' in window)) return;
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    }
+    function leerTodo() {
+      decir(null, secciones.map((s, i) => ({ texto: (i ? s.titulo + '. ' : '') + s.texto, indice: i })));
+    }
+    function leerParte(i) {
+      const s = secciones[i];
+      if (s) decir(null, [{ texto: s.titulo + '. ' + s.texto, indice: i }]);
     }
 
     function avisar(texto, error) {
@@ -4078,6 +4130,7 @@
     }
 
     async function escanear() {
+      desbloquearVoz();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         avisar('Este navegador no permite usar la cámara. Escribe el código de la lámina más abajo.', true);
         return;
@@ -4136,23 +4189,40 @@
       }
     }
 
+    // Las 4 partes del audio; con un servidor anterior (sin "audio"), la
+    // leyenda y la descripción.
+    function seccionesDe(d) {
+      if (d.audio && Array.isArray(d.audio.secciones) && d.audio.secciones.length) return d.audio.secciones;
+      return [
+        { id: 'leyenda', titulo: 'Leyenda', texto: (d.leyenda && d.leyenda.texto) || '' },
+        { id: 'que_muestra', titulo: 'Descripción', texto: d.descripcion || '' },
+      ].filter(s => s.texto);
+    }
+
     function pintar(d) {
       const ley = d.leyenda || {};
-      titulo.textContent = ley.titulo || (d.grafica && d.grafica.titulo) || 'Lámina táctil';
-      lista.textContent = '';
-      const entradas = [];
-      (ley.ejes || []).forEach(e => entradas.push(`${e.letra}: eje ${e.eje}${e.texto ? ', ' + e.texto : ''}.`));
-      if ((ley.series || []).length > 1) {
-        ley.series.forEach(s => entradas.push(`${s.etiqueta}, textura ${s.textura}: ${s.nombre}` +
-          (s.color ? `, línea ${s.color} en el original` : '') + '.'));
-      }
-      (ley.letras || []).forEach(l => entradas.push(`${l.letra}: ${l.texto}.`));
-      if (!entradas.length && d.descripcion) entradas.push(d.descripcion);
-      entradas.forEach(t => lista.appendChild(crearEl('li', null, t)));
+      titulo.textContent = ley.titulo || (d.grafica && d.grafica.titulo) || (d.figura && d.figura.pie_figura) || 'Lámina táctil';
+      secciones = seccionesDe(d);
+      contPartes.textContent = '';
+      contTextos.textContent = '';
+      botonesPartes = secciones.map((s, i) => {
+        const b = crearEl('button', 'secondary', `${i + 1}. ${s.titulo}`);
+        b.type = 'button';
+        if (DETALLE_PARTES[s.id]) b.appendChild(crearEl('small', null, DETALLE_PARTES[s.id]));
+        b.addEventListener('click', () => leerParte(i));
+        contPartes.appendChild(b);
+        const sec = crearEl('section');
+        sec.appendChild(crearEl('h4', null, s.titulo));
+        sec.appendChild(crearEl('p', null, s.texto));
+        contTextos.appendChild(sec);
+        return b;
+      });
       resultado.hidden = false;
     }
 
-    async function abrir(texto) {
+    // hablar=false: se abrió desde un enlace (sin un toque en esta página,
+    // el navegador no deja hablar): se ofrece el botón "Escuchar todo".
+    async function abrir(texto, hablar = true) {
       const codigo = codigoDe(texto);
       if (!codigo) {
         avisar('Ese no parece un código de lámina: son 10 letras y números, como 0A1B2C3D4E.', true);
@@ -4169,23 +4239,25 @@
         decir('No se encontraron los datos de esa lámina.');
         return;
       }
-      datosLamina = datos;
       enlaceMas.href = `${API_BASE}/q/${codigo}`;
       pintar(datos);
-      avisar('Lámina cargada. Leyendo la leyenda.');
-      titulo.focus();
-      decir((datos.leyenda && datos.leyenda.texto) || datos.descripcion);
+      if (hablar) {
+        avisar('Lámina cargada. Leyendo todo; abajo puedes repetir cada parte.');
+        titulo.focus();
+        leerTodo();
+      } else {
+        avisar('Lámina cargada. Toca «Escuchar todo» para oírla, o elige una parte.');
+        btnTodo.focus();
+      }
     }
 
     btnEscanear.addEventListener('click', escanear);
     btnDetener.addEventListener('click', () => { detenerCamara(); avisar('Cámara detenida.'); });
-    form.addEventListener('submit', ev => { ev.preventDefault(); abrir(inputCodigo.value); });
-    document.getElementById('explorar-repetir').addEventListener('click', () =>
-      datosLamina && decir((datosLamina.leyenda && datosLamina.leyenda.texto) || datosLamina.descripcion));
-    document.getElementById('explorar-descripcion').addEventListener('click', () =>
-      datosLamina && decir(datosLamina.descripcion));
+    form.addEventListener('submit', ev => { ev.preventDefault(); desbloquearVoz(); abrir(inputCodigo.value); });
+    btnTodo.addEventListener('click', leerTodo);
     document.getElementById('explorar-callar').addEventListener('click', () => {
       if ('speechSynthesis' in window) speechSynthesis.cancel();
+      marcar(-1);
     });
     // al salir de la pantalla, apagar la cámara y la voz
     document.querySelectorAll('#screen-exploracion [data-goto]').forEach(b => b.addEventListener('click', () => {
@@ -4205,7 +4277,7 @@
     if (/^#explorar\b/.test(location.hash)) {
       goTo('screen-exploracion');
       const codigo = (location.hash.split('=')[1] || '').trim();
-      if (codigo) Exploracion.abrir(codigo);
+      if (codigo) Exploracion.abrir(codigo, false);
       return;
     }
     const { datos } = await llamarApi('/api/auth/yo', { method: 'GET' });
