@@ -1043,6 +1043,21 @@ def index():
     )
 
 
+# Guía para usar Puntito: textos (guias.json) y grabaciones (audio/*.m4a).
+GUIA_DIR = os.path.join(BASE_DIR, "..", "interfaz", "guia")
+_EXTENSIONES_GUIA = (".json", ".m4a", ".mp3")
+
+
+@app.route("/guia/<path:nombre_archivo>", methods=["GET"])
+def archivo_guia(nombre_archivo):
+    if not nombre_archivo.lower().endswith(_EXTENSIONES_GUIA):
+        return jsonify({"ok": False, "error": "No encontrado."}), 404
+    # tipo explícito: según el sistema, .m4a sale como "audio/mp4a-latm" o
+    # sin tipo, y Safari no reproduce un audio que no viene como audio/mp4
+    tipo = {".m4a": "audio/mp4", ".mp3": "audio/mpeg"}.get(os.path.splitext(nombre_archivo)[1].lower())
+    return send_from_directory(GUIA_DIR, nombre_archivo, max_age=3600, mimetype=tipo)
+
+
 @app.route("/api/salud", methods=["GET"])
 def salud():
     # base_persistente: False = SQLite en el disco del servidor, que en Render
@@ -1379,7 +1394,7 @@ _PAGINA_QR = """<!doctype html>
 </p>
 </section>
 {% endif %}
-<p><a href="/#explorar={{ token }}">Abrir en el modo exploración de Tactiverso</a></p>
+<p><a href="/#explorar={{ token }}">Abrir en el modo exploración de Puntito</a></p>
 
 {% if d.leyenda %}
 <h2>Leyenda</h2>
