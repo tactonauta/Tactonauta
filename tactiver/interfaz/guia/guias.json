@@ -8,6 +8,12 @@
       "texto": "Hola, te damos la bienvenida a Puntito. Puntito convierte los gráficos de líneas de tus documentos en PDF en láminas táctiles: placas impresas en 3D, con el gráfico en relieve y los textos en braille. Funciona en cuatro pasos. Primero, tú subes el PDF. Segundo, Puntito busca los gráficos de líneas y te dice de qué trata cada uno, para que elijas cuáles quieres. Tercero, tu supervisor revisa las gráficas y las envía a la imprenta. Cuarto, cuando la lámina está impresa, la recoges. Además, cada lámina tiene un código QR: con el modo exploración de Puntito puedes escanearlo y escuchar todo lo que la lámina no puede mostrar en relieve. En la pantalla de inicio hay cinco botones, en este orden: Guía para usar Puntito, que es esta guía; Soy estudiante; Soy supervisor; Soy de imprenta; y Modo exploración. Si eres estudiante, usa el botón Soy estudiante. En esta guía hay una grabación para cada paso: puedes escucharlas en orden o ir directo a la que necesites."
     },
     {
+      "id": "usar-guia",
+      "titulo": "Cómo usar esta guía",
+      "detalle": "pausar, repetir y pasar a la siguiente",
+      "texto": "Esta guía tiene una grabación para cada paso de Puntito. Para escuchar una, presiona su botón en la lista de guías. Mientras suena, tienes tres botones arriba de la lista: Pausar, que cambia a Continuar cuando la pausas; Escuchar desde el principio; y Siguiente guía. Si prefieres leer, abre Leer el texto de esta guía, debajo de esos botones. Cuando termina una grabación, Puntito te dice cuál es la siguiente. Si ya iniciaste sesión, puedes volver a esta guía cuando quieras con el botón Guía para usar Puntito, arriba de todo de la página. Para salir, presiona Volver."
+    },
+    {
       "id": "moverte",
       "titulo": "Cómo moverte por Puntito",
       "detalle": "con el teclado o tu lector de pantalla",
@@ -33,9 +39,15 @@
     },
     {
       "id": "subir-pdf",
-      "titulo": "Cómo subir un PDF y elegir las gráficas",
-      "detalle": "enviar una solicitud a tu supervisor",
-      "texto": "Después de iniciar sesión estás en la pantalla Bienvenido a Puntito, el paso 1 de 3. Presiona el botón Comenzar: subir un PDF. En el paso 2, Sube tu documento, hay un campo para elegir el archivo. Presiona Enter y se abre la ventana para buscar el PDF en tu computadora. Elige el archivo y confirma. No hace falta presionar nada más: Puntito empieza a analizar el documento solo, y te va avisando del avance. Puede tardar un minuto, o algo más si el documento es largo. Luego pasas al paso 3, Gráficos de tu documento. Ahí hay una lista de casillas, una por cada gráfico de líneas que se encontró. Cada una dice su título o su pie de figura, en qué página está, y un poco de lo que dice el documento sobre ella. Todas vienen marcadas: si alguna no la necesitas, desmárcala con la barra espaciadora. Al final de la lista, presiona Enviar a mi supervisor. Puntito te lo confirma con la pantalla Solicitud enviada, y te dice el número de tu solicitud. Ten en cuenta que, por ahora, Puntito solo convierte gráficos de líneas. Si tu documento no tiene ninguno, te lo avisa y puedes elegir otro PDF. Y si te dice que el servidor está ocupado con otro documento, espera unos minutos y vuelve a intentarlo."
+      "titulo": "Cómo subir tu PDF",
+      "detalle": "elegir el archivo y esperar el análisis",
+      "texto": "Después de iniciar sesión estás en la pantalla Bienvenido a Puntito, el paso 1 de 3. Presiona el botón Comenzar: subir un PDF. En el paso 2, Sube tu documento, hay un campo para elegir el archivo. Presiona Enter y se abre la ventana para buscar el PDF en tu computadora; elige el archivo y confirma. No hace falta presionar nada más: Puntito empieza a analizar el documento solo y te va avisando del avance. Puede tardar un minuto, o algo más si el documento es largo, así que espera hasta escuchar el resultado. Se sube un archivo a la vez, y tiene que ser un PDF."
+    },
+    {
+      "id": "elegir-graficos",
+      "titulo": "Cómo elegir los gráficos y enviar tu solicitud",
+      "detalle": "marcar, desmarcar y enviar a tu supervisor",
+      "texto": "Cuando Puntito termina de analizar tu PDF, pasas al paso 3, Gráficos de tu documento. Primero te dice cuántas figuras con gráficos de líneas encontró. Luego hay una lista de casillas, una por cada figura. Cada casilla dice su título o su pie de figura y en qué página está; debajo, un poco de lo que dice el documento sobre ella. Todas vienen marcadas: si alguna no la necesitas, desmárcala con la barra espaciadora. Al final de la lista, presiona Enviar a mi supervisor. Puntito te lo confirma con la pantalla Solicitud enviada, te dice el número de tu solicitud y las figuras que enviaste. Desde ahí puedes presionar Ver estado de mis solicitudes, o Enviar otra solicitud."
     },
     {
       "id": "estado",
@@ -44,16 +56,34 @@
       "texto": "Para saber cómo va una solicitud, presiona Ver estado de mis solicitudes. Está arriba de todo de la página, y también en la pantalla Solicitud enviada. Vas a encontrar una lista con tus solicitudes. Cada una dice su número, cuántas láminas tiene, la fecha y el documento. Después dice dos estados. Primero, el del supervisor: solicitud en espera, aprobada o rechazada. Si fue rechazada, también te dice el motivo, y puedes enviar una nueva solicitud. Segundo, el de la imprenta: aún no enviada a imprenta; en cola de impresión; se está imprimiendo tu lámina; o ya está impreso, puedes recogerlo. Cuando escuches esto último, tu lámina está lista. Para regresar, presiona Volver."
     },
     {
-      "id": "exploracion",
-      "titulo": "Cómo usar el modo exploración",
-      "detalle": "escanear el QR de una lámina y escucharla",
-      "texto": "El modo exploración sirve para escuchar todo lo que la lámina no puede mostrar en relieve. No necesitas una cuenta. En la pantalla de inicio, presiona Modo exploración, y luego, Escanear código QR. La primera vez, el navegador te pide permiso para usar la cámara: acéptalo. El código QR está en la esquina superior izquierda de la lámina. Para ubicarla, busca con los dedos la esquina recortada: esa es la esquina superior derecha, y el QR está en la otra esquina de arriba. Pon esa esquina frente a la cámara, a unos veinte centímetros, y muévela despacio. Si Puntito no encuentra el código, te pide que acerques o alejes un poco la lámina. Cuando lo lee, empieza a hablar solo, en cuatro partes: qué es la gráfica y de qué documento sale; la leyenda; qué muestra la gráfica; y qué dice el documento sobre ella. Después aparecen botones para repetir cada parte, el botón Escuchar todo, y el botón Detener el audio. También puedes escanear el QR con la cámara de tu celular: se abre una página con los mismos botones."
+      "id": "orientar-lamina",
+      "titulo": "Cómo orientarte en la lámina",
+      "detalle": "dónde está cada parte al tocarla",
+      "texto": "La lámina es una placa cuadrada de 22 centímetros por lado. Para orientarla, recorre los bordes con los dedos hasta encontrar la esquina recortada: tiene que quedar arriba a la derecha. Arriba a la izquierda hay un cuadrado con un relieve de cuadritos: es el código QR, y no es parte del gráfico. A su derecha, en la parte de arriba, está el título en braille. Debajo está el gráfico, que ocupa casi toda la lámina. Y abajo de todo, separada del gráfico, está la leyenda. Un buen recorrido es: primero el título, después los ejes, después las curvas, y al final la leyenda."
     },
     {
-      "id": "lamina",
-      "titulo": "Cómo es una lámina táctil",
-      "detalle": "cómo orientarte al tocarla",
-      "texto": "La lámina es una placa cuadrada de 22 centímetros por lado. Para orientarla, busca la esquina recortada: tiene que quedar arriba a la derecha. Arriba a la izquierda hay un cuadrado con un relieve de cuadritos: es el código QR, y no es parte del gráfico. El gráfico ocupa la parte de arriba de la lámina, y la leyenda está abajo. El eje horizontal del gráfico tiene la letra X, y el eje vertical, la letra Y. Los números de los ejes están en braille. Cuando un número o un texto no entra en su lugar, va con una letra, y la leyenda o el modo exploración te dicen qué significa. Si el gráfico tiene más de una curva, cada una tiene una textura distinta: en celdas, rayada o punteada. En la leyenda de abajo, X e Y te dicen qué es cada eje, y Leyenda 1, Leyenda 2 y Leyenda 3 te muestran la textura de cada curva. Para escuchar el nombre de cada curva, su color en el original y sus valores, usa el modo exploración."
+      "id": "leer-lamina",
+      "titulo": "Cómo leer el gráfico de la lámina",
+      "detalle": "ejes, números, curvas, letras y anillos",
+      "texto": "El gráfico tiene dos ejes: el horizontal, abajo, que lleva la letra X, y el vertical, a la izquierda, que lleva la letra Y. Los números de cada eje están en braille, junto a sus marcas. Las curvas son líneas en relieve; si hay más de una, cada una tiene su propia textura: en celdas, rayada o punteada. Cuando un número o un texto no entra en su lugar, en la lámina va una letra, y el modo exploración te dice qué significa. Si encuentras un anillo en relieve, es un punto que tu supervisor quiso destacar: el texto de al lado lo explica. Las ecuaciones están escritas en braille matemático. En la leyenda de abajo, X e Y te dicen qué es cada eje, y Leyenda 1, Leyenda 2 y Leyenda 3 te muestran la textura de cada curva."
+    },
+    {
+      "id": "escanear-qr",
+      "titulo": "Cómo escanear el código QR",
+      "detalle": "abrir el modo exploración y apuntar la cámara",
+      "texto": "El modo exploración no necesita una cuenta. En la pantalla de inicio, presiona Modo exploración, y luego, Escanear código QR. La primera vez, el navegador te pide permiso para usar la cámara: acéptalo. Toma la lámina y busca la esquina recortada: el código QR está en la otra esquina de arriba, la izquierda. Pon esa esquina frente a la cámara, a unos veinte centímetros, y muévela despacio. Si Puntito no lo encuentra, cada tanto te pide que acerques o alejes un poco la lámina. Si no puedes usar la cámara, abre la opción No puedo usar la cámara: escribir el código de la lámina, y escribe su código de diez letras y números. También puedes escanear el QR con la cámara de tu celular: se abre una página con la información de la lámina."
+    },
+    {
+      "id": "escuchar-lamina",
+      "titulo": "Cómo escuchar la información de la lámina",
+      "detalle": "las cuatro partes y cómo repetirlas",
+      "texto": "Cuando Puntito lee el código, empieza a hablar solo y te cuenta todo en cuatro partes. Primera, qué es esta gráfica: su pie de figura, y el documento y la página de donde sale. Segunda, la leyenda: qué es cada eje, cada curva con su color en el original, y qué significa cada letra. Tercera, qué muestra: si las curvas suben o bajan, sus máximos y mínimos, y los textos que agregó tu supervisor. Cuarta, qué dice el documento sobre la figura. Después aparecen los botones Escuchar todo y Detener el audio, y un botón para cada parte, numerados del uno al cuatro. Así, si mientras tocas la lámina no recuerdas qué era una letra, presionas Leyenda y escuchas solo esa parte."
+    },
+    {
+      "id": "problemas",
+      "titulo": "Si algo no funciona",
+      "detalle": "qué hacer ante los avisos más comunes",
+      "texto": "Si la página tarda en abrir la primera vez, espera un minuto: el servidor puede estar despertando. Si Puntito te dice que el servidor está ocupado procesando otro documento, espera unos minutos y vuelve a intentarlo, porque atiende un documento a la vez. Si te dice que el documento no tiene gráficos de líneas, por ahora no se puede convertir: prueba con otro PDF. Si te dice correo o contraseña incorrectos, revisa lo que escribiste, y recuerda entrar por Soy estudiante. Y si en el modo exploración te dice que no se encontraron los datos de la lámina, puede que tu supervisor todavía no la haya autorizado. Si nada de esto funciona, pídele ayuda a tu supervisor."
     }
   ]
 }
