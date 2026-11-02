@@ -2,24 +2,6 @@
   "_nota": "Guías de usuario en audio de Puntito. Cada guía tiene su grabación en audio/<id>.mp3, con la voz Camila. Si cambias un texto, vuelve a generar su audio con generar_audios.py (o reemplaza el .mp3 por una grabación propia con el mismo nombre).",
   "guias": [
     {
-      "id": "que-es",
-      "titulo": "Qué es Puntito",
-      "detalle": "para qué sirve y cómo funciona",
-      "texto": "Hola, te damos la bienvenida a Puntito. Puntito convierte los gráficos de líneas de tus documentos en PDF en láminas táctiles: placas impresas en 3D, con el gráfico en relieve y los textos en braille. Funciona en cuatro pasos. Primero, tú subes el PDF. Segundo, Puntito busca los gráficos de líneas y te dice de qué trata cada uno, para que elijas cuáles quieres. Tercero, tu supervisor revisa las gráficas y las envía a la imprenta. Cuarto, cuando la lámina está impresa, la recoges. Además, cada lámina tiene un código QR: con el modo exploración de Puntito puedes escanearlo y escuchar todo lo que la lámina no puede mostrar en relieve. En la pantalla de inicio hay cinco botones, en este orden: Guía para usar Puntito, que es esta guía; Soy estudiante; Soy supervisor; Soy de imprenta; y Modo exploración. Si eres estudiante, usa el botón Soy estudiante. En esta guía hay una grabación para cada paso: puedes escucharlas en orden o ir directo a la que necesites."
-    },
-    {
-      "id": "usar-guia",
-      "titulo": "Cómo usar esta guía",
-      "detalle": "pausar, repetir y pasar a la siguiente",
-      "texto": "Esta guía tiene una grabación para cada paso de Puntito. Para escuchar una, presiona su botón en la lista de guías. Mientras suena, tienes tres botones arriba de la lista: Pausar, que cambia a Continuar cuando la pausas; Escuchar desde el principio; y Siguiente guía. Si prefieres leer, abre Leer el texto de esta guía, debajo de esos botones. Cuando termina una grabación, Puntito te dice cuál es la siguiente. Si ya iniciaste sesión, puedes volver a esta guía cuando quieras con el botón Guía para usar Puntito, arriba de todo de la página. Para salir, presiona Volver."
-    },
-    {
-      "id": "moverte",
-      "titulo": "Cómo moverte por Puntito",
-      "detalle": "con el teclado o tu lector de pantalla",
-      "texto": "Puntito está pensado para usarse con un lector de pantalla, como NVDA, JAWS o VoiceOver. En la computadora, pasa de un elemento al siguiente con la tecla Tab, y vuelve al anterior con Mayúscula más Tab. Para presionar un botón, usa Enter o la barra espaciadora. Para marcar o desmarcar una casilla, usa la barra espaciadora. Cada pantalla empieza con un título, y con tu lector de pantalla puedes saltar de título en título: por ejemplo, con la tecla H en NVDA o en JAWS. En el celular, desliza un dedo hacia la derecha o hacia la izquierda para recorrer la pantalla, y toca dos veces para presionar. Puntito te avisa en voz alta lo que va pasando: por ejemplo, cuando termina de analizar tu documento, o si hay un error. Cuando inicias sesión, arriba de todo de la página aparecen cuatro botones: Ver estado de mis solicitudes, Cambiar código de supervisor, Guía para usar Puntito, y Cerrar sesión. Así puedes volver a esta guía cuando quieras."
-    },
-    {
       "id": "crear-cuenta",
       "titulo": "Cómo crear tu cuenta",
       "detalle": "registrarte como estudiante",
