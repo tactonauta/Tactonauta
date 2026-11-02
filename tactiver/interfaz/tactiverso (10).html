@@ -818,6 +818,7 @@
 <div class="user-bar" id="user-bar" hidden>
   <span class="greeting" id="user-bar-greeting"></span>
   <span class="role-tag" id="user-bar-role"></span>
+  <button type="button" class="linklike" id="nav-subir-pdf" hidden>Subir un PDF</button>
   <button type="button" class="linklike" id="nav-ver-estado" hidden>Ver estado de mis solicitudes</button>
   <button type="button" class="linklike" id="nav-cambiar-predeterminado" hidden>Cambiar</button>
   <button type="button" class="linklike" id="nav-guia">Guía para usar Puntito</button>
@@ -834,7 +835,7 @@
     <div class="role-buttons">
       <button type="button" class="role-btn guia-btn" data-goto="screen-guia">
         <span class="role-title">Guía para usar Puntito</span>
-        <span class="role-desc">Escucha en unos 3 minutos cómo usar Puntito: tu cuenta, cómo pedir una lámina y cómo explorarla.</span>
+        <span class="role-desc">Escucha, paso a paso, cómo usar Puntito: crear tu cuenta, iniciar sesión, subir un PDF, conocer tu lámina, el modo exploración y más.</span>
       </button>
       <button type="button" class="role-btn" data-role="estudiante">
         <span class="role-title">Soy estudiante</span>
@@ -901,7 +902,7 @@
        guia/audio/<id>.m4a), pensada para personas ciegas; sin cuenta. -->
   <section class="screen no-border" id="screen-guia" aria-labelledby="guia-heading">
     <h1 id="guia-heading" tabindex="-1">Guía para usar Puntito</h1>
-    <p class="lede">Son 4 guías cortas, de menos de un minuto cada una. Puedes escucharlas en orden o ir directo a la que necesites. Mientras suena, puedes pausarla, volver a empezarla o pasar a la siguiente.</p>
+    <p class="lede">Son 11 guías cortas, una por paso, con los nombres exactos de los botones y los campos. Puedes escucharlas en orden o ir directo a la que necesites. Mientras suena, puedes pausarla, volver a empezarla o pasar a la siguiente.</p>
 
     <div class="guia-reproductor" id="guia-reproductor" hidden>
       <h2 id="guia-actual" tabindex="-1"></h2>
@@ -1539,6 +1540,7 @@
   const userBar = document.getElementById('user-bar');
   const userBarGreeting = document.getElementById('user-bar-greeting');
   const userBarRole = document.getElementById('user-bar-role');
+  const navSubirPdf = document.getElementById('nav-subir-pdf');
   const navVerEstado = document.getElementById('nav-ver-estado');
   const navCambiarPredeterminado = document.getElementById('nav-cambiar-predeterminado');
   const navCerrarSesion = document.getElementById('nav-cerrar-sesion');
@@ -1552,6 +1554,9 @@
     userBar.hidden = false;
     userBarGreeting.textContent = 'Hola, ' + usuarioActual.nombre;
     userBarRole.textContent = rol === 'estudiante' ? 'Estudiante' : (rol === 'supervisor' ? 'Supervisor' : 'Imprenta');
+    // el estudiante no necesita ver su rol; sí tener a mano subir un PDF
+    userBarRole.hidden = rol === 'estudiante';
+    navSubirPdf.hidden = rol !== 'estudiante';
     navVerEstado.hidden = rol !== 'estudiante';
     navCambiarPredeterminado.hidden = rol !== 'estudiante';
     navCambiarPredeterminado.textContent = 'Cambiar código de supervisor';
@@ -1562,6 +1567,17 @@
     usuarioActual = null;
     refrescarBarraUsuario();
     goTo('screen-landing');
+  });
+
+  // "Subir un PDF" desde cualquier pantalla: directo al paso 2 (o a
+  // conectarse con el supervisor, si todavía no lo hizo)
+  navSubirPdf.addEventListener('click', () => {
+    if (!usuarioActual || usuarioActual.rol !== 'estudiante') return;
+    if (!usuarioActual.supervisor_predeterminado_id) {
+      goTo('screen-config-estudiante');
+      return;
+    }
+    goTo('step-2');
   });
 
   navVerEstado.addEventListener('click', async () => {
