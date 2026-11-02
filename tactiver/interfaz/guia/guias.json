@@ -23,7 +23,7 @@
       "id": "subir-pdf",
       "titulo": "Cómo subir tu PDF",
       "detalle": "elegir el archivo y esperar el análisis",
-      "texto": "Después de iniciar sesión estás en la pantalla Bienvenido a Puntito, el paso 1 de 3. Presiona el botón Comenzar: subir un PDF. En el paso 2, Sube tu documento, hay un campo para elegir el archivo. Presiona Enter y se abre la ventana para buscar el PDF en tu computadora; elige el archivo y confirma. No hace falta presionar nada más: Puntito empieza a analizar el documento solo y te va avisando del avance. Puede tardar un minuto, o algo más si el documento es largo, así que espera hasta escuchar el resultado. Se sube un archivo a la vez, y tiene que ser un PDF."
+      "texto": "Después de iniciar sesión estás en la pantalla Bienvenido a Puntito, el paso 1 de 3. Presiona el botón Comenzar: subir un PDF. También puedes ir directo desde cualquier pantalla con el botón Subir un PDF, el primero de arriba de todo de la página. En el paso 2, Sube tu documento, hay un campo para elegir el archivo. Presiona Enter y se abre la ventana para buscar el PDF en tu computadora; elige el archivo y confirma. No hace falta presionar nada más: Puntito empieza a analizar el documento solo y te va avisando del avance. Puede tardar un minuto, o algo más si el documento es largo, así que espera hasta escuchar el resultado. Se sube un archivo a la vez, y tiene que ser un PDF."
     },
     {
       "id": "elegir-graficos",

@@ -814,6 +814,7 @@
 <div class="user-bar" id="user-bar" hidden>
   <span class="greeting" id="user-bar-greeting"></span>
   <span class="role-tag" id="user-bar-role"></span>
+  <button type="button" class="linklike" id="nav-subir-pdf" hidden>Subir un PDF</button>
   <button type="button" class="linklike" id="nav-ver-estado" hidden>Ver estado de mis solicitudes</button>
   <button type="button" class="linklike" id="nav-cambiar-predeterminado" hidden>Cambiar</button>
   <button type="button" class="linklike" id="nav-guia">Guía para usar Puntito</button>
@@ -1520,6 +1521,7 @@
   const userBar = document.getElementById('user-bar');
   const userBarGreeting = document.getElementById('user-bar-greeting');
   const userBarRole = document.getElementById('user-bar-role');
+  const navSubirPdf = document.getElementById('nav-subir-pdf');
   const navVerEstado = document.getElementById('nav-ver-estado');
   const navCambiarPredeterminado = document.getElementById('nav-cambiar-predeterminado');
   const navCerrarSesion = document.getElementById('nav-cerrar-sesion');
@@ -1533,6 +1535,9 @@
     userBar.hidden = false;
     userBarGreeting.textContent = 'Hola, ' + usuarioActual.nombre;
     userBarRole.textContent = rol === 'estudiante' ? 'Estudiante' : (rol === 'supervisor' ? 'Supervisor' : 'Imprenta');
+    // el estudiante no necesita ver su rol; sí tener a mano subir un PDF
+    userBarRole.hidden = rol === 'estudiante';
+    navSubirPdf.hidden = rol !== 'estudiante';
     navVerEstado.hidden = rol !== 'estudiante';
     navCambiarPredeterminado.hidden = rol !== 'estudiante';
     navCambiarPredeterminado.textContent = 'Cambiar código de supervisor';
@@ -1543,6 +1548,17 @@
     usuarioActual = null;
     refrescarBarraUsuario();
     goTo('screen-landing');
+  });
+
+  // "Subir un PDF" desde cualquier pantalla: directo al paso 2 (o a
+  // conectarse con el supervisor, si todavía no lo hizo)
+  navSubirPdf.addEventListener('click', () => {
+    if (!usuarioActual || usuarioActual.rol !== 'estudiante') return;
+    if (!usuarioActual.supervisor_predeterminado_id) {
+      goTo('screen-config-estudiante');
+      return;
+    }
+    goTo('step-2');
   });
 
   navVerEstado.addEventListener('click', async () => {
