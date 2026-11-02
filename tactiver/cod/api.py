@@ -1636,6 +1636,8 @@ def clasificar():
 # El id es el nombre del JSON de un resultado anterior (`correccion_id`).
 # ------------------------------------------------------------------
 LARGO_MAX_TEXTO_LAMINA = 300
+LARGO_MAX_NOTA = 120          # caracteres de una nota del supervisor
+MAX_NOTAS_LAMINA = 12
 
 
 def _ajustes_validos(ajustes):
@@ -1658,6 +1660,24 @@ def _ajustes_validos(ajustes):
         if _RE_AJUSTE.fullmatch(str(clave)) and math.isfinite(dx) and math.isfinite(dy) and (dx or dy):
             limite = max(PLACA_ANCHO, PLACA_ALTO)
             limpio["mover"][str(clave)] = [max(-limite, min(limite, dx)), max(-limite, min(limite, dy))]
+    # notas del supervisor: texto libre en un punto de la gráfica (px, py en
+    # píxeles de la imagen original; ver generador_stl.NOTA_ANILLO_RADIO)
+    notas, vistos = [], set()
+    for n in (ajustes.get("notas") or [])[:MAX_NOTAS_LAMINA] if isinstance(ajustes.get("notas"), list) else ():
+        if not isinstance(n, dict):
+            continue
+        id_nota = str(n.get("id") or "")
+        texto = " ".join(str(n.get("texto") or "").split())[:LARGO_MAX_NOTA]
+        try:
+            px, py = float(n.get("px")), float(n.get("py"))
+        except (TypeError, ValueError):
+            continue
+        if (re.fullmatch(r"nota_\d{1,4}", id_nota) and id_nota not in vistos and texto
+                and math.isfinite(px) and math.isfinite(py) and 0 <= px <= 50000 and 0 <= py <= 50000):
+            vistos.add(id_nota)
+            notas.append({"id": id_nota, "texto": texto, "px": round(px, 1), "py": round(py, 1)})
+    if notas:
+        limpio["notas"] = notas
     return limpio
 
 

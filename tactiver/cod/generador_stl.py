@@ -1019,7 +1019,18 @@ def _texto_numero(valor, decimales):
 # "titulo_eje_y", "num_x_3", "num_y_0", "cat_2", "dato_1", "serie_0",
 # "leyenda_serie_1"... (el número es la posición en el JSON del segmentador,
 # así no cambia aunque se oculte otra cosa).
-_RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie)_\d+)")
+_RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie|nota)_\d+)")
+
+# Notas del supervisor: textos que agrega en cualquier lugar de la gráfica
+# (en la pizarra), por ejemplo en un punto de intersección. Van en
+# ajustes["notas"] = [{"id": "nota_3", "texto": "...", "px": 410, "py": 220}],
+# con px/py en píxeles de la imagen original, como las etiquetas de dato:
+# así quedan sobre el mismo punto del gráfico aunque cambie la distribución.
+# En la placa: un anillo en relieve marca el punto y el texto va al lado.
+NOTA_ANILLO_RADIO = 2.2         # mm
+NOTA_ANILLO_LINEA = 1.0         # mm, grosor del trazo del anillo
+NOTA_ANILLO_LADOS = 12
+NOTA_RENGLONES_MAX = 3
 
 
 def aplicar_ajustes(datos, ajustes):
@@ -2244,6 +2255,91 @@ def generar_modelo_desde_recta(
               f"{omitidas} omitidos.", flush=True)
 
     # ================================================================
+    # Notas del supervisor (ver NOTA_ANILLO_RADIO): un anillo en el punto
+    # que marcó y el texto al lado (derecha, izquierda, arriba o abajo,
+    # sin pisar curvas ni otros textos). Si no hay lugar libre, va a la
+    # derecha igual y se avisa, para que lo mueva o lo acorte.
+    notas_diseno = []
+    if incluir_etiquetas:
+        ocupados_notas = [list(e["recuadro"]) for e in elementos if e.get("recuadro")]
+        max_celdas = int((ancho_plot - ESPACIADO_BRAILLE - DIAM_PUNTO_BRAILLE) // CELDA_PITCH) + 1
+        for nota in ajustes.get("notas") or []:
+            id_nota = str(nota.get("id") or "")
+            texto_nota = " ".join(str(nota.get("texto") or "").split())
+            if not re.fullmatch(r"nota_\d+", id_nota) or not texto_nota:
+                continue
+            if id_nota in ocultos:
+                ocultos_info.append({"id": id_nota, "clase": "nota", "texto": texto_nota})
+                continue
+            try:
+                x_val, y_val = pixel_a_valor(float(nota["px"]), float(nota["py"]))
+                xf, yf = valor_a_fisico(x_val, y_val)
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                continue
+            if not (math.isfinite(xf) and math.isfinite(yf)):
+                continue
+            xf = min(max(izquierda, xf), izquierda + ancho_plot)
+            yf = min(max(abajo, yf), abajo + alto_plot)
+            # el anillo, en el punto exacto
+            desde = len(piezas)
+            vertices = [(xf + NOTA_ANILLO_RADIO * math.cos(2 * math.pi * k / NOTA_ANILLO_LADOS),
+                         yf + NOTA_ANILLO_RADIO * math.sin(2 * math.pi * k / NOTA_ANILLO_LADOS))
+                        for k in range(NOTA_ANILLO_LADOS + 1)]
+            _agregar_cadena(piezas, list(zip(vertices, vertices[1:])), NOTA_ANILLO_LINEA, RELIEVE_LINEA)
+            _registrar(f"{id_nota}_punto", "nota_punto", desde, texto=texto_nota)
+            # el texto, en hasta NOTA_RENGLONES_MAX renglones
+            renglones = partir_en_renglones(_celdas_braille_mixto(texto_nota), max_celdas)
+            if len(renglones) > NOTA_RENGLONES_MAX:
+                avisos.append(f"La nota «{texto_nota[:40]}» es muy larga para la lámina: "
+                              f"se escriben sus primeros {NOTA_RENGLONES_MAX} renglones. Acórtala.")
+                renglones = renglones[:NOTA_RENGLONES_MAX]
+            ancho = max(_ancho_celdas(len(r)) for r in renglones)
+            paso_renglon = ALTURA_FILA_BRAILLE + 2.0
+            alto = ALTURA_FILA_BRAILLE + paso_renglon * (len(renglones) - 1)
+            hueco = NOTA_ANILLO_RADIO + 1.5
+            x_min_t, x_max_t = MARGEN_PLACA, dim_x - MARGEN_PLACA - ancho
+            candidatos = [(xf + hueco, yf - alto / 2), (xf - hueco - ancho, yf - alto / 2),
+                          (xf - ancho / 2, yf + hueco), (xf - ancho / 2, yf - hueco - alto)]
+            candidatos += [(x0, y0 + signo * k * 1.5) for k in range(1, 9) for signo in (1, -1)
+                           for x0, y0 in candidatos[:2]]
+            libre = None
+            for x0, y0 in candidatos:
+                x0 = min(max(x_min_t, x0), x_max_t)
+                rect = (x0, y0, x0 + ancho, y0 + alto)
+                if rect[1] < abajo + 0.5 or rect[3] > abajo + alto_plot + 3.0:
+                    continue
+                if any(not (rect[2] + 1 < o[0] or o[2] + 1 < rect[0] or
+                            rect[3] + 1 < o[1] or o[3] + 1 < rect[1]) for o in ocupados_notas):
+                    continue
+                if _distancia_rect_polilinea(rect, vertices) < 1.0:
+                    continue
+                if any(_distancia_rect_polilinea(rect, s_) < 2.0 for s_ in series_fisicas):
+                    continue
+                libre = rect
+                break
+            if libre is None:
+                x0 = min(max(x_min_t, xf + hueco), x_max_t)
+                libre = (x0, yf - alto / 2, x0 + ancho, yf + alto / 2)
+                avisos.append(f"La nota «{texto_nota[:40]}» no entra junto a su punto sin pisar "
+                              "una curva u otro texto: muévela o acórtala.")
+            dx, dy = movidos.get(id_nota, (0.0, 0.0))
+            x0, y_arriba = libre[0] + dx, libre[3] + dy
+            desde = len(piezas)
+            for k, r in enumerate(renglones):
+                yc = y_arriba - ALTURA_FILA_BRAILLE / 2 - k * paso_renglon
+                _dibujar_celdas(piezas, r, x0 + BORDE_A_CELDA, yc)
+            recuadro = [x0, y_arriba - alto, x0 + ancho, y_arriba]
+            ocupados_notas.append(list(recuadro))
+            _registrar(id_nota, "nota", desde, texto=texto_nota, recuadro=recuadro,
+                       ocultable=True, movible=True, movido=bool(dx or dy),
+                       editable="texto", clave_edicion=id_nota, valor_edicion=texto_nota)
+            textos_diseno.append(_texto_diseno("nota", _rotulo_simple(texto_nota), recuadro))
+            notas_diseno.append({"id": id_nota, "texto": texto_nota, "recuadro": recuadro,
+                                 "punto_mm": [round(xf, 2), round(yf, 2)],
+                                 "valor_x": x_val if calibrados else None,
+                                 "valor_y": y_val if calibrados else None})
+
+    # ================================================================
     # 12. DIBUJAR TODAS LAS SERIES
     # ================================================================
     # Cada serie usa una textura distinta (sólida / rayada / punteada) para
@@ -2404,6 +2500,8 @@ def generar_modelo_desde_recta(
             # cada texto escrito (títulos, categorías): qué dice y dónde
             "textos": textos_diseno,
             "etiquetas_dato": datos_diseno,
+            # notas del supervisor: texto, dónde quedó y el punto que marcan
+            "notas": notas_diseno,
             # QR en relieve (None si no se pidió): esquina, lado y URL
             "qr": qr_info,
             "avisos": avisos,

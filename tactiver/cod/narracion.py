@@ -462,7 +462,8 @@ def exportar_hand_tracking(datos, diseno, descripcion):
         que = {"titulo": "Título", "categoria": "Categoría del eje horizontal",
                "numero_x": _eje("horizontal", textos.get("titulo_eje_x")),
                "numero_y": _eje("vertical", textos.get("titulo_eje_y")),
-               "dato": "Valor anotado junto a la curva"}.get(txt["tipo"], "Texto")
+               "dato": "Valor anotado junto a la curva",
+               "nota": "Nota"}.get(txt["tipo"], "Texto")
         completo = txt["texto_completo"]
         if txt["tipo"] in ("titulo_eje_x", "titulo_eje_y"):
             # en la placa, solo la letra del eje
@@ -716,6 +717,9 @@ def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
         },
         "contexto": figura.get("contexto") or {"antes": "", "despues": "", "menciones": []},
         "descripcion": descripcion,
+        # notas que el supervisor agregó en la gráfica: texto y punto que marcan
+        "notas": [{"texto": n["texto"], "valor_x": _num(n.get("valor_x")), "valor_y": _num(n.get("valor_y"))}
+                  for n in diseno.get("notas") or []],
         # lo que se escucha en el modo exploración (ver leyenda_lamina)
         "leyenda": leyenda_lamina(datos, diseno),
         "grafica": {
@@ -963,6 +967,15 @@ def _audio_que_muestra(d):
         frases.append(f"{sujeto} {_forma(vals, rango_y, eje, fmt_y)}")
     if not series:
         frases.append("No se pudieron leer los valores de la gráfica.")
+    notas = [n for n in d.get("notas") or [] if n.get("texto")]
+    if notas:
+        frases.append("En la lámina hay " + ("una nota, marcada con un anillo en relieve" if len(notas) == 1
+                      else f"{len(notas)} notas, cada una marcada con un anillo en relieve") + ".")
+        for n in notas:
+            donde = ""
+            if n.get("valor_x") is not None and n.get("valor_y") is not None:
+                donde = f", {eje.en(n['valor_x'])}, a la altura de {fmt_y(n['valor_y'])} en el eje vertical"
+            frases.append(f"Nota{donde}: {_oracion(_normalizar(n['texto']))}")
     texto = " ".join(frases)
     # "cuando el eje horizontal vale 5" se entiende; "cuando x vale 5", también
     return texto.replace("cuando el eje horizontal vale", "cuando el eje horizontal está en")

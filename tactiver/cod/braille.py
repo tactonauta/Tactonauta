@@ -7,6 +7,7 @@
 # del proyecto: generador_stl.py la importa de acá.
 # ============================================================
 
+import re
 import unicodedata
 
 
@@ -163,7 +164,7 @@ def _palabra_en_mayusculas(texto, inicio):
     return len(letras) >= 2 and all(c.isupper() for c in letras)
 
 
-def texto_a_celdas(texto):
+def _texto_literal_a_celdas(texto):
 
     texto = " ".join(str(texto).split())
 
@@ -251,6 +252,227 @@ def texto_a_celdas(texto):
         celdas.pop()
 
 
+    return celdas
+
+
+# ============================================================
+# 6b. ECUACIONES: CÓDIGO MATEMÁTICO UNIFICADO
+#
+# Las expresiones matemáticas ("y = 2x + 1", "R² = 0,98", "σ ≈ 1,5") se
+# escriben con el Código Matemático Unificado para Iberoamérica (Consejo
+# Iberoamericano del Braille, 2023):
+# https://www.once.es/servicios-sociales/braille/consejo-iberoamericano/codigo-matematico-unificado-para-iberoamerica
+# Antes, el texto literario omitía todo lo que no fuera letra o número:
+# "y = 2x + 1" quedaba "y 2x 1".
+#
+# Cada signo, con la página del documento donde está:
+#   + 235 · - 36 · × 236 · / 256 · ÷ y : 5-2 (pág. 55)
+#   = 2356 · < 246 · > 135 · ≤ 246-2356 · ≥ 135-2356 (pág. 64-65)
+#   ≠ 45-2356 (pág. 65) · ≈ 5-2356-3 (pág. 64)
+#   ± 235-25-36 · % 456-356 (pág. 60) · ° 356 (pág. 95)
+#   ( 126 · ) 345 · [ 12356 · ] 23456 · paréntesis auxiliares 26 ... 35 (pág. 23)
+#   exponente (superíndice) 16 · subíndice 34 (pág. 46, 57)
+#   raíz cuadrada 1246-156 + radicando (pág. 58)
+#   mayúscula latina 46 + letra, una por letra (pág. 13)
+#   minúscula a-j después de un número: punto 5 delante (pág. 12, 14)
+#   griega minúscula 4 + letra · griega mayúscula 45 + letra (pág. 14-15)
+#   coma decimal 2 (pág. 19)
+# El punto de multiplicar (6 + medio cajetín en blanco) se escribe con el
+# aspa (236): el significado es el mismo y no depende del cajetín vecino.
+# ============================================================
+
+def _celda(puntos):
+    """Nombre de una celda por sus puntos ("p235") en la tabla BRAILLE."""
+    nombre = "p" + puntos
+    BRAILLE.setdefault(nombre, [int(c) for c in puntos])
+    return nombre
+
+
+def _signo(*celdas):
+    return [_celda(c) for c in celdas]
+
+
+SIGNOS_MATEMATICOS = {
+    "+": _signo("235"), "-": _signo("36"), "−": _signo("36"), "–": _signo("36"),
+    "×": _signo("236"), "·": _signo("236"), "*": _signo("236"), "⋅": _signo("236"),
+    "/": _signo("256"), "÷": _signo("5", "2"), ":": _signo("5", "2"),
+    "=": _signo("2356"), "<": _signo("246"), ">": _signo("135"),
+    "≤": _signo("246", "2356"), "≥": _signo("135", "2356"),
+    "≠": _signo("45", "2356"), "≈": _signo("5", "2356", "3"),
+    "±": _signo("235", "25", "36"), "∓": _signo("36", "25", "235"),
+    "%": _signo("456", "356"), "°": _signo("356"),
+    "(": _signo("126"), ")": _signo("345"), "[": _signo("12356"), "]": _signo("23456"),
+}
+_EXPONENTE = _signo("16")
+_SUBINDICE = _signo("34")
+_AUX_ABRE, _AUX_CIERRA = _signo("26"), _signo("35")
+_RAIZ = _signo("1246", "156")
+_PREFIJO_MAYUSCULA = _celda("46")
+_PREFIJO_MINUSCULA = _celda("5")
+_PREFIJO_GRIEGA = _celda("4")
+_PREFIJO_GRIEGA_MAYUSCULA = _celda("45")
+
+# letra base de cada griega (pág. 14-15): casi todas, la latina parecida
+_GRIEGAS = {
+    "α": "a", "β": "b", "γ": "g", "δ": "d", "ε": "e", "ζ": "z", "η": _celda("156"),
+    "θ": _celda("1456"), "ι": "i", "κ": "k", "λ": "l", "μ": "m", "ν": "n", "ξ": "x",
+    "ο": "o", "π": "p", "ρ": "r", "σ": "s", "ς": "s", "τ": "t", "υ": "u", "φ": "f",
+    "χ": _celda("12346"), "ψ": "y", "ω": "w",
+}
+
+_SUPERINDICES = dict(zip("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ", "0123456789+-=()ni"))
+_SUBINDICES = dict(zip("₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓ", "0123456789+-=()aeox"))
+
+# Lo que hace que un texto sea una ecuación (y no, por ejemplo, un guion
+# entre palabras como "PEGMA-PEGDA" o un rango "1-3").
+_SIGNOS_FUERTES = (set("=≠≈≤≥±∓√^×÷%°_") | set(_SUPERINDICES) | set(_SUBINDICES)
+                   | set(_GRIEGAS) | {c.upper() for c in _GRIEGAS})
+# un número, una letra suelta o una función de una letra o abreviada:
+# "2", "-1,5", "2x", "y", "f(x)", "sen(x)", "(a"
+_RE_OPERANDO = re.compile(
+    r"^[(\[]*(?:[-−]?\d+(?:[.,]\d+)*[a-zA-Zα-ωΑ-Ω]?|[a-zA-Zα-ωΑ-Ω]|[a-zA-Z]{1,3}\([^()\s]{0,8}\))"
+    r"[)\]]*[.,;]?$")
+# un número seguido de una letra de la a a la j ("3a"): sin el código
+# matemático se leería como otra cifra ("31")
+_RE_NUMERO_LETRA = re.compile(r"\d[a-j](?![a-zA-Z])")
+_OPERADORES_SUELTOS = {"+", "-", "−", "–", "×", "·", "*", "/", "÷", "<", ">"}
+
+
+def _es_fuerte(token):
+    return (any(c in _SIGNOS_FUERTES for c in token) or bool(_RE_NUMERO_LETRA.search(token))
+            or bool(re.fullmatch(r"[a-zA-Z]{1,3}\([^()\s]{0,8}\)[.,;]?", token)))
+
+
+def es_ecuacion(texto):
+    """True si el texto tiene una expresión matemática ("y = 2x + 1", "R²")."""
+    return any(_es_fuerte(t) for t in str(texto).split()) or bool(
+        re.search(r"\b\d+[a-zA-Z]\s*[+\-−]\s*\d", str(texto)))
+
+
+def _tramos(texto):
+    """Parte el texto en tramos (es_matematico, texto): la expresión va con
+    el código matemático, el resto como texto. Una palabra es parte de la
+    expresión si tiene un signo matemático, o si es un número, una letra
+    suelta o un operador al lado de una que ya lo es."""
+    palabras = str(texto).split()
+    mat = [_es_fuerte(p) for p in palabras]
+    if not any(mat) and re.search(r"\b\d+[a-zA-Z]\s*[+\-−]\s*\d", str(texto)):
+        mat = [p in _OPERADORES_SUELTOS for p in palabras]
+    cambio = True
+    while cambio:
+        cambio = False
+        for i, p in enumerate(palabras):
+            if mat[i]:
+                continue
+            vecino = (i > 0 and mat[i - 1]) or (i + 1 < len(palabras) and mat[i + 1])
+            if vecino and (p in _OPERADORES_SUELTOS or _RE_OPERANDO.match(p)):
+                mat[i] = cambio = True
+    tramos = []
+    for p, m in zip(palabras, mat):
+        if tramos and tramos[-1][0] == m:
+            tramos[-1][1].append(p)
+        else:
+            tramos.append((m, [p]))
+    return [(m, " ".join(ps)) for m, ps in tramos]
+
+
+def _normalizar_indices(expr):
+    """"x²" -> "x^(2)", "x₁" -> "x_(1)": los superíndices y subíndices de
+    Unicode, como exponente o subíndice explícito."""
+    salida, i = [], 0
+    while i < len(expr):
+        for tabla, marca in ((_SUPERINDICES, "^"), (_SUBINDICES, "_")):
+            if expr[i] in tabla:
+                j = i
+                while j < len(expr) and expr[j] in tabla:
+                    j += 1
+                salida.append(marca + "(" + "".join(tabla[c] for c in expr[i:j]) + ")")
+                i = j
+                break
+        else:
+            salida.append(expr[i])
+            i += 1
+    return "".join(salida)
+
+
+def _grupo(expr, i):
+    """Lo que sigue a un ^, un _ o una raíz: un grupo entre paréntesis o
+    llaves, o un término simple (número con signo, o una letra). Devuelve
+    (texto del grupo, compuesto?, posición siguiente)."""
+    if i < len(expr) and expr[i] in "({":
+        cierre = ")" if expr[i] == "(" else "}"
+        nivel, j = 0, i
+        while j < len(expr):
+            if expr[j] in "({":
+                nivel += 1
+            elif expr[j] in ")}":
+                nivel -= 1
+                if nivel == 0:
+                    break
+            j += 1
+        interior = expr[i + 1:j]
+        simple = re.fullmatch(r"[-−]?(\d+(?:[.,]\d+)?|[^\W\d_])", interior) is not None
+        return interior, not simple, j + 1
+    m = re.match(r"[-−]?(\d+(?:[.,]\d+)?|[^\W\d_])", expr[i:])
+    if m:
+        return m.group(0), False, i + m.end()
+    return "", False, i
+
+
+def expresion_a_celdas(expr):
+    """Celdas Braille de una expresión matemática, con el Código Matemático
+    Unificado: "y=2x+1" -> y = #b x + #a (sin espacios, como en el código)."""
+    expr = _normalizar_indices(str(expr).replace(" ", ""))
+    celdas, numero, i = [], False, 0
+    while i < len(expr):
+        c = expr[i]
+        if c.isdigit():
+            if not numero:
+                celdas.append("numeral")
+            celdas.append(c)
+            numero = True
+            i += 1
+            continue
+        if c in ",." and numero and i + 1 < len(expr) and expr[i + 1].isdigit():
+            celdas.append("punto")      # coma decimal: punto 2
+            i += 1
+            continue
+        if c in "^_" or c == "√":
+            celdas += _EXPONENTE if c == "^" else _SUBINDICE if c == "_" else _RAIZ
+            grupo, compuesto, i = _grupo(expr, i + 1)
+            interior = expresion_a_celdas(grupo)
+            celdas += (_AUX_ABRE + interior + _AUX_CIERRA) if compuesto else interior
+            numero = bool(interior) and interior[-1] in DIGITOS
+            continue
+        numero_antes, numero = numero, False
+        if c in _GRIEGAS or c.lower() in _GRIEGAS:
+            base = _GRIEGAS[c.lower()]
+            celdas += [_PREFIJO_GRIEGA_MAYUSCULA if c.isupper() else _PREFIJO_GRIEGA, base]
+        elif c.isalpha():
+            letra = quitar_tilde(c).lower()
+            if letra in BRAILLE:
+                if c.isupper():
+                    celdas.append(_PREFIJO_MAYUSCULA)
+                elif numero_antes and letra in "abcdefghij":
+                    celdas.append(_PREFIJO_MINUSCULA)   # si no, se leería como cifra
+                celdas.append(letra)
+        elif c in SIGNOS_MATEMATICOS:
+            celdas += SIGNOS_MATEMATICOS[c]
+        i += 1
+    return celdas
+
+
+def texto_a_celdas(texto):
+    """Celdas Braille de un texto. Las expresiones matemáticas que tenga
+    van con el Código Matemático Unificado (ver arriba); el resto, como
+    texto (ver _texto_literal_a_celdas)."""
+    if not es_ecuacion(texto):
+        return _texto_literal_a_celdas(texto)
+    celdas = []
+    for matematico, tramo in _tramos(texto):
+        if celdas:
+            celdas.append(" ")
+        celdas += expresion_a_celdas(tramo) if matematico else _texto_literal_a_celdas(tramo)
     return celdas
 
 

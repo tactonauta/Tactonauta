@@ -526,6 +526,10 @@
   }
   .titulo-fila input.sin-posicion { border-style: dashed; }
   .simbolos { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+  .notas-lista { list-style: none; margin: 0.4rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .notas-lista li { display: flex; gap: 0.3rem; align-items: center; }
+  .notas-lista label { font-size: 0.85rem; font-weight: 600; color: #7a4fd0; min-width: 3.2rem; }
+  .notas-lista input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; font: inherit; font-size: 0.9rem; }
   .simbolos button {
     min-width: 1.9em; padding: 0.15em 0.35em; font: inherit; font-size: 0.85rem;
     background: #fffdf8; border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
@@ -1340,6 +1344,9 @@
           <button type="button" class="tool-btn" data-modo="titulo-y">
             <span class="dot cuadrado" style="background:#c040c0"></span> Agregar título eje Y
           </button>
+          <button type="button" class="tool-btn" data-modo="nota">
+            <span class="dot" style="background:#7a4fd0"></span> Agregar texto en la gráfica
+          </button>
           <button type="button" class="tool-btn" data-modo="borrar">
             <span class="dot" style="background:#8c2a09"></span> Borrar punto
           </button>
@@ -1383,6 +1390,10 @@
           <strong>Títulos:</strong> usa "Agregar título eje X/Y" y haz clic sobre el título en la
           imagen (o donde debería ir); luego escríbelo en "Títulos de los ejes". Los botones de
           símbolos insertan Ω, μ, λ, etc. Los marcadores se pueden arrastrar en "Mover puntos".
+          <strong>Textos en la gráfica:</strong> usa "Agregar texto en la gráfica" y haz clic en el
+          punto que quieres explicar (por ejemplo, donde se cruzan dos curvas); escribe el texto en
+          "Textos en la gráfica". En la lámina, un anillo en relieve marca el punto y el texto va al
+          lado en braille; las ecuaciones se escriben en braille matemático.
           <strong>Lámina 3D (derecha):</strong> es lo que se va a imprimir, en su tamaño real
           (22 × 22 cm). Haz clic en un texto, una curva o una entrada de la leyenda para cambiar
           su texto o quitarlo; arrastra los textos para moverlos (o usa las flechas del teclado,
@@ -1425,6 +1436,14 @@
           </div>
           <div class="simbolos" id="editor-simbolos" role="group" aria-label="Insertar símbolo en el título"></div>
           <p class="editor-ayuda">Los símbolos se insertan en la última casilla de título que usaste.</p>
+        </div>
+        <div class="editor-block">
+          <div class="editor-block-header">
+            <h3>Textos en la gráfica</h3>
+          </div>
+          <p class="editor-ayuda">Para agregar información en cualquier punto (por ejemplo, donde se cruzan dos curvas): elige «Agregar texto en la gráfica» y haz clic en ese punto. En la lámina, un anillo en relieve marca el punto y el texto va al lado, en braille. Las ecuaciones (y = 2x + 1, R² = 0,98) se escriben en braille matemático.</p>
+          <ul class="notas-lista" id="editor-notas"></ul>
+          <div class="simbolos" id="editor-simbolos-nota" role="group" aria-label="Insertar símbolo en el texto"></div>
         </div>
         <div class="editor-block editor-acciones">
           <button type="button" class="primary" id="editor-recalcular">Recalcular con mis correcciones</button>
@@ -2857,6 +2876,7 @@
       titulo: 'Título del gráfico', titulo_eje: 'Título de eje', numero_eje: 'Número del eje',
       categoria: 'Categoría del eje X', dato: 'Valor anotado junto a la curva', serie: 'Curva',
       leyenda: 'Entrada de la leyenda', eje: 'Eje', qr: 'Código QR',
+      nota: 'Texto agregado en la gráfica', nota_punto: 'Punto marcado por un texto agregado',
     };
 
     function el(tag, attrs, padre) {
@@ -2867,6 +2887,7 @@
     }
 
     function colorDe(id) {
+      if (/^nota_\d+/.test(id)) return '#7a4fd0';
       const m = /^(?:leyenda_)?serie_(\d+)$/.exec(id);
       return m ? COLORES_SERIE[Number(m[1]) % COLORES_SERIE.length] : '#6b6659';
     }
@@ -2970,6 +2991,12 @@
     const simbolosEl = document.getElementById('editor-simbolos');
     const COLOR_TITULO = { x: '#ff8c00', y: '#c040c0' };
     const SIMBOLOS = ['Ω', 'μ', 'λ', 'Δ', 'θ', 'α', 'β', 'π', 'σ', 'ω', 'φ', '°', '²', '³', '·', '±'];
+    // para los textos en la gráfica: los de las ecuaciones más usadas
+    const SIMBOLOS_NOTA = ['=', '≠', '≈', '≤', '≥', '±', '²', '³', '√', '×', '÷', '·', 'π', 'Ω', 'μ', 'α', 'β', 'Δ', 'σ', '°'];
+    const COLOR_NOTA = '#7a4fd0';
+    const notasEl = document.getElementById('editor-notas');
+    const simbolosNotaEl = document.getElementById('editor-simbolos-nota');
+    let ultimoInputNota = null;
     let ultimoInputTitulo = inputTituloX;
 
     // Misma paleta que _calibrar_y_exportar() en segmentador.py (colores BGR
@@ -2996,7 +3023,7 @@
 
     // Lámina: lo que el supervisor cambió en la vista previa (se guarda con
     // la figura y se aplica al generar el STL, al autorizar).
-    const ajustesVacios = () => ({ textos: {}, ocultar: [], mover: {} });
+    const ajustesVacios = () => ({ textos: {}, ocultar: [], mover: {}, notas: [] });
     let ajustes = ajustesVacios();
     let ajustesGuardados = ajustesVacios();
     let ajustesCambiados = false;
@@ -3052,8 +3079,10 @@
       pendienteRecalculo = false;
       ajustesGuardados = { ...ajustesVacios(), ...JSON.parse(JSON.stringify(figura.ajustes_lamina || {})) };
       ajustes = JSON.parse(JSON.stringify(ajustesGuardados));
+      if (!Array.isArray(ajustes.notas)) ajustes.notas = [];
       ajustesCambiados = false;
       seleccion = null;
+      pintarNotas();
       vista = null;
       laminaSvg.textContent = '';
       serieActiva = 0;
@@ -3206,6 +3235,36 @@
         return;
       }
       laminaSeleccion.appendChild(crearEl('p', null, 'En la lámina dice: «' + e.texto + '»'));
+      if (e.clase === 'nota' || e.clase === 'nota_punto') {
+        const id = e.id.replace(/_punto$/, '');
+        const nota = ajustes.notas.find(n => n.id === id);
+        if (nota) {
+          const fila = crearEl('div', 'fila');
+          const inp = document.createElement('input');
+          inp.type = 'text'; inp.id = 'lamina-texto'; inp.maxLength = 120; inp.value = nota.texto;
+          inp.setAttribute('aria-label', 'Texto agregado en la gráfica');
+          const aplicar = crearBtn('secondary small', 'Aplicar');
+          const hacer = () => { cambiarTextoNota(id, inp.value); pintarNotas(); };
+          aplicar.addEventListener('click', hacer);
+          inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); hacer(); } });
+          fila.append(inp, aplicar);
+          laminaSeleccion.appendChild(fila);
+          const acciones = crearEl('div', 'acciones');
+          if (e.movido) {
+            const volver = crearBtn('secondary small', 'Volver a su lugar');
+            volver.addEventListener('click', () => cambiarAjustes(a => { delete a.mover[id]; }));
+            acciones.appendChild(volver);
+          }
+          const quitar = crearBtn('danger small', 'Quitar este texto');
+          quitar.addEventListener('click', () => quitarNota(id));
+          acciones.appendChild(quitar);
+          laminaSeleccion.appendChild(acciones);
+          laminaSeleccion.appendChild(crearEl('p', 'editor-ayuda',
+            'Para cambiar el punto que marca, arrastra su anillo en la pizarra de la izquierda. ' +
+            'El texto se puede arrastrar acá para acomodarlo.'));
+        }
+        return;
+      }
       if (e.editable && e.clave_edicion) {
         const fila = crearEl('div', 'fila');
         const inp = document.createElement('input');
@@ -3583,6 +3642,23 @@
       });
       if (estado.tituloX) dibujarTitulo(ctx, estado.tituloX, COLOR_TITULO.x, 'X');
       if (estado.tituloY) dibujarTitulo(ctx, estado.tituloY, COLOR_TITULO.y, 'Y');
+      (ajustes.notas || []).forEach((n, i) => dibujarNota(ctx, n, i + 1));
+    }
+
+    // Texto agregado en la gráfica: un anillo (como el de la lámina) y su número
+    function dibujarNota(ctx, n, numero) {
+      const r = radioPunto() * 1.3;
+      ctx.lineWidth = 3; ctx.strokeStyle = COLOR_NOTA;
+      ctx.beginPath(); ctx.arc(n.px, n.py, r, 0, Math.PI * 2); ctx.stroke();
+      const etiqueta = 'T' + numero + (n.texto ? ': ' + n.texto : '');
+      ctx.font = `bold ${Math.round(r * 1.6)}px sans-serif`;
+      ctx.textBaseline = 'middle';
+      const ancho = ctx.measureText(etiqueta).width;
+      const x = Math.min(n.px + r * 1.6, estado.ancho - ancho - 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillRect(x - 3, n.py - r, ancho + 6, r * 2);
+      ctx.fillStyle = COLOR_NOTA;
+      ctx.fillText(etiqueta, x, n.py);
     }
 
     function cuadrado(ctx, x, y, r, color) {
@@ -3640,6 +3716,9 @@
       [['x', estado.tituloX], ['y', estado.tituloY]].forEach(([eje, t]) => {
         if (t) lista.push({ x: t.px, y: t.py, set: (x, y) => { t.px = x; t.py = y; }, esTitulo: eje });
       });
+      (ajustes.notas || []).forEach(n => {
+        lista.push({ x: n.px, y: n.py, set: (x, y) => { n.px = Math.round(x); n.py = Math.round(y); }, esNota: n.id });
+      });
       return lista;
     }
 
@@ -3684,8 +3763,14 @@
         seleccionarModo('mover');
         return;
       }
+      if (modo === 'nota') {
+        agregarNota(x, y);
+        seleccionarModo('mover');
+        return;
+      }
       if (modo === 'borrar') {
         const cercano = puntoMasCercano(x, y);
+        if (cercano && cercano.esNota) { quitarNota(cercano.esNota); return; }
         if (cercano) {
           if (cercano.esCurva) {
             cercano.serie.puntos = cercano.serie.puntos.filter(p => p !== cercano.ref);
@@ -3719,10 +3804,99 @@
       ev.preventDefault();
       const { x, y } = coordsDesdeEvento(ev);
       arrastrando.set(Math.max(0, Math.min(estado.ancho, x)), Math.max(0, Math.min(estado.alto, y)));
+      if (arrastrando.esNota) { arrastrando.movida = true; dibujar(); return; }
       marcarPendiente(); dibujar();
     }
 
-    function terminarArrastre() { arrastrando = null; }
+    function terminarArrastre() {
+      const nota = arrastrando && arrastrando.esNota && arrastrando.movida;
+      arrastrando = null;
+      if (nota) cambiarAjustes(() => {});
+    }
+
+    // ---------- Textos agregados en la gráfica (notas) ----------
+    // Viven en los ajustes de la lámina (ajustes.notas), no en la lectura:
+    // agregarlos o moverlos no obliga a recalcular. Posición en píxeles de
+    // la imagen original (el generador la lleva al mismo punto de la placa).
+    function siguienteIdNota() {
+      const usados = (ajustes.notas || []).map(n => Number(n.id.split('_')[1]) || 0);
+      return 'nota_' + (Math.max(0, ...usados) + 1);
+    }
+
+    function agregarNota(x, y) {
+      const nota = { id: siguienteIdNota(), texto: '', px: Math.round(x), py: Math.round(y) };
+      ajustes.notas.push(nota);
+      ajustesCambiados = true;
+      actualizarConfirmar();
+      dibujar();
+      pintarNotas();
+      const inp = document.getElementById('nota-' + nota.id);
+      if (inp) { inp.focus(); inp.scrollIntoView({ block: 'nearest' }); }
+      statusEl.className = 'status';
+      statusEl.textContent = 'Escribe el texto en «Textos en la gráfica» y presiona Enter.';
+    }
+
+    function quitarNota(id) {
+      if (seleccion === id) seleccion = null;
+      cambiarAjustes(a => {
+        a.notas = a.notas.filter(n => n.id !== id);
+        delete a.mover[id];
+        a.ocultar = a.ocultar.filter(o => o !== id);
+      });
+      dibujar();
+      pintarNotas();
+    }
+
+    function cambiarTextoNota(id, texto) {
+      const nota = ajustes.notas.find(n => n.id === id);
+      if (!nota || nota.texto === texto.trim()) return;
+      cambiarAjustes(() => { nota.texto = texto.trim(); });
+      dibujar();
+    }
+
+    function pintarNotas() {
+      notasEl.textContent = '';
+      (ajustes.notas || []).forEach((n, i) => {
+        const li = crearEl('li');
+        const etiqueta = crearEl('label', null, 'T' + (i + 1));
+        etiqueta.htmlFor = 'nota-' + n.id;
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = 'nota-' + n.id;
+        inp.maxLength = 120;
+        inp.value = n.texto;
+        inp.placeholder = 'Texto para este punto';
+        inp.setAttribute('aria-label', 'Texto agregado en la gráfica, número ' + (i + 1));
+        inp.addEventListener('focus', () => { ultimoInputNota = inp; });
+        inp.addEventListener('change', () => cambiarTextoNota(n.id, inp.value));
+        inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); cambiarTextoNota(n.id, inp.value); } });
+        const quitar = crearBtn('mini-del', '✕', 'Quitar el texto ' + (i + 1));
+        quitar.title = 'Quitar este texto';
+        quitar.addEventListener('click', () => quitarNota(n.id));
+        li.append(etiqueta, inp, quitar);
+        notasEl.appendChild(li);
+      });
+      simbolosNotaEl.hidden = !(ajustes.notas || []).length;
+    }
+
+    SIMBOLOS_NOTA.forEach(simbolo => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = simbolo;
+      b.title = `Insertar ${simbolo}`;
+      b.setAttribute('aria-label', `Insertar ${simbolo} en el texto`);
+      b.addEventListener('mousedown', (ev) => ev.preventDefault());
+      b.addEventListener('click', () => {
+        const inp = ultimoInputNota && document.body.contains(ultimoInputNota) ? ultimoInputNota : notasEl.querySelector('input');
+        if (!inp) return;
+        const ini = inp.selectionStart ?? inp.value.length;
+        const fin = inp.selectionEnd ?? inp.value.length;
+        inp.value = inp.value.slice(0, ini) + simbolo + inp.value.slice(fin);
+        inp.focus();
+        inp.setSelectionRange(ini + simbolo.length, ini + simbolo.length);
+      });
+      simbolosNotaEl.appendChild(b);
+    });
 
     canvas.addEventListener('mousedown', iniciarArrastre);
     canvas.addEventListener('mousemove', moverArrastre);
@@ -3767,6 +3941,8 @@
       pendienteRecalculo = false;
       ajustes = JSON.parse(JSON.stringify(ajustesGuardados));
       ajustesCambiados = false;
+      pintarNotas();
+      dibujar();
       actualizarConfirmar();
       refrescarVista();
       statusEl.className = 'status'; statusEl.textContent = 'Cambios deshechos.';
