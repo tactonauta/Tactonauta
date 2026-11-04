@@ -8,6 +8,8 @@ import sys
 import cv2
 import fitz  # PyMuPDF
 import numpy as np
+
+import clasificador_figuras
 from PIL import Image
 
 from classify_charts import es_grafico_lineal, es_figura_compuesta, clasificar_geometria, es_dispersion
@@ -599,6 +601,44 @@ def _agrupar_rects(rects, umbral=15):
     return grupos
 
 
+# Un gráfico tiene poco texto (números de los ejes, títulos): en los PDFs de
+# prueba, a lo sumo el 8,5 % de su recuadro está cubierto por palabras. Una
+# diapositiva entera (fondo y barra de título dibujados), un recuadro de
+# "Solución" de LaTeX o un recuadro de fondo de un libro también son dibujos
+# vectoriales, pero con 13-60 % de texto: antes se recortaban enteros y, por
+# sus bordes finos, pasaban como "gráfico de líneas". En esos casos se busca
+# el gráfico ADENTRO, sin los trazos que cruzan toda la región (fondo, marco,
+# rayas de lado a lado).
+DENSIDAD_TEXTO_MAX = 0.11
+DECORACION_FRACCION = 0.8      # trazo que ocupa >= 80 % del ancho o del alto de la región
+TRAZOS_MIN_GRAFICO = 6
+
+
+def _densidad_texto(page, rect):
+    """Parte del recuadro cubierta por palabras del PDF (0 a 1)."""
+    palabras = page.get_text("words", clip=rect)
+    area = sum((w[2] - w[0]) * (w[3] - w[1]) for w in palabras)
+    return area / max(1.0, rect.width * rect.height)
+
+
+def _graficos_dentro(page, region, rects):
+    """Sub-regiones con forma de gráfico dentro de una región con mucho texto
+    (ver DENSIDAD_TEXTO_MAX): los trazos de adentro, sin la decoración,
+    agrupados de nuevo; quedan los grupos con varios trazos y poco texto."""
+    internos = [r for r in rects if region.contains(r)
+                and r.width < DECORACION_FRACCION * region.width and r.height < DECORACION_FRACCION * region.height]
+    encontrados = []
+    for g in _agrupar_rects(internos, umbral=15):
+        if g.width < 80 or g.height < 60:
+            continue
+        if sum(1 for r in internos if g.contains(r)) < TRAZOS_MIN_GRAFICO:
+            continue
+        if _densidad_texto(page, g) > DENSIDAD_TEXTO_MAX:
+            continue
+        encontrados.append(g)
+    return encontrados
+
+
 def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bloques=()):
     """Detecta gráficos dibujados directamente con vectores (matplotlib/R/LaTeX),
     agrupando los trazos sueltos (líneas, ejes, leyenda) en bloques y renderizándolos
@@ -608,12 +648,17 @@ def extraer_dibujos_vectoriales(page, page_num, output_dir, contador_inicial, bl
     if not rects:
         return extraidas, contador_inicial
 
-    grupos = _agrupar_rects(rects, umbral=15)
+    grupos = []
+    for g in _agrupar_rects(rects, umbral=15):
+        if g.width < 80 or g.height < 60:  # descarta subrayados/viñetas sueltas
+            continue
+        if _densidad_texto(page, g) > DENSIDAD_TEXTO_MAX:
+            grupos += _graficos_dentro(page, g, rects)     # el gráfico, no el recuadro de texto
+        else:
+            grupos.append(g)
 
     contador = contador_inicial
     for g in grupos:
-        if g.width < 80 or g.height < 60:  # descarta subrayados/viñetas sueltas
-            continue
         contador += 1
         pad = 3
         g = _ampliar_con_texto(page, g)
@@ -660,16 +705,32 @@ def _pixmap_sobre_blanco(doc, xref):
     smask = doc.extract_image(xref).get("smask") or 0
     if smask and not pix.alpha:
         try:
-            pix = fitz.Pixmap(pix, fitz.Pixmap(doc, smask))
-        except (RuntimeError, ValueError):
+            mascara = fitz.Pixmap(doc, smask)
+            if (mascara.width, mascara.height) != (pix.width, pix.height):
+                # Una máscara de otro tamaño que la imagen (Sesion_10_Planeamiento_
+                # Financiero.pdf) hacía fallar PyMuPDF con "color and mask pixmaps
+                # must be the same size" y se rechazaba el PDF entero: se la
+                # lleva al tamaño de la imagen.
+                gris = np.frombuffer(mascara.samples, np.uint8).reshape(mascara.height, mascara.width, mascara.n)[:, :, 0]
+                gris = cv2.resize(gris, (pix.width, pix.height), interpolation=cv2.INTER_LINEAR)
+                mascara = fitz.Pixmap(fitz.csGRAY, pix.width, pix.height, np.ascontiguousarray(gris).tobytes(), False)
+            pix = fitz.Pixmap(pix, mascara)
+        except Exception:
             pass                                    # máscara ilegible: se sigue sin ella
     if pix.alpha:
+        # Mezcla con el blanco en enteros de 16 bits, canal por canal: en
+        # decimales (float32) una imagen de 2000x1125 ocupaba ~50 MB extra
+        # mientras se mezclaba, y un PDF de diapositivas llegaba al límite de
+        # memoria del servidor.
         muestras = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-        color = muestras[:, :, :pix.n - 1].astype(np.float32)
-        alfa = muestras[:, :, pix.n - 1:].astype(np.float32) / 255.0
-        mezcla = (color * alfa + 255.0 * (1.0 - alfa)).round().astype(np.uint8)
+        alfa = muestras[:, :, pix.n - 1].astype(np.uint16)
+        blanco = (255 - alfa) * 255
+        mezcla = np.empty((pix.height, pix.width, pix.n - 1), np.uint8)
+        for c in range(pix.n - 1):
+            mezcla[:, :, c] = ((muestras[:, :, c] * alfa + blanco + 127) // 255).astype(np.uint8)
+        del muestras, alfa, blanco
         espacio = fitz.csRGB if pix.n - 1 == 3 else fitz.csGRAY
-        pix = fitz.Pixmap(espacio, pix.width, pix.height, np.ascontiguousarray(mezcla).tobytes(), False)
+        pix = fitz.Pixmap(espacio, pix.width, pix.height, mezcla.tobytes(), False)
     return pix
 
 
@@ -709,11 +770,16 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
     doc = fitz.open(pdf_path)
     extraidas = []
     bloques = bloques_documento(doc)
-    copia = fitz.open("pdf", doc.tobytes())    # para medir qué imágenes se ven
-    visibilidad = {}   # xref -> fracción visible: delete_image() la borra en TODAS
-                       # las páginas, así que una imagen repetida se mide una vez
+    # Copia del PDF para medir qué imágenes se ven (_fraccion_visible): se
+    # abre de nuevo en cada página con imágenes. Una sola copia para todo el
+    # documento acumulaba memoria con cada imagen borrada (+170 MB en un PDF
+    # de 40 diapositivas). Las imágenes de una página se siguen midiendo en
+    # orden sobre la misma copia, como antes.
+    bytes_pdf = doc.tobytes()
+    visibilidad = {}   # xref -> fracción visible: una imagen repetida se mide una vez
 
     for page_num, page in enumerate(doc):
+        copia = None
         # 1. Imágenes raster embebidas (fotos/capturas pegadas, ej. exportadas de Excel)
         for i, im in enumerate(page.get_image_info(xrefs=True)):
             xref = im["xref"]
@@ -726,6 +792,8 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
                 rect = fitz.Rect(im["bbox"])
                 if rect.width >= 3 and rect.height >= 3 and rect in page.rect:
                     if xref not in visibilidad:
+                        if copia is None:
+                            copia = fitz.open("pdf", bytes_pdf)
                         visibilidad[xref] = _fraccion_visible(copia[page_num], xref, rect, pix)
                     visible = visibilidad[xref]
                     if visible is not None and visible < VISIBLE_MIN:
@@ -751,6 +819,15 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
         # 2. Dibujos vectoriales (gráficos hechos con matplotlib/R/LaTeX directo en el PDF)
         vectoriales, _ = extraer_dibujos_vectoriales(page, page_num, output_dir, 0, bloques)
         extraidas.extend(vectoriales)
+
+        # PyMuPDF guarda en un caché (hasta 256 MB) las imágenes que ya
+        # decodificó. En un PDF de diapositivas con 108 imágenes de 2000x1125
+        # (Sesion_10_Planeamiento_Financiero.pdf) el análisis llegaba a 650 MB
+        # y el servidor tiene 512: cada página se procesa una sola vez, así que
+        # el caché se vacía al terminarla.
+        if copia is not None:
+            copia.close()
+        fitz.TOOLS.store_shrink(100)
 
     documento = datos_documento(doc)
     for r in extraidas:
@@ -805,12 +882,22 @@ def detectar_graficos(pdf_path, output_dir):
 
         candidatos.append(r)
 
+    # Tipo de cada figura: el modelo de Docling (ver clasificador_figuras), o
+    # la regla geométrica si el modelo no está disponible. Una imagen con
+    # varios paneles va aparte ("compuesta"): el segmentador lee un gráfico.
+    modelo = clasificador_figuras.clasificar([r["file_path"] for r in candidatos])
     resultados = []
-    for r in candidatos:
+    for k, r in enumerate(candidatos):
         if es_figura_compuesta(r["file_path"]):
             r["tipo"] = "compuesta"
             r["confianza"] = 0.0
             r["es_lineal"] = False
+        elif modelo is not None:
+            etiqueta, prob = modelo[k]
+            r["tipo"] = clasificador_figuras.TIPOS.get(etiqueta, "otro")
+            r["tipo_modelo"] = etiqueta
+            r["confianza"] = round(prob, 2)
+            r["es_lineal"] = r["tipo"] == "linea"
         else:
             tipo, extent, _ = clasificar_geometria(r["file_path"])
             if tipo == "linea" and es_dispersion(r["file_path"]):
