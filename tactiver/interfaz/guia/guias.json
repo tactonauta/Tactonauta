@@ -29,7 +29,7 @@
       "id": "elegir-graficos",
       "titulo": "Cómo elegir los gráficos y enviar tu solicitud",
       "detalle": "marcar, desmarcar y enviar a tu supervisor",
-      "texto": "Cuando Puntito termina de analizar tu PDF, pasas al paso 3, Gráficos de tu documento. Primero te dice cuántas figuras con gráficos de líneas encontró. Luego hay una lista de casillas, una por cada figura. Cada casilla dice su título o su pie de figura y en qué página está; debajo, un poco de lo que dice el documento sobre ella. Todas vienen marcadas: si alguna no la necesitas, desmárcala con la barra espaciadora. Al final de la lista, presiona Enviar a mi supervisor. Puntito te lo confirma con la pantalla Solicitud enviada, te dice el número de tu solicitud y las figuras que enviaste. Desde ahí puedes presionar Ver estado de mis solicitudes, o Enviar otra solicitud."
+      "texto": "Cuando Puntito termina de analizar tu PDF, pasas al paso 3, Gráficos de tu documento. Primero te dice cuántas figuras con gráficos de líneas o de barras encontró. Luego hay una lista de casillas, una por cada figura. Cada casilla dice su título o su pie de figura y en qué página está; debajo, un poco de lo que dice el documento sobre ella. Todas vienen marcadas: si alguna no la necesitas, desmárcala con la barra espaciadora. Al final de la lista, presiona Enviar a mi supervisor. Puntito te lo confirma con la pantalla Solicitud enviada, te dice el número de tu solicitud y las figuras que enviaste. Desde ahí puedes presionar Ver estado de mis solicitudes, o Enviar otra solicitud."
     },
     {
       "id": "estado",
@@ -46,8 +46,8 @@
     {
       "id": "leer-lamina",
       "titulo": "Cómo leer el gráfico de la lámina",
-      "detalle": "ejes, números, curvas, letras y anillos",
-      "texto": "El gráfico tiene dos ejes: el horizontal, abajo, que lleva la letra X, y el vertical, a la izquierda, que lleva la letra Y. Los números de cada eje están en braille, junto a sus marcas. Las curvas son líneas en relieve; si hay más de una, cada una tiene su propia textura: en celdas, rayada o punteada. Cuando un número o un texto no entra en su lugar, en la lámina va una letra, y el modo exploración te dice qué significa. Si encuentras un anillo en relieve, es un punto que tu supervisor quiso destacar: el texto de al lado lo explica. Las ecuaciones están escritas en braille matemático. En la leyenda de abajo, X e Y te dicen qué es cada eje, y Leyenda 1, Leyenda 2 y Leyenda 3 te muestran la textura de cada curva."
+      "detalle": "ejes, números, curvas, barras, letras y anillos",
+      "texto": "El gráfico tiene dos ejes: el horizontal, abajo, que lleva la letra X, y el vertical, a la izquierda, que lleva la letra Y. Los números de cada eje están en braille, junto a sus marcas. Las curvas son líneas en relieve; si hay más de una, cada una tiene su propia textura: en celdas, rayada o punteada. En un gráfico de barras, cada barra es un rectángulo en relieve que sube desde el eje horizontal, con su valor en braille encima cuando entra; si hay varias series, sus barras se distinguen al tacto: lisas, solo con el contorno, o con puntos. Cuando un número o un texto no entra en su lugar, en la lámina va una letra, y el modo exploración te dice qué significa. Si encuentras un anillo en relieve, es un punto que tu supervisor quiso destacar: el texto de al lado lo explica. Las ecuaciones están escritas en braille matemático. En la leyenda de abajo, X e Y te dicen qué es cada eje, y Leyenda 1, Leyenda 2 y Leyenda 3 te muestran la textura de cada curva."
     },
     {
       "id": "escanear-qr",

@@ -1,6 +1,6 @@
 # Tactonauta — servidor
 
-Convierte las gráficas de líneas de un PDF en láminas táctiles para
+Convierte las gráficas de líneas y de barras de un PDF en láminas táctiles para
 imprimir en 3D (STL), con texto en Braille español y una narración para
 Hand_Tracking. Sirve la interfaz web (`tactiver/interfaz/tactiverso (10).html`)
 y la API que usa.
@@ -67,6 +67,7 @@ pipeline_rapido.py  extrae las figuras del PDF (y su texto real)
 clasificador_figuras.py  qué tipo de figura es cada una (modelo de Docling, modelos/)
 classify_charts.py  figuras con varios paneles; regla de respaldo si no está el modelo
 segmentador.py      lee la gráfica: ejes, escala, curvas, títulos, leyenda
+lector_barras.py    lee un gráfico de barras: barras, series, categorías y valores
 generador_stl.py    arma la lámina: distribución, Braille, texturas, STL
 braille.py          Braille español (tabla, mayúsculas, letras A/a para la leyenda)
 narracion.py        descripción narrada + exportación para Hand_Tracking

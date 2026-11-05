@@ -33,7 +33,7 @@ _MEDIA = np.array([0.485, 0.456, 0.406], np.float32)
 _DESVIO = np.array([0.47853944, 0.4732864, 0.47434163], np.float32)
 
 # Lo que el resto del sistema entiende por "tipo"
-TIPOS = {"line_chart": "linea", "bar_chart": "barra_o_torta", "pie_chart": "barra_o_torta",
+TIPOS = {"line_chart": "linea", "bar_chart": "barras", "pie_chart": "torta",
          "scatter_plot": "dispersion", "box_plot": "otro", "table": "tabla"}
 
 

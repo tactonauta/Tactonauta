@@ -234,8 +234,52 @@ def _forma(vals, rango_y, eje, fmt_y):
 # ------------------------------------------------------------------
 # Descripción en texto
 # ------------------------------------------------------------------
+MAX_BARRAS_NARRADAS = 12     # más que eso, solo la mayor y la menor
+
+
+def _formato_barras(valores):
+    """Los valores de las barras con los decimales que traen (9,6 no es "10")."""
+    vals = [v for v in valores if v is not None and math.isfinite(v)]
+    dec = 0
+    while dec < 2 and any(abs(v * 10 ** dec - round(v * 10 ** dec)) > 1e-6 for v in vals):
+        dec += 1
+    return lambda v: _fmt(v, dec)
+
+
+def _plural_color(color):
+    """"roja" -> "rojas", "azul" -> "azules"."""
+    return color + ("es" if color.endswith(("l", "r", "n")) else "s")
+
+
+def _frases_barras(series, categorias, fmt, texturas=None):
+    """Lo que muestra un gráfico de barras: cada valor (o, con muchas, la
+    mayor y la menor) por serie. `series`: [[(categoría, valor)]]."""
+    frases = []
+    varias = len(series) > 1
+    cat = lambda i: categorias[i] if 0 <= i < len(categorias) else f"categoría {i + 1}"
+    for k, s in enumerate(series):
+        vals = [(int(round(x)), y) for x, y in s if x is not None and y is not None]
+        if not vals:
+            continue
+        alta = max(vals, key=lambda v: v[1])
+        baja = min(vals, key=lambda v: v[1])
+        prefijo = ""
+        if varias:
+            prefijo = f"Serie {k + 1}" + (f", textura {texturas[k]}" if texturas and k < len(texturas) and texturas[k] else "") + ": "
+        if len(vals) <= MAX_BARRAS_NARRADAS:
+            frases.append(prefijo + "; ".join(f"{cat(i)}, {fmt(v)}" for i, v in sorted(vals)) + ".")
+        elif prefijo:
+            frases.append(prefijo.rstrip(": ") + ".")
+        if len(vals) > 1:
+            frases.append(f"{'En esta serie, l' if varias else 'L'}a barra más alta es {cat(alta[0])}, con "
+                          f"{fmt(alta[1])}, y la más baja, {cat(baja[0])}, con {fmt(baja[1])}.")
+    return frases
+
+
 def describir_grafica(datos, pie_figura=None, diseno=None):
     """Párrafo en español que describe la gráfica, listo para narrar."""
+    if datos.get("tipo_grafica") == "barras":
+        return _describir_barras(datos, pie_figura, diseno)
     textos = datos.get("textos") or {}
     series = [s for s in datos.get("series") or [] if s.get("puntos")]
     rx, ry = _rango_ejes(datos)
@@ -316,6 +360,44 @@ def describir_grafica(datos, pie_figura=None, diseno=None):
     if diseno:
         frases.append("En la lámina, el eje horizontal lleva la letra X y el vertical la letra Y; "
                       "la leyenda de abajo dice qué es cada uno.")
+    if (diseno or {}).get("qr"):
+        frases.append(TEXTO_QR)
+    return " ".join(frases)
+
+
+def _describir_barras(datos, pie_figura=None, diseno=None):
+    """Descripción narrada de un gráfico de barras (ver lector_barras)."""
+    textos = datos.get("textos") or {}
+    cats = _categorias(textos)
+    series = [s for s in datos.get("series") or [] if s.get("puntos")]
+    valores = [[(p.get("valor_x"), p.get("valor_y")) for p in s["puntos"]] for s in series]
+    fmt = _formato_barras([y for v in valores for _, y in v])
+    frases = []
+    pie = (pie_figura or "").strip()
+    if pie:
+        frases.append(pie if pie.endswith((".", "!", "?")) else pie + ".")
+    titulo = (textos.get("titulo") or "").strip()
+    tipo = (f"Gráfico de barras con {len(cats)} categorías" if len(series) <= 1
+            else f"Gráfico de barras con {len(cats)} categorías y {len(series)} series")
+    frases.append(f"{tipo}, titulado «{titulo}»." if titulo else f"{tipo}.")
+    tit_x, tit_y = (textos.get("titulo_eje_x") or "").strip(), (textos.get("titulo_eje_y") or "").strip()
+    if tit_x:
+        frases.append(f"Las categorías son {tit_x}.")
+    if tit_y:
+        frases.append(f"El eje vertical mide {tit_y}.")
+    texturas = [s["textura"] for s in (diseno or {}).get("series") or []]
+    if len(series) > 1:
+        frases.append("Las series son: " + "; ".join(
+            nombre_de_serie(s.get("nombre"), i) + (f", textura {texturas[i]}" if i < len(texturas) else "")
+            for i, s in enumerate(series)) + ".")
+    frases += _frases_barras(valores, cats, fmt, texturas)
+    abreviaturas = (diseno or {}).get("abreviaturas") or []
+    if abreviaturas:
+        frases.append("En la lámina, algunos nombres van con una letra: "
+                      + ", ".join(f"{a['identificador']} es {a['texto']}" for a in abreviaturas) + ".")
+    if diseno:
+        frases.append("En la lámina, cada barra lleva su valor en Braille encima, cuando entra; "
+                      "el eje vertical tiene la escala y el horizontal, las categorías.")
     if (diseno or {}).get("qr"):
         frases.append(TEXTO_QR)
     return " ".join(frases)
@@ -662,7 +744,8 @@ def leyenda_lamina(datos, diseno):
         frases.append(f"{e['letra']}: eje {e['eje']}" + (f", {e['texto']}." if e["texto"] else "."))
     if len(series) > 1:
         for s in series:
-            color = f", línea {s['color']} en el original" if s["color"] else ""
+            color = ((f", barras {_plural_color(s['color'])} en el original" if diseno.get("tipo_grafica") == "barras"
+                      else f", línea {s['color']} en el original") if s["color"] else "")
             frases.append(f"{s['etiqueta']}, textura {s['textura']}: {s['nombre']}{color}.")
     for l in letras:
         frases.append(f"{l['letra']}: {l['texto']}.")
@@ -723,6 +806,7 @@ def exportar_datos_lamina(datos, diseno, descripcion, exportacion, figura=None):
         # lo que se escucha en el modo exploración (ver leyenda_lamina)
         "leyenda": leyenda_lamina(datos, diseno),
         "grafica": {
+            "tipo": diseno.get("tipo_grafica") or "lineas",
             "titulo": (textos.get("titulo") or "").strip(),
             "calibrada": bool(dom.get("calibrado")),
             "eje_x": {**_eje_datos(datos, "x", rx), "categorias": _categorias(textos)},
@@ -911,19 +995,24 @@ def _audio_eje(info, letra):
 
 def _audio_leyenda(d):
     ley, graf = d.get("leyenda") or {}, d.get("grafica") or {}
+    barras = graf.get("tipo") == "barras"
     frases = [_audio_eje(graf.get("eje_x") or {}, "X"), _audio_eje(graf.get("eje_y") or {}, "Y")]
     series = ley.get("series") or []
     if len(series) == 1:
         s = series[0]
         nombre = _nombre_curva(s.get("nombre"))
-        frases.append("Hay una sola curva" + (f", «{nombre}»" if nombre else "")
-                      + (f"; en el original es una línea {s['color']}" if s.get("color") else "") + ".")
+        frases.append(("Hay una sola serie de barras" if barras else "Hay una sola curva")
+                      + (f", «{nombre}»" if nombre else "")
+                      + ((f"; en el original son barras {_plural_color(s['color'])}" if barras
+                          else f"; en el original es una línea {s['color']}") if s.get("color") else "") + ".")
     elif series:
-        frases.append(f"Hay {len(series)} curvas, cada una con su textura.")
+        frases.append(f"Hay {len(series)} " + ("series de barras" if barras else "curvas")
+                      + ", cada una con su textura.")
         for s in series:
             nombre = _nombre_curva(s.get("nombre")) or "sin nombre legible"
             frases.append(f"{s['etiqueta']}, textura {s['textura']}: {nombre}"
-                          + (f", línea {s['color']} en el original" if s.get("color") else "") + ".")
+                          + ((f", barras {_plural_color(s['color'])} en el original" if barras
+                              else f", línea {s['color']} en el original") if s.get("color") else "") + ".")
     grupos = {}
     for l in ley.get("letras") or []:
         grupos.setdefault(l.get("donde") or "", []).append(l)
@@ -941,6 +1030,12 @@ def _audio_leyenda(d):
 
 def _audio_que_muestra(d):
     graf = d.get("grafica") or {}
+    if graf.get("tipo") == "barras":
+        valores = [s.get("valores") or [] for s in graf.get("series") or []]
+        fmt = _formato_barras([y for v in valores for _, y in v])
+        texturas = [s.get("textura") for s in graf.get("series") or []]
+        frases = _frases_barras(valores, (graf.get("eje_x") or {}).get("categorias") or [], fmt, texturas)
+        return " ".join(frases) or "No se pudieron leer los valores de las barras."
     ex, ey = graf.get("eje_x") or {}, graf.get("eje_y") or {}
     log_y = ey.get("escala") == "log"
     rango_y = (ey["max"] - ey["min"]) if ey.get("max") is not None and ey.get("min") is not None else None

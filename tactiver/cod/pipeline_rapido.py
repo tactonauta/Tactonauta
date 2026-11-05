@@ -892,12 +892,14 @@ def detectar_graficos(pdf_path, output_dir):
             r["tipo"] = "compuesta"
             r["confianza"] = 0.0
             r["es_lineal"] = False
+            r["es_barras"] = False
         elif modelo is not None:
             etiqueta, prob = modelo[k]
             r["tipo"] = clasificador_figuras.TIPOS.get(etiqueta, "otro")
             r["tipo_modelo"] = etiqueta
             r["confianza"] = round(prob, 2)
             r["es_lineal"] = r["tipo"] == "linea"
+            r["es_barras"] = r["tipo"] == "barras"
         else:
             tipo, extent, _ = clasificar_geometria(r["file_path"])
             if tipo == "linea" and es_dispersion(r["file_path"]):
@@ -906,6 +908,7 @@ def detectar_graficos(pdf_path, output_dir):
             r["tipo"] = tipo
             r["confianza"] = confianza
             r["es_lineal"] = tipo == "linea"
+            r["es_barras"] = False   # la regla de respaldo no distingue barras de tortas
         resultados.append(r)
 
     resultados = _sin_duplicados(resultados)

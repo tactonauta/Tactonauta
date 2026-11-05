@@ -526,6 +526,8 @@
   }
   .titulo-fila input.sin-posicion { border-style: dashed; }
   .simbolos { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+  #editor-overlay.barras .solo-lineas { display: none !important; }
+  #editor-overlay:not(.barras) .solo-barras { display: none !important; }
   .notas-lista { list-style: none; margin: 0.4rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .notas-lista li { display: flex; gap: 0.3rem; align-items: center; }
   .notas-lista label { font-size: 0.85rem; font-weight: 600; color: #7a4fd0; min-width: 3.2rem; }
@@ -1009,7 +1011,7 @@
 
     <ol class="instructions">
       <li>Sube el PDF que tiene los gráficos.</li>
-      <li>Puntito encuentra los gráficos de líneas y te dice de qué trata cada uno.</li>
+      <li>Puntito encuentra los gráficos de líneas y de barras y te dice de qué trata cada uno.</li>
       <li>Eliges cuáles enviar: vienen todos marcados, desmarca los que no necesites.</li>
       <li>Se envía una solicitud a tu supervisor, que la revisa y la manda a imprimir en relieve.</li>
     </ol>
@@ -1025,7 +1027,7 @@
   <section class="step" id="step-2" aria-labelledby="step-2-heading">
     <span class="step-eyebrow">Paso 2 de 3</span>
     <h2 id="step-2-heading" tabindex="-1">Sube tu documento</h2>
-    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
+    <p class="lede">Elige el PDF. En cuanto lo elijas, Puntito busca los gráficos de líneas y de barras y te los muestra para que elijas cuáles enviar a tu supervisor. Tu lector de pantalla te irá avisando del avance.</p>
 
     <label for="pdf-input" class="dropzone" id="dropzone" tabindex="0">
       <span class="icon" aria-hidden="true">
@@ -1055,14 +1057,14 @@
 
     <div class="progress-line" id="progress-line">
       <span class="spinner" aria-hidden="true"></span>
-      <span id="progress-text">Buscando gráficos de líneas en el documento…</span>
+      <span id="progress-text">Buscando gráficos de líneas y de barras en el documento…</span>
     </div>
 
     <p class="status" role="status" aria-live="polite" id="detect-status"></p>
 
     <form id="form-eleccion" hidden>
       <fieldset class="picks">
-        <legend>Gráficos de líneas encontrados. Marca los que quieres enviar a tu supervisor.</legend>
+        <legend>Gráficos de líneas y de barras encontrados. Marca los que quieres enviar a tu supervisor.</legend>
         <ul class="eleccion-lista" id="eleccion-lista"></ul>
       </fieldset>
       <div class="actions">
@@ -1330,29 +1332,30 @@
           <button type="button" class="tool-btn active" data-modo="mover">
             <span class="dot" style="background:#6b6659"></span> Mover puntos
           </button>
-          <button type="button" class="tool-btn" data-modo="agregar">
+          <button type="button" class="tool-btn solo-lineas" data-modo="agregar">
             <span class="dot" style="background:#2e8b57"></span> Agregar punto a la curva
           </button>
-          <button type="button" class="tool-btn" data-modo="etiqueta-x">
+          <button type="button" class="tool-btn solo-lineas" data-modo="etiqueta-x">
             <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje X
           </button>
-          <button type="button" class="tool-btn" data-modo="etiqueta-y">
+          <button type="button" class="tool-btn solo-lineas" data-modo="etiqueta-y">
             <span class="dot cuadrado" style="background:#e8c400"></span> Agregar etiqueta eje Y
           </button>
-          <button type="button" class="tool-btn" data-modo="titulo-x">
+          <button type="button" class="tool-btn solo-lineas" data-modo="titulo-x">
             <span class="dot cuadrado" style="background:#ff8c00"></span> Agregar título eje X
           </button>
-          <button type="button" class="tool-btn" data-modo="titulo-y">
+          <button type="button" class="tool-btn solo-lineas" data-modo="titulo-y">
             <span class="dot cuadrado" style="background:#c040c0"></span> Agregar título eje Y
           </button>
           <button type="button" class="tool-btn" data-modo="nota">
             <span class="dot" style="background:#7a4fd0"></span> Agregar texto en la gráfica
           </button>
-          <button type="button" class="tool-btn" data-modo="borrar">
+          <button type="button" class="tool-btn solo-lineas" data-modo="borrar">
             <span class="dot" style="background:#8c2a09"></span> Borrar punto
           </button>
         </div>
-        <div class="editor-toolbar" id="editor-series-toolbar"></div>
+        <div class="editor-toolbar solo-lineas" id="editor-series-toolbar"></div>
+        <p class="editor-ayuda solo-barras">Gráfico de barras: para corregir un valor o un nombre, haz clic en él en la vista previa de la lámina (derecha) y escríbelo. En la gráfica de la izquierda puedes agregar textos en cualquier punto.</p>
         <div class="editor-lado-a-lado">
           <div>
             <p class="editor-rotulo">Pizarra: arrastra los puntos sobre la gráfica</p>
@@ -1407,21 +1410,21 @@
           <div id="editor-estado"></div>
           <ul class="editor-advertencias" id="editor-advertencias"></ul>
         </div>
-        <div class="editor-block">
+        <div class="editor-block solo-lineas">
           <div class="editor-block-header">
             <h3>Etiquetas del eje X</h3>
             <button type="button" class="mini-add" id="editor-add-etiqueta-x" title="Agregar etiqueta al centro del eje X">+ Agregar</button>
           </div>
           <table class="editor-tabla"><tbody id="editor-tabla-x"></tbody></table>
         </div>
-        <div class="editor-block">
+        <div class="editor-block solo-lineas">
           <div class="editor-block-header">
             <h3>Etiquetas del eje Y</h3>
             <button type="button" class="mini-add" id="editor-add-etiqueta-y" title="Agregar etiqueta al centro del eje Y">+ Agregar</button>
           </div>
           <table class="editor-tabla"><tbody id="editor-tabla-y"></tbody></table>
         </div>
-        <div class="editor-block">
+        <div class="editor-block solo-lineas">
           <div class="editor-block-header">
             <h3>Títulos de los ejes</h3>
           </div>
@@ -1447,7 +1450,7 @@
           <div class="simbolos" id="editor-simbolos-nota" role="group" aria-label="Insertar símbolo en el texto"></div>
         </div>
         <div class="editor-block editor-acciones">
-          <button type="button" class="primary" id="editor-recalcular">Recalcular con mis correcciones</button>
+          <button type="button" class="primary solo-lineas" id="editor-recalcular">Recalcular con mis correcciones</button>
           <button type="button" class="secondary" id="editor-deshacer">Deshacer cambios sin guardar</button>
           <button type="button" class="primary" id="editor-confirmar" disabled>Guardar y regenerar STL</button>
           <p class="status" id="editor-status" role="status" aria-live="polite"></p>
@@ -1883,7 +1886,7 @@
     progress.style.display = 'flex';
     accionesPaso3.hidden = true;
     formEleccion.hidden = true;
-    avisar('Buscando gráficos de líneas en ' + archivo.name + '. Esto puede tardar un momento.');
+    avisar('Buscando gráficos de líneas y de barras en ' + archivo.name + '. Esto puede tardar un momento.');
 
     try {
       const cuerpo = new FormData();
@@ -1894,10 +1897,10 @@
       // Solo los gráficos de línea: es lo único que el segmentador sabe
       // convertir en lámina táctil.
       const detectados = datos.graficos || [];
-      const lineales = detectados.filter(g => g.es_lineal);
+      const lineales = detectados.filter(g => g.es_lineal || g.es_barras);
       if (lineales.length === 0) {
         fallar(detectados.length > 0
-          ? 'El documento tiene ' + detectados.length + ' figura(s), pero ninguna es un gráfico de líneas (por ahora es lo único que se puede convertir).'
+          ? 'El documento tiene ' + detectados.length + ' figura(s), pero ninguna es un gráfico de líneas o de barras (por ahora es lo único que se puede convertir).'
           : 'No se encontraron gráficos en el documento.');
         return;
       }
@@ -1927,11 +1930,11 @@
       formEleccion.hidden = false;
       const n = gruposEleccion().length;
       avisar((encontrados.documento ? 'Documento: ' + encontrados.documento + '. ' : '') +
-        (n === 1 ? 'Se encontró 1 figura con gráficos de líneas. Está marcada.'
-        : 'Se encontraron ' + n + ' figuras con gráficos de líneas. Todas están marcadas.') +
+        (n === 1 ? 'Se encontró 1 figura con gráficos de líneas o de barras. Está marcada.'
+        : 'Se encontraron ' + n + ' figuras con gráficos de líneas o de barras. Todas están marcadas.') +
         ' Desmarca las que no quieras enviar y pulsa "Enviar a mi supervisor".' +
         (encontrados.otras > 0 ? ' El documento tiene además ' + encontrados.otras +
-          ' figura(s) que no son gráficos de líneas; esas no se pueden convertir por ahora.' : ''));
+          ' figura(s) que no son gráficos de líneas ni de barras; esas no se pueden convertir por ahora.' : ''));
       listaEleccion.querySelector('input')?.focus();
     } catch (err) {
       fallar('No se pudo completar: ' + err.message);
@@ -2056,14 +2059,14 @@
     const n = grupos.length;
     document.getElementById('ticket-number').textContent = 'Solicitud #' + String(solicitud.id).padStart(5, '0');
     document.getElementById('ticket-detail').textContent =
-      (n === 1 ? 'Se envió 1 figura con gráficos de líneas' : 'Se enviaron ' + n + ' figuras con gráficos de líneas') +
+      (n === 1 ? 'Se envió 1 figura con gráficos' : 'Se enviaron ' + n + ' figuras con gráficos') +
       ' a tu supervisor (' + (usuarioActual.supervisor_codigo || 'sin definir') + ')' +
       (n === 1 ? ' para convertirla en lámina táctil.' : ' para convertirlas en láminas táctiles.') +
       (noElegidas > 0
         ? (noElegidas === 1 ? ' No se envió 1 figura que desmarcaste.' : ' No se enviaron ' + noElegidas + ' figuras que desmarcaste.')
         : '') +
       (otrasFiguras > 0
-        ? ' El documento tenía ' + otrasFiguras + ' figura(s) más que no son gráficos de líneas; esas no se pueden convertir por ahora.'
+        ? ' El documento tenía ' + otrasFiguras + ' figura(s) más que no son gráficos de líneas ni de barras; esas no se pueden convertir por ahora.'
         : '');
     const listaTicket = document.getElementById('ticket-list');
     listaTicket.innerHTML = '';
@@ -2893,6 +2896,7 @@
       categoria: 'Categoría del eje X', dato: 'Valor anotado junto a la curva', serie: 'Curva',
       leyenda: 'Entrada de la leyenda', eje: 'Eje', qr: 'Código QR',
       nota: 'Texto agregado en la gráfica', nota_punto: 'Punto marcado por un texto agregado',
+      valor_barra: 'Valor de la barra',
     };
 
     function el(tag, attrs, padre) {
@@ -2938,6 +2942,9 @@
           // módulo del QR (centro y lado, en mm): se ve y se puede escanear en pantalla
           else if (p.t === 'q') el('rect', { class: 'lam-qr', x: p.x - p.d / 2, y: p.y - p.d / 2,
                                              width: p.d, height: p.d }, g);
+          // barra (o parte de una: el contorno, la base de la textura con puntos)
+          else if (p.t === 'r') el('rect', { x: p.x0, y: p.y0, width: p.x1 - p.x0, height: p.y1 - p.y0,
+                                             fill: color, 'fill-opacity': p.h < 1 ? 0.35 : 0.9 }, g);
           else el('line', { class: 'lam-tramo', x1: p.a[0], y1: p.a[1], x2: p.b[0], y2: p.b[1],
                             stroke: color, 'stroke-width': p.d }, g);
         });
@@ -3139,6 +3146,12 @@
       if (!jsonRes.ok) throw new Error('HTTP ' + jsonRes.status);
       const j = await jsonRes.json();
 
+      // Gráfico de barras: la pizarra no corrige puntos ni ejes (los valores y
+      // los nombres se corrigen en la vista previa); quedan los textos libres.
+      const esBarras = j.tipo_grafica === 'barras';
+      overlayEl.classList.toggle('barras', esBarras);
+      if (esBarras) seleccionarModo('mover');
+
       estado.ancho = j.imagen.ancho;
       estado.alto = j.imagen.alto;
       estado.ejeX = j.ejes.eje_x;
@@ -3163,6 +3176,13 @@
         puntos = simplificarPolilinea(puntos, tolPx);
         return { color: PALETA[i % PALETA.length], puntos };
       });
+      if (esBarras) {
+        estado.series = [];
+        estado.ejeX = estado.ejeY = null;
+        estado.etiquetasX = [];
+        estado.etiquetasY = [];
+        estado.tituloX = estado.tituloY = null;
+      }
       if (estado.series.length === 0) estado.series = [{ color: PALETA[0], puntos: [] }];
       serieActiva = Math.min(serieActiva, estado.series.length - 1);
 
