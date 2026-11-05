@@ -594,6 +594,48 @@ def _agregar_cadena(piezas, tramos, diametro, altura, tapa_inicio=True):
             ultimo = b
 
 
+def agregar_barra(piezas, x0, y0, x1, y1, estilo):
+    """Una barra en relieve entre (x0, y0) y (x1, y1), mm, con la textura de
+    su serie (ver _ESTILOS_BARRA): 0 rellena, 1 solo el contorno, 2 con
+    puntos sobre una base baja."""
+    x0, x1 = sorted((float(x0), float(x1)))
+    y0, y1 = sorted((float(y0), float(y1)))
+    if x1 - x0 < 0.2 or y1 - y0 < 0.2:
+        return
+    estilo = estilo % len(_ESTILOS_BARRA)
+    if estilo == 1 and x1 - x0 > 3 * BARRA_PARED and y1 - y0 > 3 * BARRA_PARED:
+        p = BARRA_PARED
+        for a in ((x0, y0, x1, y0 + p), (x0, y1 - p, x1, y1), (x0, y0 + p, x0 + p, y1 - p),
+                  (x1 - p, y0 + p, x1, y1 - p)):
+            piezas.append({"t": "r", "x0": a[0], "y0": a[1], "x1": a[2], "y1": a[3], "h": BARRA_RELIEVE})
+        return
+    if estilo == 2:
+        piezas.append({"t": "r", "x0": x0, "y0": y0, "x1": x1, "y1": y1, "h": BARRA_BASE_PUNTOS})
+        margen = BARRA_PUNTO_DIAM / 2 + 0.4
+        nx = max(1, int((x1 - x0 - 2 * margen) // BARRA_PUNTO_PASO) + 1)
+        ny = max(1, int((y1 - y0 - 2 * margen) // BARRA_PUNTO_PASO) + 1)
+        ox = (x0 + x1) / 2 - (nx - 1) * BARRA_PUNTO_PASO / 2
+        oy = (y0 + y1) / 2 - (ny - 1) * BARRA_PUNTO_PASO / 2
+        if y1 - y0 >= BARRA_PUNTO_DIAM:
+            for i in range(nx):
+                for j in range(ny):
+                    agregar_punto_relieve(piezas, (ox + i * BARRA_PUNTO_PASO, oy + j * BARRA_PUNTO_PASO),
+                                          BARRA_PUNTO_DIAM, BARRA_RELIEVE)
+        return
+    piezas.append({"t": "r", "x0": x0, "y0": y0, "x1": x1, "y1": y1, "h": BARRA_RELIEVE})
+
+
+def _marcas_redondas(lo, hi, n=5):
+    """Marcas "redondas" (0, 5, 10...) entre lo y hi, para un eje sin números leídos."""
+    if hi <= lo:
+        return [lo]
+    paso = (hi - lo) / max(1, n - 1)
+    potencia = 10 ** math.floor(math.log10(paso))
+    paso = min((m * potencia for m in (1, 2, 2.5, 5, 10) if m * potencia >= paso), default=paso)
+    inicio = math.ceil(lo / paso) * paso
+    return [round(inicio + k * paso, 10) for k in range(int((hi - inicio) / paso + 1e-9) + 1)]
+
+
 def agregar_punto_relieve(piezas, punto, diametro, altura):
     """Un bulto redondo aislado en el punto dado (usado por el patrón
     "punteado" para distinguir una tercera serie al tacto). Ver `SOLAPE`
@@ -623,6 +665,16 @@ def _malla_de(pieza):
             pieza["d"],
             pieza["h"],
             pieza.get("c0", True)
+        )
+
+    if pieza["t"] == "r":
+        return _malla_caja(
+            pieza["x1"] - pieza["x0"],
+            pieza["y1"] - pieza["y0"],
+            pieza["h"] + SOLAPE,
+            cx=(pieza["x0"] + pieza["x1"]) / 2,
+            cy=(pieza["y0"] + pieza["y1"]) / 2,
+            z0=BASE_THICKNESS - SOLAPE
         )
 
     if pieza["t"] == "q":
@@ -663,6 +715,10 @@ def _primitiva_json(pieza):
             "y": r(pieza["y"]),
             "d": r(pieza["d"])
         }
+
+    if pieza["t"] == "r":
+        return {"t": "r", "x0": r(pieza["x0"]), "y0": r(pieza["y0"]),
+                "x1": r(pieza["x1"]), "y1": r(pieza["y1"]), "h": r(pieza["h"])}
 
     if pieza["t"] == "q":
         return {
@@ -877,6 +933,29 @@ EJE_Y_ESTILO = dict(EJE_X_ESTILO)
 # Hand_Tracking y el modo exploración.
 # Un texto largo sigue en el renglón de abajo (con sangría), nunca se recorta.
 LEYENDA_MUESTRA = 16.0   # largo de la muestra de textura (mm)
+
+# Gráficos de BARRAS. Medidas del estudio con lectores ciegos de He, McCracken,
+# Hajas, Creem-Regehr y Lex (IEEE VIS 2025, "Using Tactile Charts to Support
+# Comprehension and Learning of Complex Visualizations for Blind and
+# Low-Vision Individuals", https://vdl.sci.utah.edu/tactile-charts/): barras de
+# 10 mm de ancho, 3-6 mm entre elementos y entre un rótulo y lo que rotula,
+# y el valor escrito directamente junto a cada barra.
+BARRA_ANCHO_MAX = 10.0
+BARRA_ANCHO_MIN = 4.0          # más angostas no se distinguen bien al tacto
+BARRA_HUECO_MIN = 3.0
+BARRA_HUECO_MAX = 6.0
+BARRA_ENTRE_SERIES = 1.0       # entre barras pegadas de un mismo grupo
+BARRA_RELIEVE = 1.4
+BARRA_PARED = 1.2              # grosor del borde en la textura "contorno"
+BARRA_PUNTO_PASO = 3.0         # separación de los puntos en la textura "con puntos"
+BARRA_PUNTO_DIAM = 1.6
+BARRA_BASE_PUNTOS = 0.5        # relieve bajo los puntos
+BARRA_VALOR_SEPARACION = 3.0   # del extremo de la barra a su valor en Braille
+BARRA_ESPACIO_VALOR = 0.12     # parte del alto que se reserva arriba para los valores
+MAX_CATEGORIAS_BARRAS = 24
+# Cada serie, su textura (rellena / solo el contorno / con puntos): como los
+# círculos llenos y vacíos del estudio, se distinguen sin buscar la leyenda.
+_ESTILOS_BARRA = [{"nombre": "lisa"}, {"nombre": "contorno"}, {"nombre": "con puntos"}]
 LEYENDA_HUECO = 4.0      # de la muestra al texto
 # Entre dos entradas del mismo renglón: más que un espacio entre palabras
 # (8,5 mm de borde a borde), así no se lee como una sola frase; con 11 mm
@@ -1019,7 +1098,8 @@ def _texto_numero(valor, decimales):
 # "titulo_eje_y", "num_x_3", "num_y_0", "cat_2", "dato_1", "serie_0",
 # "leyenda_serie_1"... (el número es la posición en el JSON del segmentador,
 # así no cambia aunque se oculte otra cosa).
-_RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie|nota)_\d+)")
+_RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie|nota)_\d+"
+                        r"|(?:barra|valor)_\d+_\d+|ubicacion)")
 
 # Notas del supervisor: textos que agrega en cualquier lugar de la gráfica
 # (en la pizarra), por ejemplo en un punto de intersección. Van en
@@ -1048,6 +1128,21 @@ def aplicar_ajustes(datos, ajustes):
     cambios = ajustes.get("textos") or {}
     for clave, valor in cambios.items():
         valor = str(valor).strip()
+        m_barra = re.fullmatch(r"barra_(\d+)_(\d+)", clave)
+        if m_barra:
+            # valor de una barra corregido por el supervisor: serie s, categoría i
+            s_, i_ = int(m_barra.group(1)), int(m_barra.group(2))
+            try:
+                numero = float(valor.replace(",", "."))
+            except ValueError:
+                continue
+            if s_ < len(series) and math.isfinite(numero):
+                puntos = [dict(p) for p in series[s_].get("puntos") or []]
+                for p in puntos:
+                    if round(float(p.get("valor_x", -1))) == i_:
+                        p["valor_y"] = numero
+                series[s_] = {**series[s_], "puntos": puntos}
+            continue
         if clave in ("titulo", "titulo_eje_x", "titulo_eje_y"):
             textos[clave] = valor
             continue
@@ -1273,6 +1368,7 @@ def generar_modelo_desde_recta(
     ajustes=None,
     url_qr=None,
     figura=None,
+    esquina=None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -1325,6 +1421,9 @@ def generar_modelo_desde_recta(
     `figura`: "Figura 4" (o "Página 3" si el PDF no la numera); va delante
     del título: "Figura 4. Deuda pública".
 
+    `esquina`: de dónde sale la lámina ("Pág. 5, Fig. 1"); va en Braille en la
+    esquina inferior derecha, para identificarla sin escanear el QR.
+
     La placa es siempre la de PLACA_ANCHO x PLACA_ALTO con la esquina
     recortada (PLACA_CHAFLAN).
 
@@ -1362,6 +1461,9 @@ def generar_modelo_desde_recta(
 
         puntos_legacy = resultado.get("puntos_curva") or []
 
+        modo_barras = resultado.get("tipo_grafica") == "barras"
+        transpuesta = bool((resultado.get("ejes") or {}).get("transpuesta"))
+
         resumen = resultado.get("resumen") or {}
 
     elif isinstance(datos_segmentador, (list, tuple)):
@@ -1370,6 +1472,7 @@ def generar_modelo_desde_recta(
         series = []
         puntos_legacy = list(datos_segmentador)
         resumen = {}
+        modo_barras = transpuesta = False
 
     else:
         raise ValueError(
@@ -1400,6 +1503,8 @@ def generar_modelo_desde_recta(
             return ""
         return texto
 
+    _estilos = _ESTILOS_BARRA if modo_barras else _ESTILOS_SERIE
+    esquina_txt = (esquina or "").strip() if incluir_etiquetas and "ubicacion" not in ocultos else ""
     titulo_grafico = _titulo_visible("titulo", textos.get("titulo"), "titulo")
     titulo_eje_x_txt = _titulo_visible("titulo_eje_x", textos.get("titulo_eje_x"), "titulo_eje")
     titulo_eje_y_txt = _titulo_visible("titulo_eje_y", textos.get("titulo_eje_y"), "titulo_eje")
@@ -1418,7 +1523,7 @@ def generar_modelo_desde_recta(
 
             puntos = serie.get("puntos", [])
 
-            if isinstance(puntos, list) and len(puntos) >= 2:
+            if isinstance(puntos, list) and len(puntos) >= (1 if modo_barras else 2):
                 series_puntos.append(puntos)
                 nombres_leidos.append(serie.get("nombre"))
                 ids_series.append(serie.get("_id", k))
@@ -1602,6 +1707,33 @@ def generar_modelo_desde_recta(
         y_min = -rect_y2
         y_max = -rect_y1
 
+    if modo_barras:
+        # Barras: el eje X son las categorías (la i-ésima en el valor i) y el
+        # eje Y va de 0 (la base de las barras) al mayor valor, con lugar
+        # arriba (y abajo, si hay negativas) para el valor de cada barra.
+        n_categorias = len(textos.get("categorias_x") or []) or 1 + max(
+            int(round(p.get("valor_x") or 0)) for s_ in series_puntos for p in s_)
+        if n_categorias > MAX_CATEGORIAS_BARRAS:
+            raise ValueError(f"El gráfico tiene {n_categorias} categorías: en la placa entran hasta "
+                             f"{MAX_CATEGORIAS_BARRAS} barras legibles.")
+        valores_barras = [float(p["valor_y"]) for s_ in series_puntos for p in s_
+                          if p.get("valor_y") is not None and math.isfinite(float(p["valor_y"]))]
+        if not valores_barras:
+            raise ValueError("No se pudo leer el valor de ninguna barra: escríbelos en la vista "
+                             "previa (haz clic en cada barra).")
+        marcas_leidas = [e["valor"] for e in textos.get("etiquetas_eje_y") or []
+                         if e.get("valor") is not None and math.isfinite(e["valor"])]
+        lo = min([0.0] + valores_barras + marcas_leidas)
+        hi = max([0.0] + valores_barras + marcas_leidas)
+        if hi - lo < 1e-9:
+            hi = lo + 1.0
+        extra = (hi - lo) * BARRA_ESPACIO_VALOR
+        x_min, x_max = -0.5, n_categorias - 0.5
+        y_min = lo - (extra if min(valores_barras) < 0 else 0.0)
+        y_max = hi + (extra if max(valores_barras) > 0 else 0.0)
+        log_x = log_y = False
+        calibrados = True
+
     rango_x = x_max - x_min
     rango_y = y_max - y_min
 
@@ -1654,6 +1786,13 @@ def generar_modelo_desde_recta(
 
         valores_x = valores_x[:MAX_TICKS_POR_EJE]
         valores_y = valores_y[:MAX_TICKS_POR_EJE]
+        if modo_barras:
+            # una marca por categoría; en el eje Y, solo hasta el mayor valor
+            # (no en el espacio reservado para los números de las barras)
+            valores_x = [float(i) for i in range(n_categorias)]
+            valores_y = [v for v in valores_y if lo - 1e-9 <= v <= hi + 1e-9]
+            if not _valores_reales_eje(etiquetas_y_json, 2, y_min, y_max):
+                valores_y = _marcas_redondas(lo, hi)
 
     # Lo que se ESCRIBE en cada marca: el valor real (10 ** v en un eje log).
     reales_x = [10.0 ** v if log_x else v for v in valores_x]
@@ -1748,13 +1887,13 @@ def generar_modelo_desde_recta(
     for pasada in range(2):
         abreviador = Abreviador()
 
-        def _abreviar(texto, ancho, donde, clave):
+        def _abreviar(texto, ancho, donde, clave, minuscula=False):
             if not incluir_etiquetas or clave in ocultos:
                 # no se escribe: no hace falta letra (ni ocupa lugar)
                 celdas = [] if clave in ocultos else _celdas_braille_mixto(texto)
                 return {"celdas": celdas, "usa_leyenda": False,
                         "identificador": None, "texto_original": texto, "texto_stl": texto}
-            return abreviador.procesar(texto, ancho, donde, clave)
+            return abreviador.procesar(texto, ancho, donde, clave, minuscula=minuscula)
 
         def _letra(texto, celdas, donde, clave):
             if clave in ocultos:
@@ -1798,8 +1937,14 @@ def generar_modelo_desde_recta(
         posiciones = [(v - x_min) / rango_x * disponible for v in valores_x]
 
         # --- Categorías del eje X: siempre con su letra (A, B...) ---
-        rotulos_x = [_abreviar(categorias_x[int(round(v))], -1.0, "categoría del eje X",
-                               f"cat_{int(round(v))}")
+        # en las barras, el nombre completo si entra bajo su barra (el
+        # estudio prefiere rotular directo); si no, su letra
+        ancho_categoria = (disponible / max(1, len(categorias_x)) - BARRA_HUECO_MIN
+                           if modo_barras else -1.0)
+        # letra minúscula (una celda) si la mayúscula (dos celdas) no entra
+        minuscula_cat = modo_barras and ancho_categoria < _ancho_celdas(2) + BARRA_HUECO_MIN - BARRA_HUECO_MIN
+        rotulos_x = [_abreviar(categorias_x[int(round(v))], ancho_categoria, "categoría del eje X",
+                               f"cat_{int(round(v))}", minuscula=minuscula_cat)
                      if _es_categoria(v) else None for v in reales_x]
 
         # --- Números del eje X: con letras si completos no entran todos
@@ -1859,7 +2004,9 @@ def generar_modelo_desde_recta(
         alto_ideal = ancho_plot * proporcion
 
         def _alto_libre(n):
-            return tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+            # con la página y la figura en la esquina de abajo, un renglón menos
+            return (tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+                    - (INTERLINEA_BRAILLE if esquina_txt else 0.0))
 
         umbral = min(ALTO_PLOT_MIN, alto_ideal)
         n_renglones = renglones_necesarios
@@ -1874,7 +2021,7 @@ def generar_modelo_desde_recta(
                          izquierda + ancho_plot) for v in valores_x]
         y_finales = [min(max(abajo + (v - y_min) / rango_y * alto_plot, abajo), abajo + alto_plot)
                      for v in valores_y]
-        dibujar_x = _legibles(x_finales, celdas_x, anchos_x, CELDA_PITCH)
+        dibujar_x = _legibles(x_finales, celdas_x, anchos_x, BARRA_HUECO_MIN if modo_barras else CELDA_PITCH)
         dibujar_y = _legibles(y_finales, celdas_y, [ALTURA_FILA_BRAILLE] * len(celdas_y),
                               ESPACIADO_BRAILLE)
         con_letra_x = [i for i, r in enumerate(letras_x) if r]
@@ -1918,6 +2065,11 @@ def generar_modelo_desde_recta(
 
     def pixel_a_valor(px, py):
 
+        if transpuesta:
+            # barras horizontales: la calibración es de la orientación
+            # normalizada (x de la imagen = valor, y = categoría)
+            px, py = py, px
+
         if calibrados:
 
             x_val = m_x * px + b_x
@@ -1954,8 +2106,36 @@ def generar_modelo_desde_recta(
 
     series_fisicas = []
     indices_fisicas = []   # posición de cada serie dibujada en series_puntos
+    barras_fisicas = []    # (serie, categoría, x0, y0, x1, y1, valor) en mm
 
-    for indice, puntos in enumerate(series_puntos, start=1):
+    if modo_barras:
+        k_series = len(series_puntos)
+        franja = ancho_plot / n_categorias
+        hueco = min(BARRA_HUECO_MAX, max(BARRA_HUECO_MIN, 0.3 * franja))
+        ancho_barra = min(BARRA_ANCHO_MAX, (franja - hueco) / k_series)
+        if ancho_barra < BARRA_ANCHO_MIN:
+            print(f"[STL] Barras angostas: {ancho_barra:.1f} mm", flush=True)
+        y_base = valor_a_fisico(0, 0.0)[1]
+        for j, puntos in enumerate(series_puntos):
+            contorno = []
+            for p in sorted(puntos, key=lambda q: q.get("valor_x") or 0):
+                if p.get("valor_y") is None or p.get("valor_x") is None:
+                    continue
+                i = int(round(float(p["valor_x"])))
+                v = float(p["valor_y"])
+                if not (0 <= i < n_categorias and math.isfinite(v)):
+                    continue
+                cx = valor_a_fisico(float(i), 0.0)[0] + (j - (k_series - 1) / 2) * ancho_barra
+                medio = ancho_barra / 2 - (BARRA_ENTRE_SERIES / 2 if k_series > 1 else 0.0)
+                y_extremo = valor_a_fisico(0, v)[1]
+                barras_fisicas.append((j, i, cx - medio, y_base, cx + medio, y_extremo, v))
+                contorno += [(cx - medio, y_base), (cx - medio, y_extremo), (cx + medio, y_extremo),
+                             (cx + medio, y_base)]
+            if len(contorno) >= 2:
+                series_fisicas.append(contorno)
+                indices_fisicas.append(j)
+
+    for indice, puntos in enumerate([] if modo_barras else series_puntos, start=1):
 
         puntos_fisicos = []
 
@@ -2349,7 +2529,44 @@ def generar_modelo_desde_recta(
 
     # La textura va por la posición ORIGINAL de la serie (no por el orden
     # entre las que se pudieron dibujar), así coincide con la leyenda.
-    for indice, puntos_stl in zip(indices_fisicas, series_fisicas):
+    for indice, puntos_stl in zip(indices_fisicas, series_fisicas) if modo_barras else ():
+        desde = len(piezas)
+        for j, i, x0b, y0b, x1b, y1b, v in barras_fisicas:
+            if j == indice:
+                agregar_barra(piezas, x0b, y0b, x1b, y1b, indice)
+        sid = ids_series[indice]
+        _registrar(f"serie_{sid}", "serie", desde, texto=nombres_series[indice],
+                   textura=_estilos[indice % len(_estilos)]["nombre"],
+                   ocultable=len(series_fisicas) > 1, editable="texto",
+                   clave_edicion=f"serie_{sid}", valor_edicion=nombres_series[indice])
+    if modo_barras and incluir_etiquetas:
+        # el valor de cada barra, en Braille, a 3 mm de su extremo (si entra
+        # sobre su barra sin tocar la vecina); el supervisor lo puede corregir
+        sin_lugar = 0
+        for j, i, x0b, y0b, x1b, y1b, v in barras_fisicas:
+            sid = ids_series[j]
+            dec = _decimales_de(v)
+            celdas = _celdas_numero(v, dec)
+            ancho_v = _ancho_celdas(len(celdas))
+            # con una serie, el número puede ocupar todo el ancho de su categoría
+            limite = (franja - 1.0) if k_series == 1 else (x1b - x0b) + BARRA_ENTRE_SERIES - 0.5
+            if ancho_v > limite:
+                sin_lugar += 1
+                continue
+            arriba = y1b >= y0b
+            y_val = (y1b + BARRA_VALOR_SEPARACION + ALTURA_FILA_BRAILLE / 2 if arriba
+                     else y1b - BARRA_VALOR_SEPARACION - ALTURA_FILA_BRAILLE / 2)
+            tinta = _texto_numero(v, dec)
+            recuadro = _texto(f"valor_{sid}_{i}", "valor_barra", celdas, (x0b + x1b) / 2 - ancho_v / 2,
+                              y_val, tinta, editable="numero", clave_edicion=f"barra_{sid}_{i}",
+                              valor_edicion=tinta)
+            if recuadro:
+                textos_diseno.append(_texto_diseno("valor_barra", _rotulo_simple(tinta), recuadro))
+        if sin_lugar:
+            avisos.append(f"{sin_lugar} valor(es) de barra no entran sobre su barra en Braille: "
+                          "se escuchan con el QR.")
+
+    for indice, puntos_stl in () if modo_barras else zip(indices_fisicas, series_fisicas):
         estilo = _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]
         desde = len(piezas)
         agregar_funcion(
@@ -2383,7 +2600,9 @@ def generar_modelo_desde_recta(
         for pieza in renglon:
             inicio_entrada.setdefault(pieza["entrada"], len(piezas))
             x = MARGEN_PLACA + pieza["dx"]
-            if pieza["serie"] is not None:
+            if pieza["serie"] is not None and modo_barras:
+                agregar_barra(piezas, x, y_fila - 2.5, x + LEYENDA_MUESTRA, y_fila + 2.5, pieza["serie"])
+            elif pieza["serie"] is not None:
                 estilo = _ESTILOS_SERIE[pieza["serie"] % len(_ESTILOS_SERIE)]
                 r_tapa = estilo["diametro"] / 2   # la tapa redondeada no sale del margen
                 agregar_funcion(
@@ -2415,7 +2634,7 @@ def generar_modelo_desde_recta(
             indice, nombre = series_leyenda[k - n_ejes]
             sid = ids_series[indice]
             info = {"id": f"leyenda_serie_{sid}", "texto": f"Leyenda {indice + 1}: {nombre} (textura "
-                    f"{_ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]['nombre']})",
+                    f"{_estilos[indice % len(_estilos)]['nombre']})",
                     "ocultable": True, "editable": "texto",
                     "clave_edicion": f"serie_{sid}", "valor_edicion": nombre}
         elementos.append({"clase": "leyenda", "desde": desde, "hasta": hasta,
@@ -2434,7 +2653,7 @@ def generar_modelo_desde_recta(
                 "indice": indice,
                 "etiqueta": f"Leyenda {indice + 1}",
                 "nombre": nombre,
-                "textura": _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]["nombre"],
+                "textura": _estilos[indice % len(_estilos)]["nombre"],
                 "muestra": [(x0, y_muestra), (x0 + LEYENDA_MUESTRA, y_muestra)],
                 "recuadro": recuadros_entrada[k],
                 "recortado": False,
@@ -2449,6 +2668,17 @@ def generar_modelo_desde_recta(
               f"textura(s), {len(renglones_leyenda)} renglón(es); {len(abreviaturas_diseno)} letra(s) "
               "explicadas solo en el QR.",
               flush=True)
+
+    # ================================================================
+    # 12b'. PÁGINA Y FIGURA (esquina inferior derecha)
+    # ================================================================
+    if esquina_txt:
+        celdas_esq = _celdas_braille_mixto(esquina_txt)
+        ancho_esq = _ancho_celdas(len(celdas_esq))
+        recuadro = _texto("ubicacion", "ubicacion", celdas_esq, dim_x - MARGEN_PLACA - ancho_esq,
+                          MARGEN_PLACA + ALTURA_FILA_BRAILLE / 2, esquina_txt)
+        if recuadro:
+            textos_diseno.append(_texto_diseno("ubicacion", _rotulo_simple(esquina_txt), recuadro))
 
     # ================================================================
     # 12c. QR (esquina superior izquierda, en el lugar reservado en 6b)
@@ -2485,7 +2715,7 @@ def generar_modelo_desde_recta(
                 "indice": indice,
                 "nombre": nombres_series[indice],
                 "nombre_leido": bool((nombres_leidos[indice] or "").strip()),
-                "textura": _ESTILOS_SERIE[indice % len(_ESTILOS_SERIE)]["nombre"],
+                "textura": _estilos[indice % len(_estilos)]["nombre"],
                 "puntos_mm": [tuple(p) for p in puntos_stl],
             } for indice, puntos_stl in zip(indices_fisicas, series_fisicas)],
             "leyenda": leyenda_diseno,
@@ -2502,6 +2732,11 @@ def generar_modelo_desde_recta(
             "etiquetas_dato": datos_diseno,
             # notas del supervisor: texto, dónde quedó y el punto que marcan
             "notas": notas_diseno,
+            # gráfico de barras: cada barra (serie, categoría, valor, recuadro en mm)
+            "tipo_grafica": "barras" if modo_barras else "lineas",
+            "barras": [{"serie": j, "categoria": i, "valor": v,
+                        "recuadro": [min(x0b, x1b), min(y0b, y1b), max(x0b, x1b), max(y0b, y1b)]}
+                       for j, i, x0b, y0b, x1b, y1b, v in barras_fisicas],
             # QR en relieve (None si no se pidió): esquina, lado y URL
             "qr": qr_info,
             "avisos": avisos,

@@ -79,6 +79,8 @@ import numpy as np
 import almacen
 import db
 from segmentador import aplicar_correcciones, procesar_imagen
+import clasificador_figuras
+import lector_barras
 import narracion
 import pipeline_rapido
 from generador_stl import (
@@ -408,10 +410,11 @@ def _figuras_de_solicitud(figuras):
         except (TypeError, ValueError):
             pagina = 0
         pie = ext.get("pie_figura") or ""
+        clase = "Gráfico de barras" if ext.get("tipo") == "barras" else "Gráfico de líneas"
         limpias.append({
             "id": nombre,
-            "titulo": "Gráfico de línea",
-            "caption": pie or f"Gráfico de líneas sin pie de figura en la página {pagina}",
+            "titulo": clase,
+            "caption": pie or f"{clase} sin pie de figura en la página {pagina}",
             "pagina": pagina,
             "imagen_url": f"/api/resultados/{nombre}",
             "pie_figura": pie,
@@ -763,6 +766,9 @@ def corregir_figura_solicitud(id_solicitud, indice):
                      "reiniciarse). Hay que volver a subir el documento.",
         }), 404
 
+    if correcciones and _tipo_grafica({"ruta_json": ruta_json}) == "barras":
+        return jsonify({"ok": False, "error": "En un gráfico de barras, los valores y los nombres "
+                                              "se corrigen en la vista previa de la lámina."}), 400
     try:
         if correcciones:
             resultado = aplicar_correcciones(ruta_imagen, RESULTADOS_DIR, correcciones,
@@ -1102,6 +1108,20 @@ def _leer_json_extra(resultado):
     return datos.get("ejes") or {}, datos.get("textos") or {}
 
 
+def _tipo_grafica(resultado):
+    """"barras" si la lectura es de un gráfico de barras (ver lector_barras)."""
+    if resultado.get("tipo_grafica"):
+        return resultado["tipo_grafica"]
+    ruta_json = resultado.get("ruta_json")
+    if ruta_json and almacen.asegurar(ruta_json):
+        try:
+            with open(ruta_json, encoding="utf-8") as f:
+                return json.load(f).get("tipo_grafica") or "lineas"
+        except (OSError, ValueError):
+            pass
+    return "lineas"
+
+
 def _payload_stl(resultado):
     """Arma la entrada completa que espera el generador de STL."""
     ejes, textos = _leer_json_extra(resultado)
@@ -1111,6 +1131,7 @@ def _payload_stl(resultado):
         "resumen": resultado.get("resumen") or {},
         "ejes": ejes,
         "textos": textos,
+        "tipo_grafica": _tipo_grafica(resultado),
     }
 
 
@@ -1173,6 +1194,7 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
         ajustes=ajustes,
         url_qr=url_qr,
         figura=_etiqueta_figura(_info_figura(resultado, figura, pie_figura)),
+        esquina=_texto_esquina(_info_figura(resultado, figura, pie_figura)),
     )
     advertencias.extend(diseno.get("avisos") or [])
 
@@ -1267,14 +1289,27 @@ def _info_figura(resultado, figura=None, pie_figura=None):
     return info
 
 
+def _texto_esquina(info):
+    """De dónde sale la lámina, para la esquina inferior derecha:
+    "Pág. 5, Fig. 1" (o solo la página, o solo la figura). "" si no se sabe."""
+    pie = (info.get("pie_figura") or "").strip()
+    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*([0-9IVX]+(?:\.[0-9]+)?)", pie, re.IGNORECASE)
+    partes = []
+    if info.get("pagina"):
+        partes.append(f"Pág. {info['pagina']}")
+    if m:
+        partes.append(f"Fig. {m.group(1)}")
+    return ", ".join(partes)
+
+
 def _etiqueta_figura(info):
     """Lo que va delante del título de la lámina: "Figura 4" si el pie de
     figura del PDF la numera ("Fig. 4", "Figura 4.", "Gráfico 4"...); si no,
     "Página 3"; "" si no se sabe de dónde salió la imagen."""
     pie = (info.get("pie_figura") or "").strip()
-    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*(\d+)", pie, re.IGNORECASE)
+    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*([0-9IVX]+(?:\.[0-9]+)?)", pie, re.IGNORECASE)
     if m:
-        return f"Figura {m.group(1)}"
+        return f"Figura {m.group(1)}"     # también "Gráfico I.15" (CEPAL)
     return f"Página {info['pagina']}" if info.get("pagina") else ""
 
 
@@ -1507,6 +1542,8 @@ def _guardar_extraccion(ruta_imagen, detectado, archivo_pdf=""):
     with open(_ruta_extraccion(ruta_imagen), "w", encoding="utf-8") as f:
         json.dump({
             "pagina": detectado.get("page"),
+            # "linea" o "barras": qué lector usa la revisión (segmentar_figura)
+            "tipo": detectado.get("tipo"),
             "origen": detectado.get("origen"),
             "pie_figura": detectado.get("pie_figura", ""),
             "grupo": detectado.get("grupo"),
@@ -1542,10 +1579,23 @@ def _contexto_breve(contexto):
     return texto
 
 
+def tipo_de_figura(ruta_imagen):
+    """"barras" o "linea": lo que dijo el clasificador al extraerla del PDF;
+    una imagen subida suelta por el supervisor se clasifica en el momento."""
+    tipo = _extraccion(ruta_imagen).get("tipo")
+    if tipo:
+        return tipo
+    modelo = clasificador_figuras.clasificar([ruta_imagen])
+    return clasificador_figuras.TIPOS.get(modelo[0][0], "otro") if modelo else "linea"
+
+
 def segmentar_figura(ruta_imagen, palabras=None):
-    """procesar_imagen() con el texto del PDF de esa figura, si se extrajo."""
+    """Lee la gráfica (líneas: segmentador; barras: lector_barras), con el
+    texto del PDF de esa figura si se extrajo."""
     if palabras is None:
         palabras = _extraccion(ruta_imagen).get("palabras")
+    if tipo_de_figura(ruta_imagen) == "barras":
+        return lector_barras.leer_barras(ruta_imagen, RESULTADOS_DIR, palabras=palabras)
     return procesar_imagen(ruta_imagen, RESULTADOS_DIR, palabras=palabras)
 
 
@@ -1611,6 +1661,8 @@ def clasificar():
             "tipo": d["tipo"],
             "confianza": d["confianza"],
             "es_lineal": d["es_lineal"],
+            # gráfico de barras: también se puede pedir como lámina
+            "es_barras": bool(d.get("es_barras")),
             # "Figura N. ..." junto a la figura en el PDF ("" si no hay):
             # el frontend lo guarda en la solicitud y abre la descripción narrada
             "pie_figura": d.get("pie_figura", ""),
@@ -1703,7 +1755,8 @@ def vista_lamina():
     try:
         generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
                                    diseno=diseno, ajustes=ajustes, url_qr=url_qr,
-                                   figura=_etiqueta_figura(_info_figura(resultado)))
+                                   figura=_etiqueta_figura(_info_figura(resultado)),
+                                   esquina=_texto_esquina(_info_figura(resultado)))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({
