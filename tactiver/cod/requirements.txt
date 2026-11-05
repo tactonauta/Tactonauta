@@ -8,3 +8,4 @@ PyMuPDF
 Pillow
 gunicorn
 qrcode
+onnxruntime

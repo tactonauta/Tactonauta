@@ -64,7 +64,8 @@ api.py              servidor Flask: sesiones, solicitudes, revisión, imprenta
 db.py               base de datos (SQLite local o Turso)
 almacen.py          copia de los archivos en Cloudflare R2
 pipeline_rapido.py  extrae las figuras del PDF (y su texto real)
-classify_charts.py  clasifica cada figura (líneas, barras, torta, dispersión...)
+clasificador_figuras.py  qué tipo de figura es cada una (modelo de Docling, modelos/)
+classify_charts.py  figuras con varios paneles; regla de respaldo si no está el modelo
 segmentador.py      lee la gráfica: ejes, escala, curvas, títulos, leyenda
 generador_stl.py    arma la lámina: distribución, Braille, texturas, STL
 braille.py          Braille español (tabla, mayúsculas, letras A/a para la leyenda)
