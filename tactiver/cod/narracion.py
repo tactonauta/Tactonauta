@@ -545,7 +545,8 @@ def exportar_hand_tracking(datos, diseno, descripcion):
                "numero_x": _eje("horizontal", textos.get("titulo_eje_x")),
                "numero_y": _eje("vertical", textos.get("titulo_eje_y")),
                "dato": "Valor anotado junto a la curva",
-               "nota": "Nota"}.get(txt["tipo"], "Texto")
+               "nota": "Nota", "valor_barra": "Valor de la barra",
+               "ubicacion": "Página y figura del documento"}.get(txt["tipo"], "Texto")
         completo = txt["texto_completo"]
         if txt["tipo"] in ("titulo_eje_x", "titulo_eje_y"):
             # en la placa, solo la letra del eje

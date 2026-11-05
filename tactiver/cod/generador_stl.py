@@ -1099,7 +1099,7 @@ def _texto_numero(valor, decimales):
 # "leyenda_serie_1"... (el número es la posición en el JSON del segmentador,
 # así no cambia aunque se oculte otra cosa).
 _RE_AJUSTE = re.compile(r"(titulo|titulo_eje_x|titulo_eje_y|(?:num_x|num_y|cat|dato|serie|leyenda_serie|nota)_\d+"
-                        r"|(?:barra|valor)_\d+_\d+)")
+                        r"|(?:barra|valor)_\d+_\d+|ubicacion)")
 
 # Notas del supervisor: textos que agrega en cualquier lugar de la gráfica
 # (en la pizarra), por ejemplo en un punto de intersección. Van en
@@ -1368,6 +1368,7 @@ def generar_modelo_desde_recta(
     ajustes=None,
     url_qr=None,
     figura=None,
+    esquina=None,
 ):
     """
     Genera una placa táctil a partir del resultado completo de
@@ -1419,6 +1420,9 @@ def generar_modelo_desde_recta(
 
     `figura`: "Figura 4" (o "Página 3" si el PDF no la numera); va delante
     del título: "Figura 4. Deuda pública".
+
+    `esquina`: de dónde sale la lámina ("Pág. 5, Fig. 1"); va en Braille en la
+    esquina inferior derecha, para identificarla sin escanear el QR.
 
     La placa es siempre la de PLACA_ANCHO x PLACA_ALTO con la esquina
     recortada (PLACA_CHAFLAN).
@@ -1500,6 +1504,7 @@ def generar_modelo_desde_recta(
         return texto
 
     _estilos = _ESTILOS_BARRA if modo_barras else _ESTILOS_SERIE
+    esquina_txt = (esquina or "").strip() if incluir_etiquetas and "ubicacion" not in ocultos else ""
     titulo_grafico = _titulo_visible("titulo", textos.get("titulo"), "titulo")
     titulo_eje_x_txt = _titulo_visible("titulo_eje_x", textos.get("titulo_eje_x"), "titulo_eje")
     titulo_eje_y_txt = _titulo_visible("titulo_eje_y", textos.get("titulo_eje_y"), "titulo_eje")
@@ -1999,7 +2004,9 @@ def generar_modelo_desde_recta(
         alto_ideal = ancho_plot * proporcion
 
         def _alto_libre(n):
-            return tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+            # con la página y la figura en la esquina de abajo, un renglón menos
+            return (tope_plot - bajo_plot - _alto_leyenda(n) - MARGEN_PLACA
+                    - (INTERLINEA_BRAILLE if esquina_txt else 0.0))
 
         umbral = min(ALTO_PLOT_MIN, alto_ideal)
         n_renglones = renglones_necesarios
@@ -2661,6 +2668,17 @@ def generar_modelo_desde_recta(
               f"textura(s), {len(renglones_leyenda)} renglón(es); {len(abreviaturas_diseno)} letra(s) "
               "explicadas solo en el QR.",
               flush=True)
+
+    # ================================================================
+    # 12b'. PÁGINA Y FIGURA (esquina inferior derecha)
+    # ================================================================
+    if esquina_txt:
+        celdas_esq = _celdas_braille_mixto(esquina_txt)
+        ancho_esq = _ancho_celdas(len(celdas_esq))
+        recuadro = _texto("ubicacion", "ubicacion", celdas_esq, dim_x - MARGEN_PLACA - ancho_esq,
+                          MARGEN_PLACA + ALTURA_FILA_BRAILLE / 2, esquina_txt)
+        if recuadro:
+            textos_diseno.append(_texto_diseno("ubicacion", _rotulo_simple(esquina_txt), recuadro))
 
     # ================================================================
     # 12c. QR (esquina superior izquierda, en el lugar reservado en 6b)

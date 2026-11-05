@@ -1194,6 +1194,7 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
         ajustes=ajustes,
         url_qr=url_qr,
         figura=_etiqueta_figura(_info_figura(resultado, figura, pie_figura)),
+        esquina=_texto_esquina(_info_figura(resultado, figura, pie_figura)),
     )
     advertencias.extend(diseno.get("avisos") or [])
 
@@ -1288,14 +1289,27 @@ def _info_figura(resultado, figura=None, pie_figura=None):
     return info
 
 
+def _texto_esquina(info):
+    """De dónde sale la lámina, para la esquina inferior derecha:
+    "Pág. 5, Fig. 1" (o solo la página, o solo la figura). "" si no se sabe."""
+    pie = (info.get("pie_figura") or "").strip()
+    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*([0-9IVX]+(?:\.[0-9]+)?)", pie, re.IGNORECASE)
+    partes = []
+    if info.get("pagina"):
+        partes.append(f"Pág. {info['pagina']}")
+    if m:
+        partes.append(f"Fig. {m.group(1)}")
+    return ", ".join(partes)
+
+
 def _etiqueta_figura(info):
     """Lo que va delante del título de la lámina: "Figura 4" si el pie de
     figura del PDF la numera ("Fig. 4", "Figura 4.", "Gráfico 4"...); si no,
     "Página 3"; "" si no se sabe de dónde salió la imagen."""
     pie = (info.get("pie_figura") or "").strip()
-    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*(\d+)", pie, re.IGNORECASE)
+    m = re.match(r"(?:fig(?:ura|ure)?|gr[áa]fic[oa])\.?\s*([0-9IVX]+(?:\.[0-9]+)?)", pie, re.IGNORECASE)
     if m:
-        return f"Figura {m.group(1)}"
+        return f"Figura {m.group(1)}"     # también "Gráfico I.15" (CEPAL)
     return f"Página {info['pagina']}" if info.get("pagina") else ""
 
 
@@ -1741,7 +1755,8 @@ def vista_lamina():
     try:
         generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
                                    diseno=diseno, ajustes=ajustes, url_qr=url_qr,
-                                   figura=_etiqueta_figura(_info_figura(resultado)))
+                                   figura=_etiqueta_figura(_info_figura(resultado)),
+                                   esquina=_texto_esquina(_info_figura(resultado)))
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     return jsonify({
