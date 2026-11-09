@@ -56,8 +56,8 @@ PUNTOS_CLAVE_TOLERANCIA_MM = 3.0
 
 # Lo que se narra del QR en relieve (generador_stl.agregar_qr).
 TEXTO_QR = ("En la esquina superior izquierda hay un código QR en relieve: no es parte del "
-            "gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y "
-            "página de donde sale, contexto y valores de cada curva).")
+            "gráfico. Identifica esta lámina: al escanearlo con el modo exploración de Puntito "
+            "se escuchan sus datos (documento y página de donde sale, contexto y valores).")
 
 FORMATO_DATOS = "tactiverso-lamina"
 VERSION_DATOS = 1

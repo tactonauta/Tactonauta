@@ -122,7 +122,7 @@
     "esquina_recortada": "superior derecha",
     "recorte_mm": 10
   },
-  "qr_modulo_mm": 1.03,
+  "qr_modulo_mm": 1.43,
   "qr_px_por_modulo_min": 2.2,
   "qr_presupuesto_ms": 200,
   "celular_puerto": 8765,

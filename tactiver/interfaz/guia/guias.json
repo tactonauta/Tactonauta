@@ -53,7 +53,7 @@
       "id": "escanear-qr",
       "titulo": "Cómo escanear el código QR",
       "detalle": "abrir el modo exploración y apuntar la cámara",
-      "texto": "El modo exploración no necesita una cuenta. En la pantalla de inicio, presiona Modo exploración, y luego, Escanear código QR. La primera vez, el navegador te pide permiso para usar la cámara: acéptalo. Toma la lámina y busca la esquina recortada: el código QR está en la otra esquina de arriba, la izquierda. Pon esa esquina frente a la cámara, a unos veinte centímetros, y muévela despacio. Si Puntito no lo encuentra, cada tanto te pide que acerques o alejes un poco la lámina. Si no puedes usar la cámara, abre la opción No puedo usar la cámara: escribir el código de la lámina, y escribe su código de diez letras y números. También puedes escanear el QR con la cámara de tu celular: se abre una página con la información de la lámina."
+      "texto": "El modo exploración no necesita una cuenta. En la pantalla de inicio, presiona Modo exploración, y luego, Escanear código QR. La primera vez, el navegador te pide permiso para usar la cámara: acéptalo. Toma la lámina y busca la esquina recortada: el código QR está en la otra esquina de arriba, la izquierda. Pon esa esquina frente a la cámara, a unos veinte centímetros, y muévela despacio. Si Puntito no lo encuentra, cada tanto te pide que acerques o alejes un poco la lámina. Si no puedes usar la cámara, abre la opción No puedo usar la cámara: escribir el código de la lámina, y escribe su código de diez letras y números. El QR tiene solo el código de la lámina: si lo lees con la cámara común del celular vas a ver ese código, y puedes escribirlo en esa misma opción."
     },
     {
       "id": "escuchar-lamina",
