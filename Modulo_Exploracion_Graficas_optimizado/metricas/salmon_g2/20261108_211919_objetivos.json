@@ -1,0 +1,742 @@
+{
+ "prueba": "objetivos",
+ "placa": "salmon_g2",
+ "fecha": "2026-11-08T21:19:19",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "claro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "intentos": 15,
+  "acierto": {
+   "k": 4,
+   "n": 15,
+   "p": 0.2667,
+   "ic95": [
+    0.109,
+    0.5195
+   ]
+  },
+  "acierto_pct": 26.6667,
+  "acierto_serie_pct": 60.0,
+  "acierto_aislado": {
+   "k": 2,
+   "n": 7,
+   "p": 0.2857,
+   "ic95": [
+    0.0822,
+    0.6411
+   ]
+  },
+  "acierto_aislado_pct": 28.5714,
+  "acierto_cruce": {
+   "k": 0,
+   "n": 5,
+   "p": 0.0,
+   "ic95": [
+    0.0,
+    0.4345
+   ]
+  },
+  "acierto_cruce_pct": 0.0,
+  "acierto_eje": {
+   "k": 1,
+   "n": 1,
+   "p": 1.0,
+   "ic95": [
+    0.2065,
+    1.0
+   ]
+  },
+  "acierto_eje_pct": 100.0,
+  "acierto_texto": {
+   "k": 1,
+   "n": 2,
+   "p": 0.5,
+   "ic95": [
+    0.0945,
+    0.9055
+   ]
+  },
+  "acierto_texto_pct": 50.0,
+  "acierto_aislado_punto": {
+   "k": 2,
+   "n": 6,
+   "p": 0.3333,
+   "ic95": [
+    0.0968,
+    0.7
+   ]
+  },
+  "acierto_aislado_punto_pct": 33.3333,
+  "acierto_aislado_linea": {
+   "k": 0,
+   "n": 1,
+   "p": 0.0,
+   "ic95": [
+    0.0,
+    0.7935
+   ]
+  },
+  "acierto_aislado_linea_pct": 0.0,
+  "acierto_cruce_linea": {
+   "k": 0,
+   "n": 5,
+   "p": 0.0,
+   "ic95": [
+    0.0,
+    0.4345
+   ]
+  },
+  "acierto_cruce_linea_pct": 0.0,
+  "sin_seleccion_pct": 6.6667,
+  "error_mediana_mm": 5.1163,
+  "error_p90_mm": 8.5936,
+  "sesgo_mm": [
+   -1.4405,
+   -0.1973
+  ],
+  "sesgo_modulo_mm": 1.454,
+  "jitter_mm": 2.2224,
+  "pinza_mantenida_pct": 100.0,
+  "mano_pct": 96.6667,
+  "t_primer_acierto_ms": 410.9001,
+  "cambios_sel_mediana": 1.0,
+  "cambios_crudo_mediana": 9.0,
+  "acierto_crudo_pct": 26.6667,
+  "pinza_px_mantenida_pct": 100.0,
+  "confusiones": [
+   [
+    "s2_p7 → s3_p6-p7",
+    1
+   ],
+   [
+    "s1_p10-p11 → s1_p10",
+    1
+   ],
+   [
+    "texto_2 → eje_x",
+    1
+   ],
+   [
+    "s1_p8-p9 → None",
+    1
+   ],
+   [
+    "s2_p1 → s2_p1-p2",
+    1
+   ],
+   [
+    "s3_p7-p8 → s3_p7",
+    1
+   ],
+   [
+    "s3_p12 → s3_p11-p12",
+    1
+   ],
+   [
+    "s3_p8-p9 → s1_p8-p9",
+    1
+   ],
+   [
+    "s2_p5-p6 → s1_p6",
+    1
+   ],
+   [
+    "s2_p12 → s2_p11-p12",
+    1
+   ],
+   [
+    "s2_p7-p8 → s3_p7",
+    1
+   ]
+  ]
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ },
+ "detalle": [
+  {
+   "objetivo": "s2_p7",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto B (crece lento)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    130.1,
+    77.2
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s3_p6-p7",
+   "votos": {
+    "None": 1,
+    "s3_p6-p7": 29
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s3_p6-p7",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 4,
+   "error_mm": 8.6855,
+   "sesgo_mm": [
+    -6.96,
+    -4.6218
+   ],
+   "jitter_mm": 2.3383,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s1_p10-p11",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto A (crece rápido)",
+   "zona": "cruce",
+   "objetivo_mm": [
+    182.2175,
+    72.0942
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p10",
+   "votos": {
+    "None": 3,
+    "s1_p10": 26
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s1_p10",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 13,
+   "error_mm": 2.2328,
+   "sesgo_mm": [
+    0.6529,
+    2.0673
+   ],
+   "jitter_mm": 2.413,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s1_p7",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto A (crece rápido)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    130.1,
+    89.5
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p7",
+   "votos": {
+    "None": 1,
+    "s2_p7": 4,
+    "s1_p7": 25
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s1_p7",
+   "acierto_crudo": true,
+   "cambios_sel": 2,
+   "cambios_crudo": 9,
+   "error_mm": 5.1163,
+   "sesgo_mm": [
+    -1.5367,
+    -4.0261
+   ],
+   "jitter_mm": 3.0109,
+   "t_primer_acierto_ms": 410.9001
+  },
+  {
+   "objetivo": "texto_2",
+   "tipo": "texto",
+   "clase": "texto",
+   "serie": "",
+   "zona": "texto",
+   "objetivo_mm": [
+    72.65,
+    131.1
+   ],
+   "frames": 31,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "eje_x",
+   "votos": {
+    "None": 1,
+    "eje_x": 30
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "eje_x",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 4,
+   "error_mm": 6.4486,
+   "sesgo_mm": [
+    -3.6711,
+    -5.031
+   ],
+   "jitter_mm": 2.4696,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s1_p8-p9",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto A (crece rápido)",
+   "zona": "cruce",
+   "objetivo_mm": [
+    152.8351,
+    81.9216
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 79.3103,
+   "seleccionado": null,
+   "votos": {
+    "None": 15,
+    "s1_p8-p9": 14
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s1_p8-p9",
+   "acierto_crudo": true,
+   "cambios_sel": 1,
+   "cambios_crudo": 10,
+   "error_mm": 3.2736,
+   "sesgo_mm": [
+    1.4898,
+    7.2623
+   ],
+   "jitter_mm": 11.7992,
+   "t_primer_acierto_ms": 1142.0822
+  },
+  {
+   "objetivo": "s2_p1",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto B (crece lento)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    43.9,
+    84.4
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s2_p1-p2",
+   "votos": {
+    "None": 3,
+    "eje_y": 9,
+    "s2_p1-p2": 17
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s2_p1-p2",
+   "acierto_crudo": false,
+   "cambios_sel": 2,
+   "cambios_crudo": 13,
+   "error_mm": 6.588,
+   "sesgo_mm": [
+    -3.1718,
+    -5.1307
+   ],
+   "jitter_mm": 3.4157,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s3_p7-p8",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto C (decrece)",
+   "zona": "cruce",
+   "objetivo_mm": [
+    135.5513,
+    75.7385
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s3_p7",
+   "votos": {
+    "None": 2,
+    "s3_p7": 27
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s3_p7",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 11,
+   "error_mm": 4.7698,
+   "sesgo_mm": [
+    1.2116,
+    -4.5915
+   ],
+   "jitter_mm": 1.3019,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "eje_x",
+   "tipo": "eje",
+   "clase": "eje",
+   "serie": "",
+   "zona": "eje",
+   "objetivo_mm": [
+    122.9,
+    121.5
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "eje_x",
+   "votos": {
+    "None": 1,
+    "eje_x": 29
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "eje_x",
+   "acierto_crudo": true,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 1.3517,
+   "sesgo_mm": [
+    -0.0,
+    -1.4351
+   ],
+   "jitter_mm": 0.9097,
+   "t_primer_acierto_ms": 137.4476
+  },
+  {
+   "objetivo": "s1_p12",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto A (crece rápido)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    202.0,
+    65.4
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p12",
+   "votos": {
+    "None": 2,
+    "s1_p12": 27
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s1_p12",
+   "acierto_crudo": true,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 1.2761,
+   "sesgo_mm": [
+    0.6236,
+    0.4785
+   ],
+   "jitter_mm": 0.9928,
+   "t_primer_acierto_ms": 280.9241
+  },
+  {
+   "objetivo": "s3_p12",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto C (decrece)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    202.0,
+    93.1
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s3_p11-p12",
+   "votos": {
+    "None": 1,
+    "s3_p11-p12": 29
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s3_p11-p12",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 4,
+   "error_mm": 6.7115,
+   "sesgo_mm": [
+    -6.3966,
+    1.6922
+   ],
+   "jitter_mm": 0.9109,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s3_p8-p9",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto C (decrece)",
+   "zona": "cruce",
+   "objetivo_mm": [
+    152.7756,
+    80.2264
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p8-p9",
+   "votos": {
+    "None": 1,
+    "s1_p8-p9": 29
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s1_p8-p9",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 10,
+   "error_mm": 1.4694,
+   "sesgo_mm": [
+    -0.3589,
+    1.3967
+   ],
+   "jitter_mm": 1.4649,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s2_p5-p6",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto B (crece lento)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    108.6,
+    79.0
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p6",
+   "votos": {
+    "None": 1,
+    "s1_p6-p7": 9,
+    "s1_p6": 20
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s1_p6-p7",
+   "acierto_crudo": false,
+   "cambios_sel": 3,
+   "cambios_crudo": 9,
+   "error_mm": 9.0381,
+   "sesgo_mm": [
+    2.5367,
+    8.7385
+   ],
+   "jitter_mm": 2.2224,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s2_p12",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Producto B (crece lento)",
+   "zona": "aislado",
+   "objetivo_mm": [
+    202.0,
+    71.2
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s2_p11-p12",
+   "votos": {
+    "None": 2,
+    "s2_p11-p12": 27
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s2_p11-p12",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 6,
+   "error_mm": 6.0964,
+   "sesgo_mm": [
+    -5.2882,
+    3.1204
+   ],
+   "jitter_mm": 1.0753,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "texto_8",
+   "tipo": "texto",
+   "clase": "texto",
+   "serie": "",
+   "zona": "texto",
+   "objetivo_mm": [
+    18.15,
+    100.6
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 75.8621,
+   "seleccionado": "texto_8",
+   "votos": {
+    "None": 10,
+    "texto_8": 16,
+    "texto_9": 3
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "texto_9",
+   "acierto_crudo": false,
+   "cambios_sel": 2,
+   "cambios_crudo": 21,
+   "error_mm": 8.4559,
+   "sesgo_mm": [
+    -0.3985,
+    1.2108
+   ],
+   "jitter_mm": 16.5445,
+   "t_primer_acierto_ms": 804.7769
+  },
+  {
+   "objetivo": "s2_p7-p8",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Producto B (crece lento)",
+   "zona": "cruce",
+   "objetivo_mm": [
+    135.4624,
+    76.7531
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s3_p7",
+   "votos": {
+    "None": 2,
+    "s3_p7": 27
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s3_p7",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 14,
+   "error_mm": 4.0826,
+   "sesgo_mm": [
+    -0.3408,
+    -4.0895
+   ],
+   "jitter_mm": 0.8775,
+   "t_primer_acierto_ms": null
+  }
+ ]
+}

@@ -1,0 +1,166 @@
+{
+  "nombre_camara": "WN CAM-K211L",
+  "indice_camara": null,
+  "orientaciones": {
+    "WN CAM-K211L": "180"
+  },
+  "orientacion_auto_qr": true,
+  "voltear": "auto",
+  "voz": "",
+  "hoja": [
+    134,
+    18,
+    357,
+    348
+  ],
+  "velocidad_voz": 200,
+  "voz_interfaz": true,
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "vista_fraccion": 1.0,
+  "resolucion": [
+    640,
+    480
+  ],
+  "mjpg": true,
+  "modelo_mano": "",
+  "confianza_mano": 0.5,
+  "complejidad_mano": 0,
+  "depurar_voz": true,
+  "esquinas_placa_px": [
+    [
+      137.43,
+      23.74
+    ],
+    [
+      473.65,
+      18.45
+    ],
+    [
+      490.31,
+      358.21
+    ],
+    [
+      134.42,
+      365.14
+    ]
+  ],
+  "registro_origen": "autodeteccion",
+  "registro_error_mm": 0.38,
+  "registro_camara": "WN CAM-K211L",
+  "registro_resolucion": [
+    640,
+    480
+  ],
+  "autodetectar_al_empezar": true,
+  "seguir_placa": true,
+  "seguir_placa_cada_s": 2.5,
+  "umbral_movimiento_placa_mm": 3.0,
+  "qr_ancla": true,
+  "mano_recorte_placa": true,
+  "mano_margen_recorte": 0.4,
+  "mano_lado_max_px": 0,
+  "fps_camara": 30,
+  "exposicion": -6,
+  "textos_cortos": true,
+  "qr_url_base": "https://tactonauta.onrender.com/q/",
+  "resolucion_qr": [
+    1920,
+    1080
+  ],
+  "resoluciones_qr_candidatas": [
+    [
+      1280,
+      960
+    ],
+    [
+      1600,
+      1200
+    ],
+    [
+      2048,
+      1536
+    ],
+    [
+      2592,
+      1944
+    ],
+    [
+      1920,
+      1080
+    ],
+    [
+      1280,
+      720
+    ]
+  ],
+  "modos_qr": {
+    "WN CAM-K211L": {
+      "v": 4,
+      "res": [
+        2048,
+        1536
+      ]
+    }
+  },
+  "qr_zoom": true,
+  "qr_zoom_vista": true,
+  "qr_zona_placa": [
+    0.02,
+    0.02,
+    0.21,
+    0.21
+  ],
+  "plantilla_placa": {
+    "mm": [
+      220,
+      220
+    ],
+    "esquina_recortada": "superior derecha",
+    "recorte_mm": 10
+  },
+  "qr_modulo_mm": 1.03,
+  "qr_px_por_modulo_min": 2.2,
+  "qr_presupuesto_ms": 200,
+  "celular_puerto": 8765,
+  "camara_qr": "",
+  "camara_qr_resolucion": [
+    1280,
+    720
+  ],
+  "depurar_vision": true,
+  "radio_punto_mm": 7.0,
+  "radio_punto_min_mm": 3.0,
+  "radio_linea_mm": 8.0,
+  "radio_eje_mm": 7.0,
+  "radio_texto_mm": 7.0,
+  "margen_resto_mm": 3.0,
+  "ventaja_punto_mm": 3.0,
+  "histeresis_mm": 2.0,
+  "seguir_serie_s": 1.5,
+  "ventaja_serie_mm": 3.0,
+  "entrada_ms": 60,
+  "cambio_ms": 120,
+  "salida_ms": 150,
+  "suavizado": true,
+  "suavizado_min_hz": 1.5,
+  "suavizado_beta": 0.05,
+  "pinza_cerrar_palma": 0.28,
+  "pinza_abrir_palma": 0.36,
+  "pinza_cerrar_mm": 22.0,
+  "pinza_abrir_mm": 28.0,
+  "palma_min_mm": 45.0,
+  "palma_max_mm": 160.0,
+  "gracia_pinza_ms": 250,
+  "gracia_mano_ms": 300,
+  "interrumpir_narracion": true,
+  "callar_al_soltar": true,
+  "anunciar_cruces": true,
+  "cruce_mm": 3.0,
+  "avisar_fuera_placa": true,
+  "fuera_placa_ms": 400,
+  "fuera_placa_cada_s": 5.0
+}

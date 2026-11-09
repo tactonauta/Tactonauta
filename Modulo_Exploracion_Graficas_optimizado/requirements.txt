@@ -1,0 +1,41 @@
+# Explorador de gráficas impresas con textura  -  dependencias
+# Python 3.9 a 3.14 (mediapipe actual publica ruedas para Windows x64/ARM64,
+# Linux x64/ARM64 y macOS con chip Apple; NO para Mac Intel)
+#
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)   |   source .venv/bin/activate   (Linux/macOS)
+#   pip install -r requirements.txt
+#
+# tkinter NO se instala con pip: viene con Python en Windows/macOS.
+# En Linux:  sudo apt install python3-tk
+
+# --- Seguimiento de la mano ---
+# El programa usa la API actual de MediaPipe (Tasks · HandLandmarker). Las versiones
+# recientes ya no traen mp.solutions.hands; por eso ya no hace falta fijar 0.10.14.
+# La primera vez descarga el modelo hand_landmarker.task (~8 MB) a la carpeta "modelos".
+mediapipe>=0.10.30
+
+# --- Imagen / cámara ---
+# mediapipe ya instala opencv-contrib-python y numpy. Se listan sin tope de versión
+# (funcionan numpy 2.x y OpenCV 4.10+ / 5.x). No instales además "opencv-python":
+# dos paquetes de OpenCV a la vez suelen chocar.
+opencv-contrib-python>=4.10
+numpy>=1.26
+
+# --- Voz ---
+# El programa busca solo una voz en español aunque Windows esté en inglés (también las
+# voces "OneCore" de Configuración > Hora e idioma > Voz > Agregar voces). comtypes ya
+# viene con pyttsx3 en Windows; se lista porque el programa lo usa directamente.
+pyttsx3>=2.90
+comtypes>=1.2; sys_platform == "win32"
+
+# --- Cámara por nombre (solo Windows; recomendado) ---
+# Permite elegir la cámara por su nombre ("nombre_camara" en config_exploracion.json) y
+# guardar la orientación de cada cámara por su nombre. Sin ella se usa el índice 0.
+pygrabber>=0.2; sys_platform == "win32"
+
+# --- Lectura de QR más robusta (recomendada en Windows) ---
+# En las pruebas sintéticas (simular_vision.py) zbar sobre las variantes "relieve" y
+# "nitidez" fue el que más leyó, también el QR en relieve. Si no está, se usa solo OpenCV.
+# En Windows funciona directo; en Linux requiere:  sudo apt install libzbar0
+pyzbar>=0.1.9; sys_platform == "win32"

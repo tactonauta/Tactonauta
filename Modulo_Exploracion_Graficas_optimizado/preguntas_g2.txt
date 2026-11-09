@@ -1,0 +1,7 @@
+¿Cuántas líneas tiene la gráfica? | 3
+¿Qué producto vende más en diciembre? | Producto A, 43 mil
+¿Qué producto baja a lo largo del año? | Producto C
+¿Cuánto vende el Producto A en enero? | 8 mil
+¿Entre qué valores va el eje vertical? | de 10 a 50
+¿Entre qué meses el Producto A supera al Producto C? | entre agosto y septiembre
+¿Qué producto cambia menos durante el año? | Producto B (de 31 a 40)

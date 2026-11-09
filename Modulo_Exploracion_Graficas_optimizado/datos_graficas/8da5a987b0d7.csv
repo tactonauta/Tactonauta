@@ -1,0 +1,106 @@
+tipo,id,serie,x1_mm,y1_mm,x2_mm,y2_mm,valor_x,valor_y,tendencia,texto
+placa,placa,,0,0,220.0,220.0,,,,"esquina superior izquierda, y hacia abajo (la esquina recortada es la superior derecha); esquina recortada de 10.0 mm; gráfico arriba y leyenda abajo"
+descripcion,descripcion,,,,,,,,,"Gráfica 2: Ventas mensuales por producto. Gráfica de líneas con 3 curvas. Eje horizontal: Mes, con 12 categorías: Ene, Feb, Mar, Abr, May, Jun, Jul, Ago, Sep, Oct, Nov, Dic. Eje vertical: Unidades vendidas (miles), con marcas de 10 a 50. La curva «Producto A (crece rápido)» (textura en celdas en la lámina) empieza en 8 en Ene y termina en 43 en Dic; en general aumenta. Su valor máximo es 43 en Dic, y el mínimo es 8 en Ene. La curva «Producto B (crece lento)» (textura rayada en la lámina) empieza en 30 en Ene y termina en 39 en Dic; en general aumenta. Su valor máximo es 40 en Dic, y el mínimo es 30 en Ene. La curva «Producto C (decrece)» (textura punteada en la lámina) empieza en 53 en Ene y termina en 25 en Dic; en general disminuye. Su valor máximo es 53 en Ene, y el mínimo es 25 en Dic. En la lámina, algunos textos van con una letra que se explica en la leyenda de abajo. A, categoría del eje X: «Ene»; B, categoría del eje X: «Feb»; C, categoría del eje X: «Mar»; D, categoría del eje X: «Abr»; E, categoría del eje X: «May»; F, categoría del eje X: «Jun»; G, categoría del eje X: «Jul»; H, categoría del eje X: «Ago»; I, categoría del eje X: «Sep»; J, categoría del eje X: «Oct»; K, categoría del eje X: «Nov»; L, categoría del eje X: «Dic». En la esquina superior izquierda hay un código QR en relieve: no es parte del gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y página de donde sale, contexto y valores de cada curva)."
+serie,serie_1,Producto A (crece rápido),,,,,,,,Textura en celdas
+serie,serie_2,Producto B (crece lento),,,,,,,,Textura rayada
+serie,serie_3,Producto C (decrece),,,,,,,,Textura punteada
+punto,s1_p1,Producto A (crece rápido),43.9,118.3,,,0.0,8.2445,,Producto A (crece rápido). Ene: Unidades vendidas (miles) 8.
+punto,s1_p2,Producto A (crece rápido),58.3,113.5,,,1.0,11.4407,,Producto A (crece rápido). Feb: Unidades vendidas (miles) 11.
+punto,s1_p3,Producto A (crece rápido),72.6,108.7,,,2.0,14.6368,,Producto A (crece rápido). Mar: Unidades vendidas (miles) 15.
+punto,s1_p4,Producto A (crece rápido),87.0,103.9,,,3.0,17.833,,Producto A (crece rápido). Abr: Unidades vendidas (miles) 18.
+punto,s1_p5,Producto A (crece rápido),101.4,99.1,,,4.0,21.0292,,Producto A (crece rápido). May: Unidades vendidas (miles) 21.
+punto,s1_p6,Producto A (crece rápido),115.8,94.3,,,5.0,24.2253,,Producto A (crece rápido). Jun: Unidades vendidas (miles) 24.
+punto,s1_p7,Producto A (crece rápido),130.1,89.5,,,6.0,27.4215,,Producto A (crece rápido). Jul: Unidades vendidas (miles) 27.
+punto,s1_p8,Producto A (crece rápido),144.5,84.7,,,7.0,30.6177,,Producto A (crece rápido). Ago: Unidades vendidas (miles) 31.
+punto,s1_p9,Producto A (crece rápido),158.9,79.9,,,8.0,33.8138,,Producto A (crece rápido). Sep: Unidades vendidas (miles) 34.
+punto,s1_p10,Producto A (crece rápido),173.2,75.1,,,9.0,36.97,,Producto A (crece rápido). Oct: Unidades vendidas (miles) 37.
+punto,s1_p11,Producto A (crece rápido),187.6,70.3,,,10.0,40.2062,,Producto A (crece rápido). Nov: Unidades vendidas (miles) 40.
+punto,s1_p12,Producto A (crece rápido),202.0,65.4,,,11.0,43.4423,,Producto A (crece rápido). Dic: Unidades vendidas (miles) 43.
+punto,s2_p1,Producto B (crece lento),43.9,84.4,,,0.0,30.7978,,Producto B (crece lento). Ene: Unidades vendidas (miles) 31.
+punto,s2_p2,Producto B (crece lento),58.3,83.2,,,1.0,31.6098,,Producto B (crece lento). Feb: Unidades vendidas (miles) 32.
+punto,s2_p3,Producto B (crece lento),72.6,82.0,,,2.0,32.4104,,Producto B (crece lento). Mar: Unidades vendidas (miles) 32.
+punto,s2_p4,Producto B (crece lento),87.0,80.8,,,3.0,33.2002,,Producto B (crece lento). Abr: Unidades vendidas (miles) 33.
+punto,s2_p5,Producto B (crece lento),101.4,79.6,,,4.0,33.9736,,Producto B (crece lento). May: Unidades vendidas (miles) 34.
+punto,s2_p6,Producto B (crece lento),115.8,78.4,,,5.0,34.8049,,Producto B (crece lento). Jun: Unidades vendidas (miles) 35.
+punto,s2_p7,Producto B (crece lento),130.1,77.2,,,6.0,35.6089,,Producto B (crece lento). Jul: Unidades vendidas (miles) 36.
+punto,s2_p8,Producto B (crece lento),144.5,76.0,,,7.0,36.4075,,Producto B (crece lento). Ago: Unidades vendidas (miles) 36.
+punto,s2_p9,Producto B (crece lento),158.9,74.7,,,8.0,37.232,,Producto B (crece lento). Sep: Unidades vendidas (miles) 37.
+punto,s2_p10,Producto B (crece lento),173.2,73.6,,,9.0,38.0088,,Producto B (crece lento). Oct: Unidades vendidas (miles) 38.
+punto,s2_p11,Producto B (crece lento),187.6,72.3,,,10.0,38.8459,,Producto B (crece lento). Nov: Unidades vendidas (miles) 39.
+punto,s2_p12,Producto B (crece lento),202.0,71.2,,,11.0,39.6028,,Producto B (crece lento). Dic: Unidades vendidas (miles) 40.
+punto,s3_p1,Producto C (decrece),43.9,51.8,,,0.0,52.5032,,Producto C (decrece). Ene: Unidades vendidas (miles) 53.
+punto,s3_p2,Producto C (decrece),58.3,55.5,,,1.0,50.043,,Producto C (decrece). Feb: Unidades vendidas (miles) 50.
+punto,s3_p3,Producto C (decrece),72.6,59.3,,,2.0,47.5343,,Producto C (decrece). Mar: Unidades vendidas (miles) 48.
+punto,s3_p4,Producto C (decrece),87.0,63.1,,,3.0,44.9992,,Producto C (decrece). Abr: Unidades vendidas (miles) 45.
+punto,s3_p5,Producto C (decrece),101.4,66.8,,,4.0,42.5122,,Producto C (decrece). May: Unidades vendidas (miles) 43.
+punto,s3_p6,Producto C (decrece),115.8,70.6,,,5.0,40.0089,,Producto C (decrece). Jun: Unidades vendidas (miles) 40.
+punto,s3_p7,Producto C (decrece),130.1,74.3,,,6.0,37.5133,,Producto C (decrece). Jul: Unidades vendidas (miles) 38.
+punto,s3_p8,Producto C (decrece),144.5,78.1,,,7.0,35.0169,,Producto C (decrece). Ago: Unidades vendidas (miles) 35.
+punto,s3_p9,Producto C (decrece),158.9,81.8,,,8.0,32.5127,,Producto C (decrece). Sep: Unidades vendidas (miles) 33.
+punto,s3_p10,Producto C (decrece),173.2,85.6,,,9.0,30.0157,,Producto C (decrece). Oct: Unidades vendidas (miles) 30.
+punto,s3_p11,Producto C (decrece),187.6,89.3,,,10.0,27.5198,,Producto C (decrece). Nov: Unidades vendidas (miles) 28.
+punto,s3_p12,Producto C (decrece),202.0,93.1,,,11.0,25.0244,,Producto C (decrece). Dic: Unidades vendidas (miles) 25.
+curva,s1_p1-p2,Producto A (crece rápido),43.9,118.3,58.3,113.5,,,aumento,"Producto A (crece rápido). De Ene a Feb, sube de 8 a 11."
+curva,s1_p2-p3,Producto A (crece rápido),58.3,113.5,72.6,108.7,,,aumento,"Producto A (crece rápido). De Feb a Mar, sube de 11 a 15."
+curva,s1_p3-p4,Producto A (crece rápido),72.6,108.7,87.0,103.9,,,aumento,"Producto A (crece rápido). De Mar a Abr, sube de 15 a 18."
+curva,s1_p4-p5,Producto A (crece rápido),87.0,103.9,101.4,99.1,,,aumento,"Producto A (crece rápido). De Abr a May, sube de 18 a 21."
+curva,s1_p5-p6,Producto A (crece rápido),101.4,99.1,115.8,94.3,,,aumento,"Producto A (crece rápido). De May a Jun, sube de 21 a 24."
+curva,s1_p6-p7,Producto A (crece rápido),115.8,94.3,130.1,89.5,,,aumento,"Producto A (crece rápido). De Jun a Jul, sube de 24 a 27."
+curva,s1_p7-p8,Producto A (crece rápido),130.1,89.5,144.5,84.7,,,aumento,"Producto A (crece rápido). De Jul a Ago, sube de 27 a 31."
+curva,s1_p8-p9,Producto A (crece rápido),144.5,84.7,158.9,79.9,,,aumento,"Producto A (crece rápido). De Ago a Sep, sube de 31 a 34."
+curva,s1_p9-p10,Producto A (crece rápido),158.9,79.9,173.2,75.1,,,aumento,"Producto A (crece rápido). De Sep a Oct, sube de 34 a 37."
+curva,s1_p10-p11,Producto A (crece rápido),173.2,75.1,187.6,70.3,,,aumento,"Producto A (crece rápido). De Oct a Nov, sube de 37 a 40."
+curva,s1_p11-p12,Producto A (crece rápido),187.6,70.3,202.0,65.4,,,aumento,"Producto A (crece rápido). De Nov a Dic, sube de 40 a 43."
+curva,s2_p1-p2,Producto B (crece lento),43.9,84.4,58.3,83.2,,,aumento,"Producto B (crece lento). De Ene a Feb, sube de 31 a 32."
+curva,s2_p2-p3,Producto B (crece lento),58.3,83.2,72.6,82.0,,,aumento,"Producto B (crece lento). De Feb a Mar, sube de 32 a 32."
+curva,s2_p3-p4,Producto B (crece lento),72.6,82.0,87.0,80.8,,,aumento,"Producto B (crece lento). De Mar a Abr, sube de 32 a 33."
+curva,s2_p4-p5,Producto B (crece lento),87.0,80.8,101.4,79.6,,,aumento,"Producto B (crece lento). De Abr a May, sube de 33 a 34."
+curva,s2_p5-p6,Producto B (crece lento),101.4,79.6,115.8,78.4,,,aumento,"Producto B (crece lento). De May a Jun, sube de 34 a 35."
+curva,s2_p6-p7,Producto B (crece lento),115.8,78.4,130.1,77.2,,,aumento,"Producto B (crece lento). De Jun a Jul, sube de 35 a 36."
+curva,s2_p7-p8,Producto B (crece lento),130.1,77.2,144.5,76.0,,,aumento,"Producto B (crece lento). De Jul a Ago, sube de 36 a 36."
+curva,s2_p8-p9,Producto B (crece lento),144.5,76.0,158.9,74.7,,,aumento,"Producto B (crece lento). De Ago a Sep, sube de 36 a 37."
+curva,s2_p9-p10,Producto B (crece lento),158.9,74.7,173.2,73.6,,,aumento,"Producto B (crece lento). De Sep a Oct, sube de 37 a 38."
+curva,s2_p10-p11,Producto B (crece lento),173.2,73.6,187.6,72.3,,,aumento,"Producto B (crece lento). De Oct a Nov, sube de 38 a 39."
+curva,s2_p11-p12,Producto B (crece lento),187.6,72.3,202.0,71.2,,,aumento,"Producto B (crece lento). De Nov a Dic, sube de 39 a 40."
+curva,s3_p1-p2,Producto C (decrece),43.9,51.8,58.3,55.5,,,disminución,"Producto C (decrece). De Ene a Feb, baja de 53 a 50."
+curva,s3_p2-p3,Producto C (decrece),58.3,55.5,72.6,59.3,,,disminución,"Producto C (decrece). De Feb a Mar, baja de 50 a 48."
+curva,s3_p3-p4,Producto C (decrece),72.6,59.3,87.0,63.1,,,disminución,"Producto C (decrece). De Mar a Abr, baja de 48 a 45."
+curva,s3_p4-p5,Producto C (decrece),87.0,63.1,101.4,66.8,,,disminución,"Producto C (decrece). De Abr a May, baja de 45 a 43."
+curva,s3_p5-p6,Producto C (decrece),101.4,66.8,115.8,70.6,,,disminución,"Producto C (decrece). De May a Jun, baja de 43 a 40."
+curva,s3_p6-p7,Producto C (decrece),115.8,70.6,130.1,74.3,,,disminución,"Producto C (decrece). De Jun a Jul, baja de 40 a 38."
+curva,s3_p7-p8,Producto C (decrece),130.1,74.3,144.5,78.1,,,disminución,"Producto C (decrece). De Jul a Ago, baja de 38 a 35."
+curva,s3_p8-p9,Producto C (decrece),144.5,78.1,158.9,81.8,,,disminución,"Producto C (decrece). De Ago a Sep, baja de 35 a 33."
+curva,s3_p9-p10,Producto C (decrece),158.9,81.8,173.2,85.6,,,disminución,"Producto C (decrece). De Sep a Oct, baja de 33 a 30."
+curva,s3_p10-p11,Producto C (decrece),173.2,85.6,187.6,89.3,,,disminución,"Producto C (decrece). De Oct a Nov, baja de 30 a 28."
+curva,s3_p11-p12,Producto C (decrece),187.6,89.3,202.0,93.1,,,disminución,"Producto C (decrece). De Nov a Dic, baja de 28 a 25."
+leyenda,leyenda_1,Producto A (crece rápido),10.0,156.8,182.7,156.8,,,,Leyenda: la textura en celdas es Producto A (crece rápido).
+leyenda,leyenda_2,Producto B (crece lento),10.0,166.8,176.5,166.8,,,,Leyenda: la textura rayada es Producto B (crece lento).
+leyenda,leyenda_3,Producto C (decrece),10.0,176.8,151.7,176.8,,,,Leyenda: la textura punteada es Producto C (decrece).
+texto,texto_1,,38.8,131.1,48.9,131.1,,,,"Categoría, abreviado con la letra A: Ene."
+texto,texto_2,,67.6,131.1,77.7,131.1,,,,"Categoría, abreviado con la letra C: Mar."
+texto,texto_3,,96.3,131.1,106.4,131.1,,,,"Categoría, abreviado con la letra E: May."
+texto,texto_4,,125.1,131.1,135.2,131.1,,,,"Categoría, abreviado con la letra G: Jul."
+texto,texto_5,,153.8,131.1,163.9,131.1,,,,"Categoría, abreviado con la letra I: Sep."
+texto,texto_6,,182.6,131.1,192.7,131.1,,,,"Categoría, abreviado con la letra K: Nov."
+texto,texto_7,,10.0,115.6,26.3,115.6,,,,Eje vertical (Unidades vendidas (miles)): 10.
+texto,texto_8,,10.0,100.6,26.3,100.6,,,,Eje vertical (Unidades vendidas (miles)): 20.
+texto,texto_9,,10.0,85.6,26.3,85.6,,,,Eje vertical (Unidades vendidas (miles)): 30.
+texto,texto_10,,10.0,70.6,26.3,70.6,,,,Eje vertical (Unidades vendidas (miles)): 40.
+texto,texto_11,,10.0,55.6,26.3,55.6,,,,Eje vertical (Unidades vendidas (miles)): 50.
+texto,texto_12,,111.6,141.1,134.1,141.1,,,,Título del eje X: Mes.
+texto,texto_13,,45.2,13.2,191.8,13.2,,,,Título del eje Y: Unidades vendidas (miles).
+leyenda,leyenda_A,,162.7,173.7,203.8,180.0,,,,Leyenda: A es Ene.
+leyenda,leyenda_B,,10.0,183.7,51.1,190.0,,,,Leyenda: B es Feb.
+leyenda,leyenda_C,,62.1,183.7,103.2,190.0,,,,Leyenda: C es Mar.
+leyenda,leyenda_D,,114.2,183.7,155.3,190.0,,,,Leyenda: D es Abr.
+leyenda,leyenda_E,,166.3,183.7,207.4,190.0,,,,Leyenda: E es May.
+leyenda,leyenda_F,,10.0,193.7,51.1,200.0,,,,Leyenda: F es Jun.
+leyenda,leyenda_G,,62.1,193.7,103.2,200.0,,,,Leyenda: G es Jul.
+leyenda,leyenda_H,,114.2,193.7,155.3,200.0,,,,Leyenda: H es Ago.
+leyenda,leyenda_I,,166.3,193.7,207.4,200.0,,,,Leyenda: I es Sep.
+leyenda,leyenda_J,,10.0,203.7,51.1,210.0,,,,Leyenda: J es Oct.
+leyenda,leyenda_K,,62.1,203.7,103.2,210.0,,,,Leyenda: K es Nov.
+leyenda,leyenda_L,,114.2,203.7,155.3,210.0,,,,Leyenda: L es Dic.
+texto,qr,,10.0,10.0,35.8,35.8,,,,"En la esquina superior izquierda hay un código QR en relieve: no es parte del gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y página de donde sale, contexto y valores de cada curva)."
+eje,eje_x,,35.8,121.5,210.0,121.5,,,,"Eje horizontal: Mes, de Ene a Dic."
+eje,eje_y,,35.8,121.5,35.8,48.4,,,,"Eje vertical: Unidades vendidas (miles), con marcas de 10 a 50."

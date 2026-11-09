@@ -1,0 +1,153 @@
+{
+ "prueba": "mano",
+ "placa": "morado_g2",
+ "fecha": "2026-11-08T20:59:26",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "oscuro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "frames": 300,
+  "deteccion": {
+   "k": 300,
+   "n": 300,
+   "p": 1.0,
+   "ic95": [
+    0.9874,
+    1.0
+   ]
+  },
+  "deteccion_pct": 100.0,
+  "fps_captura": 14.9844,
+  "fps_proceso": 14.9844,
+  "ms_mano_mediana": 25.4804,
+  "ms_mano_p95": 27.7214,
+  "latencia_vision_p95_ms": 94.4574,
+  "palma_px_mediana": 139.4285,
+  "pinza_px": {
+   "p10": 20.5913,
+   "p50": 50.9184,
+   "p90": 111.0869
+  },
+  "umbral_pinza_px": 35,
+  "recorte_a_placa": false,
+  "roi_px": null,
+  "camara_formato": "YUY2",
+  "exposicion": -6,
+  "mano_lado_max_px": 0,
+  "aviso_fps": "la cámara entrega menos de 20 fps: probar \"exposicion\" fija (p. ej. -6) o más luz; el modelo de la mano tarda 25 ms",
+  "palma_mm_mediana": 87.2017,
+  "pinza_mm": {
+   "p10": 13.2766,
+   "p50": 33.6806,
+   "p90": 71.8042
+  },
+  "dentro_placa_pct": 98.6667,
+  "umbral_pinza_px_sobre_palma": 0.251,
+  "umbral_pinza_sobre_palma": 0.28,
+  "pinza_sobre_palma": {
+   "p10": 0.1518,
+   "p50": 0.3782,
+   "p90": 0.8049
+  },
+  "umbral_pinza_mm": 22.1583,
+  "delta_e_mano_placa": 29.9449,
+  "delta_gris_mano_placa": 27.218,
+  "lab_mano": [
+   26.3977,
+   3.6875,
+   15.875
+  ],
+  "lab_placa": [
+   13.5437,
+   12.8906,
+   -22.8906
+  ]
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}

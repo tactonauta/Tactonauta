@@ -1,0 +1,29 @@
+tipo,id,serie,x1_mm,y1_mm,x2_mm,y2_mm,valor_x,valor_y,tendencia,texto
+placa,placa,,0,0,220.0,220.0,,,,"esquina superior izquierda, y hacia abajo (la esquina recortada es la superior derecha); esquina recortada de 10.0 mm; gráfico arriba y leyenda abajo"
+descripcion,descripcion,,,,,,,,,"Gráfica 3: Presión vs altitud (con discontinuidad y datos faltantes). Gráfica de líneas. Eje horizontal: Altitud (km), con marcas de 0 a 10. Eje vertical: Presión (hPa), con marcas de 600 a 1000. La curva empieza en 1013 cuando Altitud (km) vale 0 y termina en 590 cuando Altitud (km) vale 10; en general disminuye. Su valor máximo es 1013 cuando Altitud (km) vale 0, y el mínimo es 590 cuando Altitud (km) vale 10. En la esquina superior izquierda hay un código QR en relieve: no es parte del gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y página de donde sale, contexto y valores de cada curva)."
+serie,serie_1,Serie A,,,,,,,,Textura en celdas
+punto,s1_p1,Serie A,55.3,53.1,,,-0.0245,1013.4813,,Altitud (km) 0: Presión (hPa) 1013.
+punto,s1_p2,Serie A,113.2,92.6,,,3.9386,835.8924,,Altitud (km) 4: Presión (hPa) 836.
+punto,s1_p3,Serie A,114.7,109.7,,,4.0394,758.8636,,Altitud (km) 4: Presión (hPa) 759.
+punto,s1_p4,Serie A,164.8,135.9,,,7.4652,640.8371,,Altitud (km) 7: Presión (hPa) 641.
+punto,s1_p5,Serie A,202.1,147.1,,,10.0178,590.425,,Altitud (km) 10: Presión (hPa) 590.
+curva,s1_p1-p2,Serie A,55.3,53.1,113.2,92.6,,,disminución,"Entre Altitud (km) 0 y 4, baja de 1013 a 836."
+curva,s1_p2-p3,Serie A,113.2,92.6,114.7,109.7,,,disminución,"Entre Altitud (km) 4 y 4, baja de 836 a 759."
+curva,s1_p3-p4,Serie A,114.7,109.7,164.8,135.9,,,disminución,"Entre Altitud (km) 4 y 7, baja de 759 a 641."
+curva,s1_p4-p5,Serie A,164.8,135.9,202.1,147.1,,,disminución,"Entre Altitud (km) 7 y 10, baja de 641 a 590."
+texto,texto_1,,50.6,161.3,60.7,161.3,,,,Eje horizontal (Altitud (km)): 0.
+texto,texto_2,,79.9,161.3,90.0,161.3,,,,Eje horizontal (Altitud (km)): 2.
+texto,texto_3,,109.1,161.3,119.2,161.3,,,,Eje horizontal (Altitud (km)): 4.
+texto,texto_4,,138.3,161.3,148.4,161.3,,,,Eje horizontal (Altitud (km)): 6.
+texto,texto_5,,167.6,161.3,177.7,161.3,,,,Eje horizontal (Altitud (km)): 8.
+texto,texto_6,,193.7,161.3,210.0,161.3,,,,Eje horizontal (Altitud (km)): 10.
+texto,texto_7,,16.2,145.0,38.7,145.0,,,,Eje vertical (Presión (hPa)): 600.
+texto,texto_8,,16.2,122.8,38.7,122.8,,,,Eje vertical (Presión (hPa)): 700.
+texto,texto_9,,16.2,100.6,38.7,100.6,,,,Eje vertical (Presión (hPa)): 800.
+texto,texto_10,,16.2,78.4,38.7,78.4,,,,Eje vertical (Presión (hPa)): 900.
+texto,texto_11,,10.0,56.1,38.7,56.1,,,,Eje vertical (Presión (hPa)): 1000.
+texto,texto_12,,95.8,171.3,161.7,171.3,,,,Título del eje X: Altitud (km).
+texto,texto_13,,45.2,13.2,123.6,13.2,,,,Título del eje Y: Presión (hPa).
+texto,qr,,10.0,10.0,35.8,35.8,,,,"En la esquina superior izquierda hay un código QR en relieve: no es parte del gráfico. Identifica esta lámina: al escanearlo se abren sus datos (documento y página de donde sale, contexto y valores de cada curva)."
+eje,eje_x,,48.2,151.8,209.2,151.8,,,,"Eje horizontal: Altitud (km), con marcas de 0 a 10."
+eje,eje_y,,48.2,151.8,48.2,48.4,,,,"Eje vertical: Presión (hPa), con marcas de 600 a 1000."

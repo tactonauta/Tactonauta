@@ -1,0 +1,151 @@
+{
+ "prueba": "mano",
+ "placa": "turquesa_g3",
+ "fecha": "2026-11-08T21:24:46",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "medio",
+  "grafica": "3"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "frames": 300,
+  "deteccion": {
+   "k": 299,
+   "n": 300,
+   "p": 0.9967,
+   "ic95": [
+    0.9814,
+    0.9994
+   ]
+  },
+  "deteccion_pct": 99.6667,
+  "fps_captura": 14.9986,
+  "fps_proceso": 14.9986,
+  "ms_mano_mediana": 13.2974,
+  "ms_mano_p95": 15.8311,
+  "latencia_vision_p95_ms": 82.5039,
+  "palma_px_mediana": 142.2695,
+  "pinza_px": {
+   "p10": 16.0619,
+   "p50": 49.3964,
+   "p90": 99.0109
+  },
+  "umbral_pinza_px": 35,
+  "recorte_a_placa": false,
+  "roi_px": null,
+  "camara_formato": "YUY2",
+  "exposicion": -6,
+  "mano_lado_max_px": 0,
+  "aviso_fps": "la cámara entrega menos de 20 fps: probar \"exposicion\" fija (p. ej. -6) o más luz; el modelo de la mano tarda 13 ms",
+  "palma_mm_mediana": 91.2891,
+  "pinza_mm": {
+   "p10": 10.4031,
+   "p50": 32.9682,
+   "p90": 65.654
+  },
+  "dentro_placa_pct": 89.2977,
+  "umbral_pinza_px_sobre_palma": 0.246,
+  "umbral_pinza_sobre_palma": 0.28,
+  "pinza_sobre_palma": {
+   "p10": 0.1123,
+   "p50": 0.3553,
+   "p90": 0.7469
+  },
+  "umbral_pinza_mm": 22.1583,
+  "delta_e_mano_placa": 25.6534,
+  "delta_gris_mano_placa": 7.223,
+  "lab_mano": [
+   52.7588,
+   2.7344,
+   14.3125
+  ],
+  "lab_placa": [
+   52.002,
+   -9.3906,
+   -16.5938
+  ]
+ },
+ "grafica": {
+  "titulo": "Presión vs altitud (con discontinuidad y datos faltantes)",
+  "series": [
+   "Serie A"
+  ],
+  "fuente": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/948A3CF9F1",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}

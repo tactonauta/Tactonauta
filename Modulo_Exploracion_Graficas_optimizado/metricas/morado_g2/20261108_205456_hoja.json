@@ -1,0 +1,2077 @@
+{
+ "prueba": "hoja",
+ "placa": "morado_g2",
+ "fecha": "2026-11-08T20:54:56",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "oscuro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "frames": 45,
+  "repeticiones": 3,
+  "exito": {
+   "k": 45,
+   "n": 45,
+   "p": 1.0,
+   "ic95": [
+    0.9213,
+    1.0
+   ]
+  },
+  "exito_pct": 100.0,
+  "ms_mediana": 85.0129,
+  "confianza_alta_pct": 93.3333,
+  "reconstruida_pct": 0.0,
+  "metodo": "kmeans3",
+  "error_estimado_mm": 0.5583,
+  "bordes_fuera": {},
+  "esquina_ok_pct": 93.3333,
+  "esquina_vista": "superior derecha",
+  "rotacion_med_grados": 1.2443,
+  "toca_borde_pct": 0.0,
+  "area_pct": 37.2828,
+  "aspecto_px_vs_mm": 1.0171,
+  "delta_gris": 64.184,
+  "delta_e": 27.8309,
+  "fondo_desv_gris": 38.7911,
+  "separabilidad_otsu": 0.7981,
+  "gris_placa": 34.126,
+  "gris_fondo": 98.299,
+  "anisotropia_calibracion": 1.0262,
+  "estabilidad_mm": 0.5127,
+  "reposicion_mm": 0.4354,
+  "reposicion_max_mm": 0.5138,
+  "desfase_guardada_mm": 0.6514,
+  "desfase_guardada_mediana_mm": 0.515,
+  "iou_guardada": 0.9802
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ },
+ "detalle": [
+  [
+   {
+    "detectada": true,
+    "rect": [
+     139,
+     23,
+     346,
+     338
+    ],
+    "esquina": "superior derecha",
+    "ms": 214.7294,
+    "esquinas": [
+     [
+      142.39,
+      28.05
+     ],
+     [
+      471.44,
+      23.77
+     ],
+     [
+      484.69,
+      354.67
+     ],
+     [
+      139.31,
+      360.03
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.8134,
+    "error_estimado_mm": 0.8026,
+    "area_pct": 36.3905,
+    "rotacion_grados": -0.7445,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0171,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     140,
+     22,
+     345,
+     339
+    ],
+    "esquina": "superior derecha",
+    "ms": 56.4932,
+    "esquinas": [
+     [
+      142.14,
+      28.45
+     ],
+     [
+      471.25,
+      22.08
+     ],
+     [
+      484.77,
+      354.71
+     ],
+     [
+      140.31,
+      360.23
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5448,
+    "error_estimado_mm": 0.5373,
+    "area_pct": 36.4312,
+    "rotacion_grados": -1.1091,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0135,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     20,
+     351,
+     342
+    ],
+    "esquina": "superior derecha",
+    "ms": 90.2243,
+    "esquinas": [
+     [
+      142.02,
+      28.32
+     ],
+     [
+      472.01,
+      20.92
+     ],
+     [
+      487.04,
+      355.13
+     ],
+     [
+      137.41,
+      361.86
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5379,
+    "error_estimado_mm": 0.5267,
+    "area_pct": 36.9441,
+    "rotacion_grados": -1.2848,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0174,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     20,
+     351,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 82.3883,
+    "esquinas": [
+     [
+      142.01,
+      28.44
+     ],
+     [
+      472.17,
+      20.89
+     ],
+     [
+      487.01,
+      354.8
+     ],
+     [
+      137.43,
+      362.01
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5786,
+    "error_estimado_mm": 0.5667,
+    "area_pct": 36.9348,
+    "rotacion_grados": -1.3096,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0181,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     20,
+     350,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 82.4824,
+    "esquinas": [
+     [
+      141.89,
+      28.42
+     ],
+     [
+      472.07,
+      20.93
+     ],
+     [
+      486.97,
+      354.61
+     ],
+     [
+      137.52,
+      362.1
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5326,
+    "error_estimado_mm": 0.5217,
+    "area_pct": 36.9233,
+    "rotacion_grados": -1.2998,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0181,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     21,
+     351,
+     341
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.8423,
+    "esquinas": [
+     [
+      142.16,
+      28.3
+     ],
+     [
+      472.01,
+      21.02
+     ],
+     [
+      487.05,
+      354.87
+     ],
+     [
+      137.37,
+      361.86
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5331,
+    "error_estimado_mm": 0.5222,
+    "area_pct": 36.9201,
+    "rotacion_grados": -1.2638,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0178,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     140,
+     21,
+     345,
+     339
+    ],
+    "esquina": "superior derecha",
+    "ms": 56.3183,
+    "esquinas": [
+     [
+      141.65,
+      28.46
+     ],
+     [
+      471.23,
+      21.92
+     ],
+     [
+      484.7,
+      354.47
+     ],
+     [
+      140.65,
+      359.91
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9077,
+    "error_estimado_mm": 0.8955,
+    "area_pct": 36.4123,
+    "rotacion_grados": -1.1373,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0142,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     139,
+     22,
+     346,
+     339
+    ],
+    "esquina": "superior derecha",
+    "ms": 53.1779,
+    "esquinas": [
+     [
+      142.45,
+      28.03
+     ],
+     [
+      471.34,
+      22.93
+     ],
+     [
+      484.89,
+      354.54
+     ],
+     [
+      139.51,
+      360.26
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.6041,
+    "error_estimado_mm": 0.5958,
+    "area_pct": 36.4361,
+    "rotacion_grados": -0.8874,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0154,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     139,
+     22,
+     346,
+     339
+    ],
+    "esquina": "superior derecha",
+    "ms": 62.1623,
+    "esquinas": [
+     [
+      142.33,
+      27.98
+     ],
+     [
+      471.42,
+      22.67
+     ],
+     [
+      484.47,
+      354.78
+     ],
+     [
+      139.34,
+      360.05
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5259,
+    "error_estimado_mm": 0.5185,
+    "area_pct": 36.4505,
+    "rotacion_grados": -0.9243,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0148,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     21,
+     351,
+     341
+    ],
+    "esquina": "superior derecha",
+    "ms": 92.5867,
+    "esquinas": [
+     [
+      142.02,
+      28.39
+     ],
+     [
+      472.06,
+      21.05
+     ],
+     [
+      487.04,
+      354.84
+     ],
+     [
+      137.48,
+      361.88
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5571,
+    "error_estimado_mm": 0.5458,
+    "area_pct": 36.917,
+    "rotacion_grados": -1.2737,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0181,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     22,
+     350,
+     340
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.4146,
+    "esquinas": [
+     [
+      142.06,
+      27.94
+     ],
+     [
+      472.25,
+      22.11
+     ],
+     [
+      486.94,
+      354.84
+     ],
+     [
+      137.3,
+      361.88
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5167,
+    "error_estimado_mm": 0.5064,
+    "area_pct": 36.8942,
+    "rotacion_grados": -1.0101,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0194,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     140,
+     21,
+     345,
+     340
+    ],
+    "esquina": "superior derecha",
+    "ms": 55.0754,
+    "esquinas": [
+     [
+      142.04,
+      28.31
+     ],
+     [
+      471.02,
+      21.75
+     ],
+     [
+      484.62,
+      354.23
+     ],
+     [
+      140.22,
+      360.24
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.6705,
+    "error_estimado_mm": 0.6614,
+    "area_pct": 36.4213,
+    "rotacion_grados": -1.1435,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0132,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     340
+    ],
+    "esquina": "superior derecha",
+    "ms": 82.1704,
+    "esquinas": [
+     [
+      143.14,
+      28.59
+     ],
+     [
+      471.02,
+      20.64
+     ],
+     [
+      486.02,
+      354.39
+     ],
+     [
+      136.67,
+      359.92
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.8214,
+    "error_estimado_mm": 0.8074,
+    "area_pct": 36.6634,
+    "rotacion_grados": -1.3891,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0179,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     137,
+     20,
+     351,
+     342
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.1611,
+    "esquinas": [
+     [
+      141.67,
+      28.42
+     ],
+     [
+      471.97,
+      20.91
+     ],
+     [
+      487.08,
+      354.77
+     ],
+     [
+      137.71,
+      361.92
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5139,
+    "error_estimado_mm": 0.5033,
+    "area_pct": 36.9261,
+    "rotacion_grados": -1.3026,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0181,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     340
+    ],
+    "esquina": "superior derecha",
+    "ms": 84.3976,
+    "esquinas": [
+     [
+      143.24,
+      28.34
+     ],
+     [
+      469.93,
+      20.86
+     ],
+     [
+      486.35,
+      354.76
+     ],
+     [
+      136.61,
+      359.71
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.8575,
+    "error_estimado_mm": 0.8432,
+    "area_pct": 36.6314,
+    "rotacion_grados": -1.3108,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0162,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   }
+  ],
+  [
+   {
+    "detectada": true,
+    "rect": [
+     132,
+     16,
+     357,
+     348
+    ],
+    "esquina": "superior derecha",
+    "ms": 88.2557,
+    "esquinas": [
+     [
+      136.82,
+      24.5
+     ],
+     [
+      473.56,
+      16.63
+     ],
+     [
+      488.59,
+      355.63
+     ],
+     [
+      132.68,
+      363.6
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9155,
+    "error_estimado_mm": 0.8813,
+    "area_pct": 38.2369,
+    "rotacion_grados": -1.3392,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0212,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     133,
+     17,
+     357,
+     348
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.7929,
+    "esquinas": [
+     [
+      137.42,
+      24.22
+     ],
+     [
+      474.0,
+      17.04
+     ],
+     [
+      489.74,
+      358.27
+     ],
+     [
+      133.03,
+      364.88
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.545,
+    "error_estimado_mm": 0.5229,
+    "area_pct": 38.485,
+    "rotacion_grados": -1.2216,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0163,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     133,
+     16,
+     357,
+     350
+    ],
+    "esquina": "superior derecha",
+    "ms": 88.5391,
+    "esquinas": [
+     [
+      136.9,
+      23.98
+     ],
+     [
+      473.68,
+      16.86
+     ],
+     [
+      489.88,
+      357.81
+     ],
+     [
+      133.18,
+      365.03
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.515,
+    "error_estimado_mm": 0.494,
+    "area_pct": 38.5038,
+    "rotacion_grados": -1.2115,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0164,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     132,
+     22,
+     357,
+     342
+    ],
+    "esquina": null,
+    "ms": 84.5612,
+    "esquinas": [
+     [
+      136.94,
+      22.0
+     ],
+     [
+      473.52,
+      22.0
+     ],
+     [
+      488.81,
+      355.52
+     ],
+     [
+      132.81,
+      363.75
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "media",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9502,
+    "error_estimado_mm": 0.9167,
+    "area_pct": 38.0671,
+    "rotacion_grados": 0.0,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0252,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": false
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 56.2287,
+    "esquinas": [
+     [
+      137.73,
+      24.78
+     ],
+     [
+      472.55,
+      17.59
+     ],
+     [
+      487.38,
+      357.39
+     ],
+     [
+      134.54,
+      363.21
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5059,
+    "error_estimado_mm": 0.4888,
+    "area_pct": 37.9678,
+    "rotacion_grados": -1.2315,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0136,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 56.558,
+    "esquinas": [
+     [
+      137.93,
+      25.04
+     ],
+     [
+      471.71,
+      17.37
+     ],
+     [
+      487.7,
+      357.54
+     ],
+     [
+      134.41,
+      363.22
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5386,
+    "error_estimado_mm": 0.5205,
+    "area_pct": 37.9426,
+    "rotacion_grados": -1.3158,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0124,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     133,
+     16,
+     357,
+     350
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.4341,
+    "esquinas": [
+     [
+      137.12,
+      24.27
+     ],
+     [
+      473.65,
+      16.97
+     ],
+     [
+      489.79,
+      357.88
+     ],
+     [
+      133.13,
+      365.03
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5292,
+    "error_estimado_mm": 0.5079,
+    "area_pct": 38.4696,
+    "rotacion_grados": -1.2432,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0165,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 53.7168,
+    "esquinas": [
+     [
+      137.88,
+      24.55
+     ],
+     [
+      473.53,
+      17.92
+     ],
+     [
+      487.17,
+      357.63
+     ],
+     [
+      134.49,
+      363.1
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.6156,
+    "error_estimado_mm": 0.5945,
+    "area_pct": 38.0039,
+    "rotacion_grados": -1.1316,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0146,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     133,
+     16,
+     357,
+     350
+    ],
+    "esquina": "superior derecha",
+    "ms": 84.9591,
+    "esquinas": [
+     [
+      136.76,
+      24.13
+     ],
+     [
+      474.72,
+      16.86
+     ],
+     [
+      489.58,
+      357.75
+     ],
+     [
+      133.27,
+      365.23
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5266,
+    "error_estimado_mm": 0.5049,
+    "area_pct": 38.546,
+    "rotacion_grados": -1.2334,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0177,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     132,
+     16,
+     357,
+     348
+    ],
+    "esquina": "superior derecha",
+    "ms": 83.717,
+    "esquinas": [
+     [
+      136.94,
+      24.05
+     ],
+     [
+      474.12,
+      16.91
+     ],
+     [
+      488.33,
+      355.39
+     ],
+     [
+      132.93,
+      363.91
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9748,
+    "error_estimado_mm": 0.9382,
+    "area_pct": 38.2463,
+    "rotacion_grados": -1.2123,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0208,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     133,
+     17,
+     357,
+     348
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.2405,
+    "esquinas": [
+     [
+      136.92,
+      23.95
+     ],
+     [
+      474.24,
+      17.19
+     ],
+     [
+      489.67,
+      357.85
+     ],
+     [
+      133.18,
+      364.93
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5653,
+    "error_estimado_mm": 0.5424,
+    "area_pct": 38.4999,
+    "rotacion_grados": -1.1473,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0175,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 55.0048,
+    "esquinas": [
+     [
+      137.94,
+      24.85
+     ],
+     [
+      472.21,
+      17.43
+     ],
+     [
+      487.46,
+      357.61
+     ],
+     [
+      134.6,
+      363.12
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5214,
+    "error_estimado_mm": 0.5038,
+    "area_pct": 37.9506,
+    "rotacion_grados": -1.2705,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0125,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     346
+    ],
+    "esquina": "superior derecha",
+    "ms": 53.2796,
+    "esquinas": [
+     [
+      137.76,
+      24.62
+     ],
+     [
+      473.3,
+      17.91
+     ],
+     [
+      487.14,
+      357.85
+     ],
+     [
+      134.57,
+      362.92
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.4879,
+    "error_estimado_mm": 0.4712,
+    "area_pct": 37.9901,
+    "rotacion_grados": -1.1461,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0143,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 56.5742,
+    "esquinas": [
+     [
+      137.87,
+      24.84
+     ],
+     [
+      472.9,
+      17.41
+     ],
+     [
+      487.39,
+      357.91
+     ],
+     [
+      134.56,
+      363.06
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.6469,
+    "error_estimado_mm": 0.6246,
+    "area_pct": 38.005,
+    "rotacion_grados": -1.2698,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0132,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     134,
+     17,
+     354,
+     347
+    ],
+    "esquina": "superior derecha",
+    "ms": 53.647,
+    "esquinas": [
+     [
+      137.75,
+      24.92
+     ],
+     [
+      473.28,
+      17.63
+     ],
+     [
+      487.18,
+      357.86
+     ],
+     [
+      134.56,
+      363.03
+     ]
+    ],
+    "metodo": "bordes",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5781,
+    "error_estimado_mm": 0.5583,
+    "area_pct": 37.9991,
+    "rotacion_grados": -1.2443,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0142,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   }
+  ],
+  [
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     26,
+     351,
+     336
+    ],
+    "esquina": null,
+    "ms": 97.7738,
+    "esquinas": [
+     [
+      140.53,
+      26.0
+     ],
+     [
+      471.48,
+      26.0
+     ],
+     [
+      486.7,
+      356.66
+     ],
+     [
+      136.86,
+      361.32
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "media",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9796,
+    "error_estimado_mm": 0.9598,
+    "area_pct": 36.9005,
+    "rotacion_grados": 0.0,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0217,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": false
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 101.4939,
+    "esquinas": [
+     [
+      140.92,
+      28.13
+     ],
+     [
+      471.97,
+      20.58
+     ],
+     [
+      487.92,
+      357.34
+     ],
+     [
+      136.23,
+      362.68
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5853,
+    "error_estimado_mm": 0.5703,
+    "area_pct": 37.3107,
+    "rotacion_grados": -1.3055,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0166,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     26,
+     351,
+     336
+    ],
+    "esquina": null,
+    "ms": 86.0246,
+    "esquinas": [
+     [
+      140.53,
+      26.0
+     ],
+     [
+      471.47,
+      26.0
+     ],
+     [
+      486.7,
+      356.91
+     ],
+     [
+      136.86,
+      361.09
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "media",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 1.0277,
+    "error_estimado_mm": 1.007,
+    "area_pct": 36.9016,
+    "rotacion_grados": 0.0,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0216,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": false
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     341
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.0708,
+    "esquinas": [
+     [
+      140.57,
+      28.22
+     ],
+     [
+      471.25,
+      20.84
+     ],
+     [
+      486.7,
+      356.84
+     ],
+     [
+      136.84,
+      360.82
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9649,
+    "error_estimado_mm": 0.9437,
+    "area_pct": 37.0386,
+    "rotacion_grados": -1.2781,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0174,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     344
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.5411,
+    "esquinas": [
+     [
+      140.62,
+      28.16
+     ],
+     [
+      472.36,
+      20.61
+     ],
+     [
+      487.62,
+      356.81
+     ],
+     [
+      136.21,
+      363.06
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5254,
+    "error_estimado_mm": 0.5119,
+    "area_pct": 37.3221,
+    "rotacion_grados": -1.3036,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0176,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     341
+    ],
+    "esquina": "superior derecha",
+    "ms": 87.1336,
+    "esquinas": [
+     [
+      140.57,
+      28.25
+     ],
+     [
+      471.3,
+      20.79
+     ],
+     [
+      486.53,
+      356.84
+     ],
+     [
+      136.84,
+      360.82
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9984,
+    "error_estimado_mm": 0.9765,
+    "area_pct": 37.0335,
+    "rotacion_grados": -1.2912,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0173,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     344
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.1223,
+    "esquinas": [
+     [
+      140.79,
+      27.9
+     ],
+     [
+      471.76,
+      20.76
+     ],
+     [
+      487.89,
+      356.75
+     ],
+     [
+      136.33,
+      363.06
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5887,
+    "error_estimado_mm": 0.5738,
+    "area_pct": 37.292,
+    "rotacion_grados": -1.2353,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0165,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 83.1402,
+    "esquinas": [
+     [
+      140.85,
+      28.41
+     ],
+     [
+      472.17,
+      20.4
+     ],
+     [
+      487.69,
+      357.12
+     ],
+     [
+      136.23,
+      362.92
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.6054,
+    "error_estimado_mm": 0.59,
+    "area_pct": 37.3089,
+    "rotacion_grados": -1.3842,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0168,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     342
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.0129,
+    "esquinas": [
+     [
+      140.66,
+      28.34
+     ],
+     [
+      470.8,
+      20.74
+     ],
+     [
+      486.78,
+      356.47
+     ],
+     [
+      136.65,
+      361.11
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.9721,
+    "error_estimado_mm": 0.951,
+    "area_pct": 37.0202,
+    "rotacion_grados": -1.3195,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0172,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     353,
+     344
+    ],
+    "esquina": "superior derecha",
+    "ms": 85.2322,
+    "esquinas": [
+     [
+      140.51,
+      28.27
+     ],
+     [
+      471.72,
+      20.57
+     ],
+     [
+      488.01,
+      356.88
+     ],
+     [
+      136.35,
+      363.05
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5815,
+    "error_estimado_mm": 0.5666,
+    "area_pct": 37.307,
+    "rotacion_grados": -1.3309,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0171,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     344
+    ],
+    "esquina": "superior derecha",
+    "ms": 86.2046,
+    "esquinas": [
+     [
+      140.72,
+      28.08
+     ],
+     [
+      472.11,
+      20.65
+     ],
+     [
+      487.71,
+      356.74
+     ],
+     [
+      136.24,
+      363.1
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.561,
+    "error_estimado_mm": 0.5467,
+    "area_pct": 37.3072,
+    "rotacion_grados": -1.2844,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0171,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 92.5828,
+    "esquinas": [
+     [
+      140.73,
+      28.28
+     ],
+     [
+      471.76,
+      20.61
+     ],
+     [
+      487.89,
+      356.81
+     ],
+     [
+      136.27,
+      362.96
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5523,
+    "error_estimado_mm": 0.5384,
+    "area_pct": 37.2828,
+    "rotacion_grados": -1.3275,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0171,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     344
+    ],
+    "esquina": "superior derecha",
+    "ms": 87.8058,
+    "esquinas": [
+     [
+      140.56,
+      28.14
+     ],
+     [
+      472.42,
+      20.67
+     ],
+     [
+      487.51,
+      356.74
+     ],
+     [
+      136.22,
+      363.1
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5422,
+    "error_estimado_mm": 0.5283,
+    "area_pct": 37.3185,
+    "rotacion_grados": -1.2903,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0177,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     351,
+     342
+    ],
+    "esquina": "superior derecha",
+    "ms": 83.6297,
+    "esquinas": [
+     [
+      140.61,
+      28.02
+     ],
+     [
+      470.75,
+      20.91
+     ],
+     [
+      486.75,
+      356.47
+     ],
+     [
+      136.74,
+      361.11
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 1.028,
+    "error_estimado_mm": 1.0057,
+    "area_pct": 37.0218,
+    "rotacion_grados": -1.2349,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0168,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   },
+   {
+    "detectada": true,
+    "rect": [
+     136,
+     20,
+     352,
+     343
+    ],
+    "esquina": "superior derecha",
+    "ms": 83.0428,
+    "esquinas": [
+     [
+      140.49,
+      28.12
+     ],
+     [
+      471.95,
+      20.93
+     ],
+     [
+      487.81,
+      356.74
+     ],
+     [
+      136.38,
+      362.94
+     ]
+    ],
+    "metodo": "kmeans3",
+    "confianza": "alta",
+    "reconstruida": false,
+    "giro_corregido": 0,
+    "residuo_px": 0.5447,
+    "error_estimado_mm": 0.531,
+    "area_pct": 37.2815,
+    "rotacion_grados": -1.243,
+    "bordes_imagen": [],
+    "toca_borde": false,
+    "bordes_fuera": [],
+    "aspecto_px_vs_mm": 1.0179,
+    "esquina_esperada": "superior derecha",
+    "esquina_ok": true
+   }
+  ]
+ ]
+}

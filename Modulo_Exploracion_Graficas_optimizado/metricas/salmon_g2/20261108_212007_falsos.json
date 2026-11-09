@@ -1,0 +1,150 @@
+{
+ "prueba": "falsos",
+ "placa": "salmon_g2",
+ "fecha": "2026-11-08T21:20:07",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "claro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "fases": {
+   "sin_pinza": {
+    "frames": 225,
+    "frames_con_mano": 224,
+    "frames_pinza": 0,
+    "pinza_pct": 0.0,
+    "activaciones_min": 0.0,
+    "cortes_min": 0.0,
+    "anuncios_min": 0.0,
+    "duracion_s": 15.0076,
+    "pinza_px_pct": 0.0,
+    "activaciones_px_min": 0.0,
+    "cortes_px_min": 0.0,
+    "medida_pinza": {
+     "p10": 0.6285,
+     "p50": 0.7496,
+     "p90": 0.9781
+    }
+   },
+   "con_pinza": {
+    "frames": 225,
+    "frames_con_mano": 225,
+    "frames_pinza": 225,
+    "pinza_pct": 100.0,
+    "activaciones_min": 3.9993,
+    "cortes_min": 0.0,
+    "anuncios_min": 59.99,
+    "duracion_s": 15.0025,
+    "pinza_px_pct": 89.7778,
+    "activaciones_px_min": 55.9907,
+    "cortes_px_min": 51.9913,
+    "medida_pinza": {
+     "p10": 0.0745,
+     "p50": 0.144,
+     "p90": 0.2865
+    }
+   }
+  },
+  "umbral_cerrar_palma": 0.28,
+  "umbral_abrir_palma": 0.36,
+  "gracia_pinza_ms": 250,
+  "falsos_pct": 0.0,
+  "activaciones_falsas_min": 0.0,
+  "anuncios_falsos_min": 0.0,
+  "falsos_px_pct": 0.0,
+  "activaciones_falsas_px_min": 0.0,
+  "medida_sin_pinza_p10": 0.6285,
+  "sensibilidad_pct": 100.0,
+  "cortes_min": 0.0,
+  "anuncios_min": 59.99,
+  "sensibilidad_px_pct": 89.7778,
+  "cortes_px_min": 51.9913,
+  "medida_con_pinza_p90": 0.2865
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}

@@ -1,0 +1,172 @@
+﻿placa,grupo,metrica,clave,valor,objetivo,cumple
+morado_g2,Selección,Acierto de selección,acierto_pct,20.0,≥ 90 %,no
+salmon_g2,Selección,Acierto de selección,acierto_pct,26.666666666666668,≥ 90 %,no
+turquesa_g3,Selección,Acierto de selección,acierto_pct,25.0,≥ 90 %,no
+morado_g2,Selección,· en zonas aisladas,acierto_aislado_pct,14.285714285714286,≥ 90 %,no
+salmon_g2,Selección,· en zonas aisladas,acierto_aislado_pct,28.571428571428573,≥ 90 %,no
+turquesa_g3,Selección,· en zonas aisladas,acierto_aislado_pct,25.0,≥ 90 %,no
+morado_g2,Selección,· junto a cruces,acierto_cruce_pct,0.0,≥ 80 %,no
+salmon_g2,Selección,· junto a cruces,acierto_cruce_pct,0.0,≥ 80 %,no
+turquesa_g3,Selección,· junto a cruces,acierto_cruce_pct,,≥ 80 %,
+morado_g2,Selección,· ejes,acierto_eje_pct,100.0,≥ 90 %,sí
+salmon_g2,Selección,· ejes,acierto_eje_pct,100.0,≥ 90 %,sí
+turquesa_g3,Selección,· ejes,acierto_eje_pct,50.0,≥ 90 %,no
+morado_g2,Selección,· textos y leyendas,acierto_texto_pct,50.0,≥ 90 %,no
+salmon_g2,Selección,· textos y leyendas,acierto_texto_pct,50.0,≥ 90 %,no
+turquesa_g3,Selección,· textos y leyendas,acierto_texto_pct,0.0,≥ 90 %,no
+morado_g2,Selección,Acierto de serie,acierto_serie_pct,53.333333333333336,≥ 95 %,no
+salmon_g2,Selección,Acierto de serie,acierto_serie_pct,60.0,≥ 95 %,no
+turquesa_g3,Selección,Acierto de serie,acierto_serie_pct,37.5,≥ 95 %,no
+morado_g2,Selección,Error de la yema (mediana),error_mediana_mm,5.7729,≤ 4 mm,no
+salmon_g2,Selección,Error de la yema (mediana),error_mediana_mm,5.1163,≤ 4 mm,no
+turquesa_g3,Selección,Error de la yema (mediana),error_mediana_mm,9.04225,≤ 4 mm,no
+morado_g2,Selección,Sesgo de la yema,sesgo_modulo_mm,4.639156971740064,,
+salmon_g2,Selección,Sesgo de la yema,sesgo_modulo_mm,1.4539774490074535,,
+turquesa_g3,Selección,Sesgo de la yema,sesgo_modulo_mm,7.730020155748706,,
+morado_g2,Selección,Temblor,jitter_mm,2.5706,"≤ 1,5 mm",no
+salmon_g2,Selección,Temblor,jitter_mm,2.2224,"≤ 1,5 mm",no
+turquesa_g3,Selección,Temblor,jitter_mm,1.7392,"≤ 1,5 mm",no
+morado_g2,Selección,Cambios de elemento por objetivo,cambios_sel_mediana,1.0,≤ 1,sí
+salmon_g2,Selección,Cambios de elemento por objetivo,cambios_sel_mediana,1.0,≤ 1,sí
+turquesa_g3,Selección,Cambios de elemento por objetivo,cambios_sel_mediana,1.0,≤ 1,sí
+morado_g2,Selección,· sin suavizado ni estabilidad,cambios_crudo_mediana,8.0,,
+salmon_g2,Selección,· sin suavizado ni estabilidad,cambios_crudo_mediana,9.0,,
+turquesa_g3,Selección,· sin suavizado ni estabilidad,cambios_crudo_mediana,0.5,,
+morado_g2,Selección,Acierto sin suavizado ni estabilidad,acierto_crudo_pct,33.333333333333336,,
+salmon_g2,Selección,Acierto sin suavizado ni estabilidad,acierto_crudo_pct,26.666666666666668,,
+turquesa_g3,Selección,Acierto sin suavizado ni estabilidad,acierto_crudo_pct,25.0,,
+morado_g2,Registro,Error de registro (mediana),error_mediana_mm,1.967,≤ 3 mm,sí
+salmon_g2,Registro,Error de registro (mediana),error_mediana_mm,10.3504,≤ 3 mm,no
+turquesa_g3,Registro,Error de registro (mediana),error_mediana_mm,10.3715,≤ 3 mm,no
+morado_g2,Registro,Error máximo en el gráfico,error_max_grafico_mm,2.3998,≤ 6 mm,sí
+salmon_g2,Registro,Error máximo en el gráfico,error_max_grafico_mm,10.7288,≤ 6 mm,no
+turquesa_g3,Registro,Error máximo en el gráfico,error_max_grafico_mm,11.7217,≤ 6 mm,no
+morado_g2,Registro,Ídem con autodetección (A),error_auto_max_grafico_mm,2.2568,≤ 6 mm,sí
+salmon_g2,Registro,Ídem con autodetección (A),error_auto_max_grafico_mm,2.4997,≤ 6 mm,sí
+turquesa_g3,Registro,Ídem con autodetección (A),error_auto_max_grafico_mm,2.9418,≤ 6 mm,sí
+morado_g2,Registro,"Autodetección (A), mediana",error_auto_mediana_grafico_mm,0.9367,≤ 3 mm,sí
+salmon_g2,Registro,"Autodetección (A), mediana",error_auto_mediana_grafico_mm,1.9593,≤ 3 mm,sí
+turquesa_g3,Registro,"Autodetección (A), mediana",error_auto_mediana_grafico_mm,1.9959,≤ 3 mm,sí
+morado_g2,Pinza,Sensibilidad (pinza mantenida),sensibilidad_pct,100.0,≥ 95 %,sí
+salmon_g2,Pinza,Sensibilidad (pinza mantenida),sensibilidad_pct,100.0,≥ 95 %,sí
+turquesa_g3,Pinza,Sensibilidad (pinza mantenida),sensibilidad_pct,100.0,≥ 95 %,sí
+morado_g2,Pinza,Pinza falsa (% frames),falsos_pct,0.0,≤ 2 %,sí
+salmon_g2,Pinza,Pinza falsa (% frames),falsos_pct,0.0,≤ 2 %,sí
+turquesa_g3,Pinza,Pinza falsa (% frames),falsos_pct,0.0,≤ 2 %,sí
+morado_g2,Pinza,Activaciones falsas,activaciones_falsas_min,0.0,≤ 1 /min,sí
+salmon_g2,Pinza,Activaciones falsas,activaciones_falsas_min,0.0,≤ 1 /min,sí
+turquesa_g3,Pinza,Activaciones falsas,activaciones_falsas_min,0.0,≤ 1 /min,sí
+morado_g2,Pinza,Cortes con pinza cerrada,cortes_min,0.0,≤ 2 /min,sí
+salmon_g2,Pinza,Cortes con pinza cerrada,cortes_min,0.0,≤ 2 /min,sí
+turquesa_g3,Pinza,Cortes con pinza cerrada,cortes_min,0.0,≤ 2 /min,sí
+morado_g2,Pinza,"· con el umbral antiguo (px, sin gracia)",cortes_px_min,31.9898,,
+salmon_g2,Pinza,"· con el umbral antiguo (px, sin gracia)",cortes_px_min,51.9913,,
+turquesa_g3,Pinza,"· con el umbral antiguo (px, sin gracia)",cortes_px_min,27.9925,,
+morado_g2,Pinza,Sensibilidad con el umbral antiguo,sensibilidad_px_pct,91.9643,,
+salmon_g2,Pinza,Sensibilidad con el umbral antiguo,sensibilidad_px_pct,89.7778,,
+turquesa_g3,Pinza,Sensibilidad con el umbral antiguo,sensibilidad_px_pct,95.6522,,
+morado_g2,Pinza,"Índice–medio / palma, dedos juntos (p90)",medida_con_pinza_p90,0.245,,
+salmon_g2,Pinza,"Índice–medio / palma, dedos juntos (p90)",medida_con_pinza_p90,0.2865,,
+turquesa_g3,Pinza,"Índice–medio / palma, dedos juntos (p90)",medida_con_pinza_p90,0.2442,,
+morado_g2,Pinza,"Índice–medio / palma, dedos separados (p10)",medida_sin_pinza_p10,0.8129,,
+salmon_g2,Pinza,"Índice–medio / palma, dedos separados (p10)",medida_sin_pinza_p10,0.6285,,
+turquesa_g3,Pinza,"Índice–medio / palma, dedos separados (p10)",medida_sin_pinza_p10,0.6555,,
+morado_g2,Mano,Detección de la mano,deteccion_pct,100.0,≥ 95 %,sí
+salmon_g2,Mano,Detección de la mano,deteccion_pct,100.0,≥ 95 %,sí
+turquesa_g3,Mano,Detección de la mano,deteccion_pct,99.6667,≥ 95 %,sí
+morado_g2,Mano,Contraste mano–placa,delta_e_mano_placa,29.9449,,
+salmon_g2,Mano,Contraste mano–placa,delta_e_mano_placa,4.6218,,
+turquesa_g3,Mano,Contraste mano–placa,delta_e_mano_placa,25.6534,,
+morado_g2,Mano,fps procesados,fps_proceso,14.9844,≥ 20,no
+salmon_g2,Mano,fps procesados,fps_proceso,15.0066,≥ 20,no
+turquesa_g3,Mano,fps procesados,fps_proceso,14.9986,≥ 20,no
+morado_g2,Mano,fps que entrega la cámara,fps_captura,14.9844,≥ 25,no
+salmon_g2,Mano,fps que entrega la cámara,fps_captura,15.0066,≥ 25,no
+turquesa_g3,Mano,fps que entrega la cámara,fps_captura,14.9986,≥ 25,no
+morado_g2,Mano,Latencia de visión (p95),latencia_vision_p95_ms,94.4574,≤ 100 ms,sí
+salmon_g2,Mano,Latencia de visión (p95),latencia_vision_p95_ms,82.3997,≤ 100 ms,sí
+turquesa_g3,Mano,Latencia de visión (p95),latencia_vision_p95_ms,82.5039,≤ 100 ms,sí
+morado_g2,Mano,Umbral de pinza / palma,umbral_pinza_sobre_palma,0.28,,
+salmon_g2,Mano,Umbral de pinza / palma,umbral_pinza_sobre_palma,0.28,,
+turquesa_g3,Mano,Umbral de pinza / palma,umbral_pinza_sobre_palma,0.28,,
+morado_g2,Placa,Autodetección,exito_pct,100.0,≥ 95 %,sí
+salmon_g2,Placa,Autodetección,exito_pct,100.0,≥ 95 %,sí
+turquesa_g3,Placa,Autodetección,exito_pct,100.0,≥ 95 %,sí
+morado_g2,Placa,· con confianza alta,confianza_alta_pct,93.3333,≥ 90 %,sí
+salmon_g2,Placa,· con confianza alta,confianza_alta_pct,93.3333,≥ 90 %,sí
+turquesa_g3,Placa,· con confianza alta,confianza_alta_pct,37.7778,≥ 90 %,no
+morado_g2,Placa,Esquina recortada correcta,esquina_ok_pct,93.3333,≥ 95 %,no
+salmon_g2,Placa,Esquina recortada correcta,esquina_ok_pct,97.7778,≥ 95 %,sí
+turquesa_g3,Placa,Esquina recortada correcta,esquina_ok_pct,33.3333,≥ 95 %,no
+morado_g2,Placa,Rotación de la placa,rotacion_med_grados,1.2443,≤ 2°,sí
+salmon_g2,Placa,Rotación de la placa,rotacion_med_grados,3.5153,≤ 2°,no
+turquesa_g3,Placa,Rotación de la placa,rotacion_med_grados,1.0258,≤ 2°,sí
+morado_g2,Placa,Placa cortada por el encuadre,toca_borde_pct,0.0,0 %,sí
+salmon_g2,Placa,Placa cortada por el encuadre,toca_borde_pct,0.0,0 %,sí
+turquesa_g3,Placa,Placa cortada por el encuadre,toca_borde_pct,33.3333,0 %,no
+morado_g2,Placa,Contraste de gris placa–fondo,delta_gris,64.184,≥ 40,sí
+salmon_g2,Placa,Contraste de gris placa–fondo,delta_gris,87.659,≥ 40,sí
+turquesa_g3,Placa,Contraste de gris placa–fondo,delta_gris,77.671,≥ 40,sí
+morado_g2,Placa,Contraste de color placa–fondo,delta_e,27.8309,≥ 20,sí
+salmon_g2,Placa,Contraste de color placa–fondo,delta_e,31.4002,≥ 20,sí
+turquesa_g3,Placa,Contraste de color placa–fondo,delta_e,34.9261,≥ 20,sí
+morado_g2,Placa,Desfase vs. calibración guardada,desfase_guardada_mm,0.6514,≤ 3 mm,sí
+salmon_g2,Placa,Desfase vs. calibración guardada,desfase_guardada_mm,9.7387,≤ 3 mm,no
+turquesa_g3,Placa,Desfase vs. calibración guardada,desfase_guardada_mm,10.7156,≤ 3 mm,no
+morado_g2,Placa,Dispersión al recolocar,reposicion_mm,0.4354,≤ 2 mm,sí
+salmon_g2,Placa,Dispersión al recolocar,reposicion_mm,0.3188,≤ 2 mm,sí
+turquesa_g3,Placa,Dispersión al recolocar,reposicion_mm,2.2213,≤ 2 mm,no
+morado_g2,Placa,Anisotropía de la calibración,anisotropia_calibracion,1.0262,"0,95–1,05",sí
+salmon_g2,Placa,Anisotropía de la calibración,anisotropia_calibracion,1.0262,"0,95–1,05",sí
+turquesa_g3,Placa,Anisotropía de la calibración,anisotropia_calibracion,1.0262,"0,95–1,05",sí
+morado_g2,QR,Lectura del QR,tasa_pct,0.0,≥ 80 %,no
+salmon_g2,QR,Lectura del QR,tasa_pct,24.0964,≥ 80 %,no
+turquesa_g3,QR,Lectura del QR,tasa_pct,0.0,≥ 80 %,no
+morado_g2,QR,Tiempo hasta la 1.ª lectura,t_primera_s,,≤ 3 s,
+salmon_g2,QR,Tiempo hasta la 1.ª lectura,t_primera_s,0.883,≤ 3 s,sí
+turquesa_g3,QR,Tiempo hasta la 1.ª lectura,t_primera_s,,≤ 3 s,
+morado_g2,Geometría,Área ambigua (2+ series),ambigua_pct_banda,22.8166,≤ 10 %,no
+salmon_g2,Geometría,Área ambigua (2+ series),ambigua_pct_banda,22.8166,≤ 10 %,no
+turquesa_g3,Geometría,Área ambigua (2+ series),ambigua_pct_banda,0.0,≤ 10 %,sí
+morado_g2,Geometría,Conflicto de prioridad,conflicto_pct_banda,0.3863,≤ 5 %,sí
+salmon_g2,Geometría,Conflicto de prioridad,conflicto_pct_banda,0.3863,≤ 5 %,sí
+turquesa_g3,Geometría,Conflicto de prioridad,conflicto_pct_banda,0.0,≤ 5 %,sí
+morado_g2,Geometría,"Acierto esperado, yema ±4 mm, puntos aislados",esperado_4mm_aislado_punto_pct,53.0556,≥ 90 %,no
+salmon_g2,Geometría,"Acierto esperado, yema ±4 mm, puntos aislados",esperado_4mm_aislado_punto_pct,53.0556,≥ 90 %,no
+turquesa_g3,Geometría,"Acierto esperado, yema ±4 mm, puntos aislados",esperado_4mm_aislado_punto_pct,68.1667,≥ 90 %,no
+morado_g2,Geometría,"Acierto esperado, yema ±4 mm, líneas aisladas",esperado_4mm_aislado_linea_pct,53.1667,≥ 90 %,no
+salmon_g2,Geometría,"Acierto esperado, yema ±4 mm, líneas aisladas",esperado_4mm_aislado_linea_pct,53.1667,≥ 90 %,no
+turquesa_g3,Geometría,"Acierto esperado, yema ±4 mm, líneas aisladas",esperado_4mm_aislado_linea_pct,95.0,≥ 90 %,sí
+morado_g2,Geometría,"Acierto esperado, yema ±4 mm, cruces",esperado_4mm_cruce_pct,25.3333,≥ 80 %,no
+salmon_g2,Geometría,"Acierto esperado, yema ±4 mm, cruces",esperado_4mm_cruce_pct,25.3333,≥ 80 %,no
+turquesa_g3,Geometría,"Acierto esperado, yema ±4 mm, cruces",esperado_4mm_cruce_pct,,≥ 80 %,
+morado_g2,Geometría,"Acierto esperado, yema ±4 mm, ejes",esperado_4mm_eje_pct,78.5,≥ 90 %,no
+salmon_g2,Geometría,"Acierto esperado, yema ±4 mm, ejes",esperado_4mm_eje_pct,78.5,≥ 90 %,no
+turquesa_g3,Geometría,"Acierto esperado, yema ±4 mm, ejes",esperado_4mm_eje_pct,88.75,≥ 90 %,no
+morado_g2,Geometría,Trazo simulado: serie seguida en cruces,trazo_completa_cruce_serie_pct,100.0,≥ 90 %,sí
+salmon_g2,Geometría,Trazo simulado: serie seguida en cruces,trazo_completa_cruce_serie_pct,100.0,≥ 90 %,sí
+turquesa_g3,Geometría,Trazo simulado: serie seguida en cruces,trazo_completa_cruce_serie_pct,,≥ 90 %,
+morado_g2,Geometría,· sin estabilidad,trazo_sin_estado_cruce_serie_pct,57.9545,,
+salmon_g2,Geometría,· sin estabilidad,trazo_sin_estado_cruce_serie_pct,57.9545,,
+turquesa_g3,Geometría,· sin estabilidad,trazo_sin_estado_cruce_serie_pct,,,
+morado_g2,Geometría,Trazo simulado: cambios de elemento,trazo_completa_resto_cambios_s,2.6227,,
+salmon_g2,Geometría,Trazo simulado: cambios de elemento,trazo_completa_resto_cambios_s,2.6227,,
+turquesa_g3,Geometría,Trazo simulado: cambios de elemento,trazo_completa_resto_cambios_s,1.25,,
+morado_g2,Geometría,· sin estabilidad,trazo_sin_estado_resto_cambios_s,6.4187,,
+salmon_g2,Geometría,· sin estabilidad,trazo_sin_estado_resto_cambios_s,6.4187,,
+turquesa_g3,Geometría,· sin estabilidad,trazo_sin_estado_resto_cambios_s,1.8478,,
+morado_g2,Geometría,Separación mínima entre series,sep_min_puntos_series_mm,1.5,,
+salmon_g2,Geometría,Separación mínima entre series,sep_min_puntos_series_mm,1.5,,
+turquesa_g3,Geometría,Separación mínima entre series,sep_min_puntos_series_mm,,,
+morado_g2,Geometría,Cruces entre series,n_cruces,3,,
+salmon_g2,Geometría,Cruces entre series,n_cruces,3,,
+turquesa_g3,Geometría,Cruces entre series,n_cruces,0,,
+morado_g2,Usuario,Acierto en tareas,acierto_pct,,≥ 80 %,
+salmon_g2,Usuario,Acierto en tareas,acierto_pct,,≥ 80 %,
+turquesa_g3,Usuario,Acierto en tareas,acierto_pct,,≥ 80 %,
+morado_g2,Usuario,Tiempo por tarea (mediana),tiempo_mediana_s,,,
+salmon_g2,Usuario,Tiempo por tarea (mediana),tiempo_mediana_s,,,
+turquesa_g3,Usuario,Tiempo por tarea (mediana),tiempo_mediana_s,,,
+morado_g2,Usuario,SUS,sus,,≥ 68,
+salmon_g2,Usuario,SUS,sus,,≥ 68,
+turquesa_g3,Usuario,SUS,sus,,≥ 68,

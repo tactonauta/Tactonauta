@@ -1,0 +1,42 @@
+EXPLORADOR DE GRÁFICAS CON TEXTURA - versión 8 nov 2026 (sin ArUco)
+=====================================================================
+
+Archivos (todos en la MISMA carpeta)
+  explorador_graficas_gui_qr.py  la aplicación (ejecutar este)
+  vision.py                      cámara, placa, QR con zoom, mano
+  interaccion.py                 selección con la pinza y narración
+  qr_celular.py                  F5: escanear el QR con el celular
+  medir_metricas.py              protocolo de métricas (geometria, camara, tareas, fps, reporte)
+  generar_qr_placa.py            QR corto (solo el código) en SVG a tamaño real
+  simular_vision.py              pruebas sin cámara (autodetección y QR simulados)
+  probar_interaccion.py          pruebas automáticas de la selección (deben dar 20 de 20)
+  requirements.txt               dependencias
+  datos_graficas/                copias locales de gráficas (funciona sin internet)
+  modelos/hand_landmarker.task   modelo de la mano (si falta, se descarga solo)
+  qr_placas/                     QR corto de la gráfica 2 (SVG, 32 mm)
+
+Tu config_exploracion.json NO va en este paquete: copia el tuyo de la carpeta anterior
+(tiene tu calibración y el nombre de la cámara). Si no lo copias se crea uno nuevo.
+
+Instalar (una vez)
+  py -m pip install -r requirements.txt
+
+Usar
+  py explorador_graficas_gui_qr.py
+    F2 pegar enlace (o solo el código de la lámina, p. ej. 54D7E01D5C)
+    F3 leer el QR con la cámara del módulo (zoom a la esquina de la placa)
+    F5 leer el QR con el celular (página en la red local)
+    F4 lista de botones · F1 instrucciones · F9 voz sí/no
+
+Si con F5 la página no carga en el celular
+  1. Pulsa "Permitir en el firewall" y acepta el aviso de Windows (una sola vez).
+  2. Si la red es de universidad/invitados (aísla equipos): activa la zona con cobertura
+     (hotspot) del celular y conecta la computadora a ella, o activa la zona con cobertura
+     de Windows, conecta el celular a ella y usa "Otra dirección" (192.168.137.1).
+  3. Plan C: lee el QR con la cámara del celular y escribe en F2 el código del final del
+     enlace (54D7E01D5C).
+
+Comprobar
+  py probar_interaccion.py          → 20 de 20 pruebas correctas
+  py simular_vision.py              → autodetección y QR simulados
+  py medir_metricas.py fps          → fps reales de la cámara y qué configurar

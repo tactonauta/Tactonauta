@@ -1,0 +1,464 @@
+{
+ "prueba": "objetivos",
+ "placa": "turquesa_g3",
+ "fecha": "2026-11-08T21:26:40",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "medio",
+  "grafica": "3"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "intentos": 8,
+  "acierto": {
+   "k": 2,
+   "n": 8,
+   "p": 0.25,
+   "ic95": [
+    0.0715,
+    0.5907
+   ]
+  },
+  "acierto_pct": 25.0,
+  "acierto_serie_pct": 37.5,
+  "acierto_aislado": {
+   "k": 1,
+   "n": 4,
+   "p": 0.25,
+   "ic95": [
+    0.0456,
+    0.6994
+   ]
+  },
+  "acierto_aislado_pct": 25.0,
+  "acierto_eje": {
+   "k": 1,
+   "n": 2,
+   "p": 0.5,
+   "ic95": [
+    0.0945,
+    0.9055
+   ]
+  },
+  "acierto_eje_pct": 50.0,
+  "acierto_texto": {
+   "k": 0,
+   "n": 2,
+   "p": 0.0,
+   "ic95": [
+    0.0,
+    0.6576
+   ]
+  },
+  "acierto_texto_pct": 0.0,
+  "acierto_aislado_punto": {
+   "k": 0,
+   "n": 3,
+   "p": 0.0,
+   "ic95": [
+    0.0,
+    0.5615
+   ]
+  },
+  "acierto_aislado_punto_pct": 0.0,
+  "acierto_aislado_linea": {
+   "k": 1,
+   "n": 1,
+   "p": 1.0,
+   "ic95": [
+    0.2065,
+    1.0
+   ]
+  },
+  "acierto_aislado_linea_pct": 100.0,
+  "sin_seleccion_pct": 37.5,
+  "error_mediana_mm": 9.0422,
+  "error_p90_mm": 11.2495,
+  "sesgo_mm": [
+   -0.5727,
+   -7.7088
+  ],
+  "sesgo_modulo_mm": 7.73,
+  "jitter_mm": 1.7392,
+  "pinza_mantenida_pct": 100.0,
+  "mano_pct": 98.3871,
+  "t_primer_acierto_ms": 274.3661,
+  "cambios_sel_mediana": 1.0,
+  "cambios_crudo_mediana": 0.5,
+  "acierto_crudo_pct": 25.0,
+  "pinza_px_mantenida_pct": 100.0,
+  "confusiones": [
+   [
+    "s1_p3 → s1_p2-p3",
+    1
+   ],
+   [
+    "s1_p1 → None",
+    1
+   ],
+   [
+    "texto_3 → eje_x",
+    1
+   ],
+   [
+    "texto_6 → s1_p5",
+    1
+   ],
+   [
+    "s1_p5 → None",
+    1
+   ],
+   [
+    "eje_x → None",
+    1
+   ]
+  ]
+ },
+ "grafica": {
+  "titulo": "Presión vs altitud (con discontinuidad y datos faltantes)",
+  "series": [
+   "Serie A"
+  ],
+  "fuente": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/948A3CF9F1",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ },
+ "detalle": [
+  {
+   "objetivo": "s1_p3-p4",
+   "tipo": "curva",
+   "clase": "linea",
+   "serie": "Serie A",
+   "zona": "aislado",
+   "objetivo_mm": [
+    139.75,
+    122.8
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p3-p4",
+   "votos": {
+    "None": 3,
+    "s1_p3-p4": 27
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s1_p3-p4",
+   "acierto_crudo": true,
+   "cambios_sel": 1,
+   "cambios_crudo": 1,
+   "error_mm": 5.7185,
+   "sesgo_mm": [
+    2.7474,
+    -5.2537
+   ],
+   "jitter_mm": 1.3613,
+   "t_primer_acierto_ms": 283.8531
+  },
+  {
+   "objetivo": "s1_p3",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Serie A",
+   "zona": "aislado",
+   "objetivo_mm": [
+    114.7,
+    109.7
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p2-p3",
+   "votos": {
+    "None": 1,
+    "s1_p2-p3": 29
+   },
+   "acierto_estricto": false,
+   "acierto_serie": true,
+   "seleccionado_crudo": "s1_p2-p3",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 9.7945,
+   "sesgo_mm": [
+    -1.7236,
+    -9.562
+   ],
+   "jitter_mm": 0.835,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "s1_p1",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Serie A",
+   "zona": "aislado",
+   "objetivo_mm": [
+    55.3,
+    53.1
+   ],
+   "frames": 31,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": null,
+   "votos": {
+    "None": 27,
+    "s1_p1-p2": 4
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": null,
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 14,
+   "error_mm": 9.6038,
+   "sesgo_mm": [
+    0.0517,
+    -8.5135
+   ],
+   "jitter_mm": 4.7649,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "texto_3",
+   "tipo": "texto",
+   "clase": "texto",
+   "serie": "",
+   "zona": "texto",
+   "objetivo_mm": [
+    114.15,
+    161.3
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "eje_x",
+   "votos": {
+    "None": 1,
+    "eje_x": 28
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "eje_x",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 8.3378,
+   "sesgo_mm": [
+    0.0,
+    -8.1708
+   ],
+   "jitter_mm": 1.2582,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "texto_6",
+   "tipo": "texto",
+   "clase": "texto",
+   "serie": "",
+   "zona": "texto",
+   "objetivo_mm": [
+    201.85,
+    161.3
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "s1_p5",
+   "votos": {
+    "None": 2,
+    "s1_p5": 27
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": "s1_p5",
+   "acierto_crudo": false,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 10.893,
+   "sesgo_mm": [
+    0.0,
+    -10.8164
+   ],
+   "jitter_mm": 1.0436,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "eje_y",
+   "tipo": "eje",
+   "clase": "eje",
+   "serie": "",
+   "zona": "eje",
+   "objetivo_mm": [
+    48.2,
+    100.1
+   ],
+   "frames": 30,
+   "mano_pct": 96.6667,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": "eje_y",
+   "votos": {
+    "None": 2,
+    "eje_y": 27
+   },
+   "acierto_estricto": true,
+   "acierto_serie": true,
+   "seleccionado_crudo": "eje_y",
+   "acierto_crudo": true,
+   "cambios_sel": 1,
+   "cambios_crudo": 0,
+   "error_mm": 2.9356,
+   "sesgo_mm": [
+    -3.0722,
+    0.0
+   ],
+   "jitter_mm": 2.4231,
+   "t_primer_acierto_ms": 264.8792
+  },
+  {
+   "objetivo": "s1_p5",
+   "tipo": "punto",
+   "clase": "punto",
+   "serie": "Serie A",
+   "zona": "aislado",
+   "objetivo_mm": [
+    202.1,
+    147.1
+   ],
+   "frames": 31,
+   "mano_pct": 96.7742,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": null,
+   "votos": {
+    "None": 19,
+    "s1_p4-p5": 11
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": null,
+   "acierto_crudo": false,
+   "cambios_sel": 2,
+   "cambios_crudo": 4,
+   "error_mm": 12.0815,
+   "sesgo_mm": [
+    -2.585,
+    -10.7947
+   ],
+   "jitter_mm": 2.7241,
+   "t_primer_acierto_ms": null
+  },
+  {
+   "objetivo": "eje_x",
+   "tipo": "eje",
+   "clase": "eje",
+   "serie": "",
+   "zona": "eje",
+   "objetivo_mm": [
+    128.7,
+    151.8
+   ],
+   "frames": 30,
+   "mano_pct": 100.0,
+   "pinza_pct": 100.0,
+   "pinza_px_pct": 100.0,
+   "seleccionado": null,
+   "votos": {
+    "None": 30
+   },
+   "acierto_estricto": false,
+   "acierto_serie": false,
+   "seleccionado_crudo": null,
+   "acierto_crudo": false,
+   "cambios_sel": 0,
+   "cambios_crudo": 1,
+   "error_mm": 8.4807,
+   "sesgo_mm": [
+    0.0,
+    -8.5591
+   ],
+   "jitter_mm": 2.1171,
+   "t_primer_acierto_ms": null
+  }
+ ]
+}

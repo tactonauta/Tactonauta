@@ -1,0 +1,384 @@
+{
+ "prueba": "geometria",
+ "placa": "morado_g2",
+ "fecha": "2026-11-08T20:49:21",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "elementos": {
+   "curva": 33,
+   "eje": 2,
+   "leyenda": 15,
+   "punto": 36,
+   "texto": 14
+  },
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "placa_mm": [
+   220.0,
+   220.0
+  ],
+  "hoja_px": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "px_por_mm": [
+   1.6,
+   1.5591
+  ],
+  "anisotropia_calibracion": 1.0262,
+  "radios_mm": {
+   "punto_config": 7.0,
+   "punto_efectivo_min": 5.7369,
+   "punto_efectivo_mediana": 5.9328,
+   "puntos_con_radio_reducido": 36,
+   "linea": 8.0,
+   "eje": 7.0,
+   "texto": 7.0,
+   "margen_resto": 3.0,
+   "distancia_pinza": 22.0
+  },
+  "pinza_palma": {
+   "cerrar": 0.28,
+   "abrir": 0.36
+  },
+  "eje_o_texto_gana_a_dato_pct_banda": 1.5837,
+  "sep_min_puntos_series_mm": 1.5,
+  "par_mas_cercano": [
+   "s1_p10",
+   "s2_p10"
+  ],
+  "sep_min_puntos_misma_serie_mm": 14.3422,
+  "cruces": [
+   {
+    "x": 155.6812,
+    "y": 80.9729,
+    "series": [
+     "Producto A (crece rápido)",
+     "Producto C (decrece)"
+    ],
+    "curvas": [
+     "s1_p8-p9",
+     "s3_p8-p9"
+    ]
+   },
+   {
+    "x": 179.3714,
+    "y": 73.0429,
+    "series": [
+     "Producto A (crece rápido)",
+     "Producto B (crece lento)"
+    ],
+    "curvas": [
+     "s1_p10-p11",
+     "s2_p10-p11"
+    ]
+   },
+   {
+    "x": 138.452,
+    "y": 76.504,
+    "series": [
+     "Producto B (crece lento)",
+     "Producto C (decrece)"
+    ],
+    "curvas": [
+     "s2_p7-p8",
+     "s3_p7-p8"
+    ]
+   }
+  ],
+  "n_cruces": 3,
+  "huecos": [],
+  "n_huecos": 0,
+  "area_grafico_mm": [
+   35.8,
+   48.4,
+   210.0,
+   121.5
+  ],
+  "cobertura_pct": 60.9825,
+  "banda_datos_pct": 50.9546,
+  "ambigua_pct_banda": 22.8166,
+  "conflicto_pct_banda": 0.3863,
+  "verificacion_selector_pct": 100.0,
+  "esperado_2mm_cruce_pct": 44.8333,
+  "esperado_2mm_cruce_serie_pct": 56.25,
+  "esperado_2mm_cruce_linea_pct": 44.8333,
+  "esperado_2mm_cruce_linea_serie_pct": 56.25,
+  "esperado_2mm_aislado_punto_pct": 89.6111,
+  "esperado_2mm_aislado_punto_serie_pct": 93.6111,
+  "esperado_2mm_aislado_pct": 88.7917,
+  "esperado_2mm_aislado_serie_pct": 95.125,
+  "esperado_2mm_aislado_linea_pct": 86.3333,
+  "esperado_2mm_aislado_linea_serie_pct": 99.6667,
+  "esperado_2mm_texto_pct": 99.25,
+  "esperado_2mm_texto_serie_pct": 99.25,
+  "esperado_2mm_eje_pct": 95.5,
+  "esperado_2mm_eje_serie_pct": 95.5,
+  "esperado_4mm_cruce_pct": 25.3333,
+  "esperado_4mm_cruce_serie_pct": 45.75,
+  "esperado_4mm_cruce_linea_pct": 25.3333,
+  "esperado_4mm_cruce_linea_serie_pct": 45.75,
+  "esperado_4mm_aislado_punto_pct": 53.0556,
+  "esperado_4mm_aislado_punto_serie_pct": 76.9444,
+  "esperado_4mm_aislado_pct": 53.0833,
+  "esperado_4mm_aislado_serie_pct": 79.875,
+  "esperado_4mm_aislado_linea_pct": 53.1667,
+  "esperado_4mm_aislado_linea_serie_pct": 88.6667,
+  "esperado_4mm_texto_pct": 88.5,
+  "esperado_4mm_texto_serie_pct": 88.5,
+  "esperado_4mm_eje_pct": 78.5,
+  "esperado_4mm_eje_serie_pct": 78.5,
+  "esperado_6mm_cruce_pct": 15.0833,
+  "esperado_6mm_cruce_serie_pct": 38.25,
+  "esperado_6mm_cruce_linea_pct": 15.0833,
+  "esperado_6mm_cruce_linea_serie_pct": 38.25,
+  "esperado_6mm_aislado_punto_pct": 32.8333,
+  "esperado_6mm_aislado_punto_serie_pct": 58.7778,
+  "esperado_6mm_aislado_pct": 33.625,
+  "esperado_6mm_aislado_serie_pct": 62.8333,
+  "esperado_6mm_aislado_linea_pct": 36.0,
+  "esperado_6mm_aislado_linea_serie_pct": 75.0,
+  "esperado_6mm_texto_pct": 67.25,
+  "esperado_6mm_texto_serie_pct": 67.25,
+  "esperado_6mm_eje_pct": 63.75,
+  "esperado_6mm_eje_serie_pct": 63.75,
+  "acierto_esperado": {
+   "2": {
+    "cruce": {
+     "estricto_pct": 44.8333,
+     "serie_pct": 56.25
+    },
+    "cruce_linea": {
+     "estricto_pct": 44.8333,
+     "serie_pct": 56.25
+    },
+    "aislado_punto": {
+     "estricto_pct": 89.6111,
+     "serie_pct": 93.6111
+    },
+    "aislado": {
+     "estricto_pct": 88.7917,
+     "serie_pct": 95.125
+    },
+    "aislado_linea": {
+     "estricto_pct": 86.3333,
+     "serie_pct": 99.6667
+    },
+    "texto": {
+     "estricto_pct": 99.25,
+     "serie_pct": 99.25
+    },
+    "eje": {
+     "estricto_pct": 95.5,
+     "serie_pct": 95.5
+    }
+   },
+   "4": {
+    "cruce": {
+     "estricto_pct": 25.3333,
+     "serie_pct": 45.75
+    },
+    "cruce_linea": {
+     "estricto_pct": 25.3333,
+     "serie_pct": 45.75
+    },
+    "aislado_punto": {
+     "estricto_pct": 53.0556,
+     "serie_pct": 76.9444
+    },
+    "aislado": {
+     "estricto_pct": 53.0833,
+     "serie_pct": 79.875
+    },
+    "aislado_linea": {
+     "estricto_pct": 53.1667,
+     "serie_pct": 88.6667
+    },
+    "texto": {
+     "estricto_pct": 88.5,
+     "serie_pct": 88.5
+    },
+    "eje": {
+     "estricto_pct": 78.5,
+     "serie_pct": 78.5
+    }
+   },
+   "6": {
+    "cruce": {
+     "estricto_pct": 15.0833,
+     "serie_pct": 38.25
+    },
+    "cruce_linea": {
+     "estricto_pct": 15.0833,
+     "serie_pct": 38.25
+    },
+    "aislado_punto": {
+     "estricto_pct": 32.8333,
+     "serie_pct": 58.7778
+    },
+    "aislado": {
+     "estricto_pct": 33.625,
+     "serie_pct": 62.8333
+    },
+    "aislado_linea": {
+     "estricto_pct": 36.0,
+     "serie_pct": 75.0
+    },
+    "texto": {
+     "estricto_pct": 67.25,
+     "serie_pct": 67.25
+    },
+    "eje": {
+     "estricto_pct": 63.75,
+     "serie_pct": 63.75
+    }
+   }
+  },
+  "acierto_esperado_nota": "% de pinzas que anunciarían el objetivo si la yema cae con un error gaussiano de sigma mm alrededor de él (calibración perfecta)",
+  "trazos": {
+   "series_trazadas": 3,
+   "ruido_mm": 1.5,
+   "fps": 15.0,
+   "vel_mm_s": 40.0,
+   "repeticiones": 4,
+   "modos": {
+    "completa": {
+     "cruce": {
+      "frames": 88,
+      "serie_pct": 100.0,
+      "con_dato_pct": 100.0,
+      "cambios_s": 2.7273,
+      "anuncios_s": 2.7273
+     },
+     "resto": {
+      "frames": 652,
+      "serie_pct": 100.0,
+      "con_dato_pct": 98.1595,
+      "cambios_s": 2.6227,
+      "anuncios_s": 2.6227
+     }
+    },
+    "sin_estado": {
+     "cruce": {
+      "frames": 88,
+      "serie_pct": 57.9545,
+      "con_dato_pct": 100.0,
+      "cambios_s": 10.7386,
+      "anuncios_s": null
+     },
+     "resto": {
+      "frames": 652,
+      "serie_pct": 95.7055,
+      "con_dato_pct": 100.0,
+      "cambios_s": 6.4187,
+      "anuncios_s": null
+     }
+    }
+   }
+  },
+  "trazo_completa_cruce_serie_pct": 100.0,
+  "trazo_completa_cruce_con_dato_pct": 100.0,
+  "trazo_completa_cruce_cambios_s": 2.7273,
+  "trazo_completa_cruce_anuncios_s": 2.7273,
+  "trazo_completa_resto_serie_pct": 100.0,
+  "trazo_completa_resto_con_dato_pct": 98.1595,
+  "trazo_completa_resto_cambios_s": 2.6227,
+  "trazo_completa_resto_anuncios_s": 2.6227,
+  "trazo_sin_estado_cruce_serie_pct": 57.9545,
+  "trazo_sin_estado_cruce_con_dato_pct": 100.0,
+  "trazo_sin_estado_cruce_cambios_s": 10.7386,
+  "trazo_sin_estado_resto_serie_pct": 95.7055,
+  "trazo_sin_estado_resto_con_dato_pct": 100.0,
+  "trazo_sin_estado_resto_cambios_s": 6.4187,
+  "imagen": "20261108_204917_mapa_seleccion.png"
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ }
+}

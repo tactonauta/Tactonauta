@@ -1,0 +1,282 @@
+{
+ "prueba": "geometria",
+ "placa": "turquesa_g3",
+ "fecha": "2026-11-08T20:53:16",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "grafica": "3"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "elementos": {
+   "curva": 4,
+   "eje": 2,
+   "punto": 5,
+   "texto": 14
+  },
+  "series": [
+   "Serie A"
+  ],
+  "placa_mm": [
+   220.0,
+   220.0
+  ],
+  "hoja_px": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "px_por_mm": [
+   1.6,
+   1.5591
+  ],
+  "anisotropia_calibracion": 1.0262,
+  "radios_mm": {
+   "punto_config": 7.0,
+   "punto_efectivo_min": 6.8663,
+   "punto_efectivo_mediana": 7.0,
+   "puntos_con_radio_reducido": 2,
+   "linea": 8.0,
+   "eje": 7.0,
+   "texto": 7.0,
+   "margen_resto": 3.0,
+   "distancia_pinza": 22.0
+  },
+  "pinza_palma": {
+   "cerrar": 0.28,
+   "abrir": 0.36
+  },
+  "eje_o_texto_gana_a_dato_pct_banda": 1.7648,
+  "sep_min_puntos_series_mm": null,
+  "par_mas_cercano": null,
+  "sep_min_puntos_misma_serie_mm": 17.1657,
+  "cruces": [],
+  "n_cruces": 0,
+  "huecos": [],
+  "n_huecos": 0,
+  "area_grafico_mm": [
+   48.2,
+   48.4,
+   209.2,
+   151.8
+  ],
+  "cobertura_pct": 27.3547,
+  "banda_datos_pct": 18.278,
+  "ambigua_pct_banda": 0.0,
+  "conflicto_pct_banda": 0.0,
+  "verificacion_selector_pct": 100.0,
+  "esperado_2mm_aislado_pct": 97.5,
+  "esperado_2mm_aislado_serie_pct": 100.0,
+  "esperado_2mm_aislado_linea_pct": 100.0,
+  "esperado_2mm_aislado_linea_serie_pct": 100.0,
+  "esperado_2mm_aislado_punto_pct": 96.6667,
+  "esperado_2mm_aislado_punto_serie_pct": 100.0,
+  "esperado_2mm_texto_pct": 99.25,
+  "esperado_2mm_texto_serie_pct": 99.25,
+  "esperado_2mm_eje_pct": 99.75,
+  "esperado_2mm_eje_serie_pct": 99.75,
+  "esperado_4mm_aislado_pct": 74.875,
+  "esperado_4mm_aislado_serie_pct": 89.5,
+  "esperado_4mm_aislado_linea_pct": 95.0,
+  "esperado_4mm_aislado_linea_serie_pct": 95.0,
+  "esperado_4mm_aislado_punto_pct": 68.1667,
+  "esperado_4mm_aislado_punto_serie_pct": 87.6667,
+  "esperado_4mm_texto_pct": 75.75,
+  "esperado_4mm_texto_serie_pct": 75.75,
+  "esperado_4mm_eje_pct": 88.75,
+  "esperado_4mm_eje_serie_pct": 88.75,
+  "esperado_6mm_aislado_pct": 51.125,
+  "esperado_6mm_aislado_serie_pct": 71.5,
+  "esperado_6mm_aislado_linea_pct": 81.0,
+  "esperado_6mm_aislado_linea_serie_pct": 81.0,
+  "esperado_6mm_aislado_punto_pct": 41.1667,
+  "esperado_6mm_aislado_punto_serie_pct": 68.3333,
+  "esperado_6mm_texto_pct": 58.0,
+  "esperado_6mm_texto_serie_pct": 58.0,
+  "esperado_6mm_eje_pct": 69.5,
+  "esperado_6mm_eje_serie_pct": 69.5,
+  "acierto_esperado": {
+   "2": {
+    "aislado": {
+     "estricto_pct": 97.5,
+     "serie_pct": 100.0
+    },
+    "aislado_linea": {
+     "estricto_pct": 100.0,
+     "serie_pct": 100.0
+    },
+    "aislado_punto": {
+     "estricto_pct": 96.6667,
+     "serie_pct": 100.0
+    },
+    "texto": {
+     "estricto_pct": 99.25,
+     "serie_pct": 99.25
+    },
+    "eje": {
+     "estricto_pct": 99.75,
+     "serie_pct": 99.75
+    }
+   },
+   "4": {
+    "aislado": {
+     "estricto_pct": 74.875,
+     "serie_pct": 89.5
+    },
+    "aislado_linea": {
+     "estricto_pct": 95.0,
+     "serie_pct": 95.0
+    },
+    "aislado_punto": {
+     "estricto_pct": 68.1667,
+     "serie_pct": 87.6667
+    },
+    "texto": {
+     "estricto_pct": 75.75,
+     "serie_pct": 75.75
+    },
+    "eje": {
+     "estricto_pct": 88.75,
+     "serie_pct": 88.75
+    }
+   },
+   "6": {
+    "aislado": {
+     "estricto_pct": 51.125,
+     "serie_pct": 71.5
+    },
+    "aislado_linea": {
+     "estricto_pct": 81.0,
+     "serie_pct": 81.0
+    },
+    "aislado_punto": {
+     "estricto_pct": 41.1667,
+     "serie_pct": 68.3333
+    },
+    "texto": {
+     "estricto_pct": 58.0,
+     "serie_pct": 58.0
+    },
+    "eje": {
+     "estricto_pct": 69.5,
+     "serie_pct": 69.5
+    }
+   }
+  },
+  "acierto_esperado_nota": "% de pinzas que anunciarían el objetivo si la yema cae con un error gaussiano de sigma mm alrededor de él (calibración perfecta)",
+  "trazos": {
+   "series_trazadas": 1,
+   "ruido_mm": 1.5,
+   "fps": 15.0,
+   "vel_mm_s": 40.0,
+   "repeticiones": 4,
+   "modos": {
+    "completa": {
+     "resto": {
+      "frames": 276,
+      "serie_pct": 100.0,
+      "con_dato_pct": 98.5507,
+      "cambios_s": 1.25,
+      "anuncios_s": 1.25
+     }
+    },
+    "sin_estado": {
+     "resto": {
+      "frames": 276,
+      "serie_pct": 100.0,
+      "con_dato_pct": 100.0,
+      "cambios_s": 1.8478,
+      "anuncios_s": null
+     }
+    }
+   }
+  },
+  "trazo_completa_resto_serie_pct": 100.0,
+  "trazo_completa_resto_con_dato_pct": 98.5507,
+  "trazo_completa_resto_cambios_s": 1.25,
+  "trazo_completa_resto_anuncios_s": 1.25,
+  "trazo_sin_estado_resto_serie_pct": 100.0,
+  "trazo_sin_estado_resto_con_dato_pct": 100.0,
+  "trazo_sin_estado_resto_cambios_s": 1.8478,
+  "imagen": "20261108_205315_mapa_seleccion.png"
+ },
+ "grafica": {
+  "titulo": "Presión vs altitud (con discontinuidad y datos faltantes)",
+  "series": [
+   "Serie A"
+  ],
+  "fuente": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/948A3CF9F1",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ }
+}

@@ -1,0 +1,344 @@
+{
+ "prueba": "registro",
+ "placa": "turquesa_g3",
+ "fecha": "2026-11-08T21:24:06",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "medio",
+  "grafica": "3"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "modelo": "homografía",
+  "n_puntos": 10,
+  "error_mediana_mm": 10.3715,
+  "error_max_puntos_mm": 13.3613,
+  "error_mediana_px": 15.0,
+  "residuo_clics_mm": 0.6471,
+  "rotacion_placa_grados": -0.2596,
+  "rect_placa_real_px": [
+   135.7171,
+   6.8817,
+   352.1795,
+   341.8046
+  ],
+  "esquinas_placa_reales_px": [
+   [
+    137.6769,
+    7.6214
+   ],
+   [
+    470.0414,
+    6.8817
+   ],
+   [
+    487.8966,
+    344.038
+   ],
+   [
+    135.7171,
+    348.6862
+   ]
+  ],
+  "iou_calibracion": 0.917,
+  "registro_origen": "autodeteccion",
+  "registro_error_estimado_mm": null,
+  "calibracion": {
+   "grafico": {
+    "mediana_mm": 9.6552,
+    "p95_mm": 11.0678,
+    "max_mm": 11.7217
+   },
+   "desplazamiento_mm": [
+    0.3328,
+    9.7313
+   ],
+   "escala_x": 0.9972,
+   "escala_y": 0.9862,
+   "placa": {
+    "mediana_mm": 9.5967,
+    "p95_mm": 12.3545,
+    "max_mm": 13.7284
+   }
+  },
+  "puntos": [
+   {
+    "nombre": "esquina superior izquierda de la placa",
+    "mm": [
+     0,
+     0
+    ],
+    "clic_px": [
+     138.4186,
+     8.9302
+    ],
+    "dibujado_px": [
+     140.8,
+     26.97
+    ],
+    "error_mm": 13.3613,
+    "residuo_mm": 1.0215
+   },
+   {
+    "nombre": "esquina inferior izquierda de la placa",
+    "mm": [
+     0,
+     220.0
+    ],
+    "clic_px": [
+     135.6279,
+     348.2791
+    ],
+    "dibujado_px": [
+     137.17,
+     362.37
+    ],
+    "error_mm": 8.3722,
+    "residuo_mm": 0.2548
+   },
+   {
+    "nombre": "esquina inferior derecha de la placa",
+    "mm": [
+     220.0,
+     220.0
+    ],
+    "clic_px": [
+     488.3721,
+     343.814
+    ],
+    "dibujado_px": [
+     488.44,
+     356.71
+    ],
+    "error_mm": 7.7869,
+    "residuo_mm": 0.3357
+   },
+   {
+    "nombre": "origen de los ejes",
+    "mm": [
+     48.2,
+     151.8
+    ],
+    "clic_px": [
+     212.6512,
+     238.8837
+    ],
+    "dibujado_px": [
+     213.6908,
+     252.8706
+    ],
+    "error_mm": 9.4681,
+    "residuo_mm": 0.6244
+   },
+   {
+    "nombre": "extremo derecho del eje horizontal",
+    "mm": [
+     209.2,
+     151.8
+    ],
+    "clic_px": [
+     464.9302,
+     235.5349
+    ],
+    "dibujado_px": [
+     466.1884,
+     248.5337
+    ],
+    "error_mm": 8.3271,
+    "residuo_mm": 0.2705
+   },
+   {
+    "nombre": "extremo superior del eje vertical",
+    "mm": [
+     48.2,
+     48.4
+    ],
+    "clic_px": [
+     212.093,
+     78.1395
+    ],
+    "dibujado_px": [
+     213.3543,
+     96.0829
+    ],
+    "error_mm": 11.4716,
+    "residuo_mm": 0.6231
+   },
+   {
+    "nombre": "esquina superior izquierda del QR",
+    "mm": [
+     10.0,
+     10.0
+    ],
+    "clic_px": [
+     151.814,
+     21.2093
+    ],
+    "dibujado_px": [
+     155.6956,
+     41.0986
+    ],
+    "error_mm": 12.9357,
+    "residuo_mm": 0.9992
+   },
+   {
+    "nombre": "esquina inferior derecha del QR",
+    "mm": [
+     35.8,
+     35.8
+    ],
+    "clic_px": [
+     192.5581,
+     59.1628
+    ],
+    "dibujado_px": [
+     194.5046,
+     77.9094
+    ],
+    "error_mm": 11.9211,
+    "residuo_mm": 0.7284
+   },
+   {
+    "nombre": "primer punto de Serie A",
+    "mm": [
+     55.3,
+     53.1
+    ],
+    "clic_px": [
+     222.6977,
+     87.0698
+    ],
+    "dibujado_px": [
+     224.1913,
+     102.824
+    ],
+    "error_mm": 11.2749,
+    "residuo_mm": 0.7564
+   },
+   {
+    "nombre": "último punto de Serie A",
+    "mm": [
+     202.1,
+     147.1
+    ],
+    "clic_px": [
+     453.7674,
+     228.2791
+    ],
+    "dibujado_px": [
+     454.7067,
+     241.3982
+    ],
+    "error_mm": 8.416,
+    "residuo_mm": 0.1174
+   }
+  ],
+  "error_max_grafico_mm": 11.7217,
+  "autodeteccion": {
+   "grafico": {
+    "mediana_mm": 1.9959,
+    "p95_mm": 2.7091,
+    "max_mm": 2.9418
+   },
+   "desplazamiento_mm": [
+    -1.272,
+    -1.4675
+   ],
+   "escala_x": 0.9929,
+   "escala_y": 0.9978,
+   "placa": {
+    "mediana_mm": 1.5515,
+    "p95_mm": 2.8137,
+    "max_mm": 3.202
+   }
+  },
+  "iou_autodeteccion": 0.9874,
+  "error_auto_mediana_grafico_mm": 1.9959,
+  "error_auto_max_grafico_mm": 2.9418,
+  "autodeteccion_error_estimado_mm": 1.2969,
+  "autodeteccion_metodo": "bordes",
+  "autodeteccion_confianza": "media"
+ },
+ "grafica": {
+  "titulo": "Presión vs altitud (con discontinuidad y datos faltantes)",
+  "series": [
+   "Serie A"
+  ],
+  "fuente": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/948A3CF9F1",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}

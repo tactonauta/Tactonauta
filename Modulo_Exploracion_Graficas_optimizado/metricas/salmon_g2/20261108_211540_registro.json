@@ -1,0 +1,380 @@
+{
+ "prueba": "registro",
+ "placa": "salmon_g2",
+ "fecha": "2026-11-08T21:15:40",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "claro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "modelo": "homografía",
+  "n_puntos": 12,
+  "error_mediana_mm": 10.3504,
+  "error_max_puntos_mm": 17.0373,
+  "error_mediana_px": 17.0012,
+  "residuo_clics_mm": 0.9434,
+  "rotacion_placa_grados": 3.9387,
+  "rect_placa_real_px": [
+   116.9481,
+   5.1376,
+   366.2179,
+   363.8414
+  ],
+  "esquinas_placa_reales_px": [
+   [
+    148.2806,
+    5.1376
+   ],
+   [
+    483.166,
+    28.0529
+   ],
+   [
+    468.3944,
+    368.9791
+   ],
+   [
+    116.9481,
+    344.227
+   ]
+  ],
+  "iou_calibracion": 0.8779,
+  "registro_origen": "autodeteccion",
+  "registro_error_estimado_mm": null,
+  "calibracion": {
+   "grafico": {
+    "mediana_mm": 4.6585,
+    "p95_mm": 9.719,
+    "max_mm": 10.7288
+   },
+   "desplazamiento_mm": [
+    1.0016,
+    2.0825
+   ],
+   "escala_x": 0.9946,
+   "escala_y": 0.9854,
+   "placa": {
+    "mediana_mm": 8.5231,
+    "p95_mm": 14.3333,
+    "max_mm": 17.2433
+   }
+  },
+  "puntos": [
+   {
+    "nombre": "esquina superior izquierda de la placa",
+    "mm": [
+     0,
+     0
+    ],
+    "clic_px": [
+     148.4651,
+     7.2558
+    ],
+    "dibujado_px": [
+     140.8,
+     26.97
+    ],
+    "error_mm": 15.4863,
+    "residuo_mm": 1.4459
+   },
+   {
+    "nombre": "esquina inferior izquierda de la placa",
+    "mm": [
+     0,
+     220.0
+    ],
+    "clic_px": [
+     117.7674,
+     345.4884
+    ],
+    "dibujado_px": [
+     137.17,
+     362.37
+    ],
+    "error_mm": 17.0373,
+    "residuo_mm": 0.9415
+   },
+   {
+    "nombre": "esquina inferior derecha de la placa",
+    "mm": [
+     220.0,
+     220.0
+    ],
+    "clic_px": [
+     468.2791,
+     368.3721
+    ],
+    "dibujado_px": [
+     488.44,
+     356.71
+    ],
+    "error_mm": 14.7915,
+    "residuo_mm": 0.3775
+   },
+   {
+    "nombre": "origen de los ejes",
+    "mm": [
+     35.8,
+     121.5
+    ],
+    "clic_px": [
+     188.093,
+     192.0
+    ],
+    "dibujado_px": [
+     194.3514,
+     206.3716
+    ],
+    "error_mm": 10.2208,
+    "residuo_mm": 0.5812
+   },
+   {
+    "nombre": "extremo derecho del eje horizontal",
+    "mm": [
+     210.0,
+     121.5
+    ],
+    "clic_px": [
+     458.7907,
+     212.093
+    ],
+    "dibujado_px": [
+     465.2943,
+     201.5933
+    ],
+    "error_mm": 7.238,
+    "residuo_mm": 0.7722
+   },
+   {
+    "nombre": "extremo superior del eje vertical",
+    "mm": [
+     35.8,
+     48.4
+    ],
+    "clic_px": [
+     197.0233,
+     79.814
+    ],
+    "dibujado_px": [
+     194.4825,
+     96.4361
+    ],
+    "error_mm": 10.48,
+    "residuo_mm": 0.6706
+   },
+   {
+    "nombre": "esquina superior izquierda del QR",
+    "mm": [
+     10.0,
+     10.0
+    ],
+    "clic_px": [
+     162.4186,
+     20.093
+    ],
+    "dibujado_px": [
+     155.6956,
+     41.0986
+    ],
+    "error_mm": 14.1893,
+    "residuo_mm": 0.5699
+   },
+   {
+    "nombre": "esquina inferior derecha del QR",
+    "mm": [
+     35.8,
+     35.8
+    ],
+    "clic_px": [
+     198.1395,
+     60.8372
+    ],
+    "dibujado_px": [
+     194.5046,
+     77.9094
+    ],
+    "error_mm": 10.9229,
+    "residuo_mm": 0.7042
+   },
+   {
+    "nombre": "primer punto de Producto A (crece rápido)",
+    "mm": [
+     43.9,
+     118.3
+    ],
+    "clic_px": [
+     199.2558,
+     185.8605
+    ],
+    "dibujado_px": [
+     206.9131,
+     201.2476
+    ],
+    "error_mm": 9.4803,
+    "residuo_mm": 1.6163
+   },
+   {
+    "nombre": "último punto de Producto A (crece rápido)",
+    "mm": [
+     202.0,
+     65.4
+    ],
+    "clic_px": [
+     452.093,
+     124.4651
+    ],
+    "dibujado_px": [
+     449.1104,
+     116.9235
+    ],
+    "error_mm": 4.8385,
+    "residuo_mm": 0.6981
+   },
+   {
+    "nombre": "primer punto de Producto B (crece lento)",
+    "mm": [
+     43.9,
+     84.4
+    ],
+    "clic_px": [
+     202.6047,
+     137.3023
+    ],
+    "dibujado_px": [
+     206.8623,
+     149.8212
+    ],
+    "error_mm": 9.1156,
+    "residuo_mm": 1.4886
+   },
+   {
+    "nombre": "último punto de Producto B (crece lento)",
+    "mm": [
+     202.0,
+     71.2
+    ],
+    "clic_px": [
+     450.9767,
+     132.8372
+    ],
+    "dibujado_px": [
+     449.4888,
+     125.5838
+    ],
+    "error_mm": 4.8304,
+    "residuo_mm": 0.2033
+   }
+  ],
+  "error_max_grafico_mm": 10.7288,
+  "autodeteccion": {
+   "grafico": {
+    "mediana_mm": 1.9593,
+    "p95_mm": 2.232,
+    "max_mm": 2.4997
+   },
+   "desplazamiento_mm": [
+    -0.5331,
+    -1.779
+   ],
+   "escala_x": 1.0061,
+   "escala_y": 0.9938,
+   "placa": {
+    "mediana_mm": 1.8762,
+    "p95_mm": 3.7636,
+    "max_mm": 5.9952
+   }
+  },
+  "iou_autodeteccion": 0.9499,
+  "error_auto_mediana_grafico_mm": 1.9593,
+  "error_auto_max_grafico_mm": 2.4997,
+  "autodeteccion_error_estimado_mm": 1.7849,
+  "autodeteccion_metodo": "gris",
+  "autodeteccion_confianza": "alta"
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}

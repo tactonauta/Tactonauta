@@ -1,0 +1,178 @@
+{
+ "prueba": "qr",
+ "placa": "salmon_g2",
+ "fecha": "2026-11-08T21:14:33",
+ "version": "1.2 · 2026-11-05",
+ "condiciones": {
+  "color": "claro",
+  "grafica": "2"
+ },
+ "calibracion": "guardada en config_exploracion.json (4 esquinas)",
+ "config": {
+  "hoja": [
+   137,
+   20,
+   352,
+   343
+  ],
+  "distancia_pinza": 35,
+  "radio_punto": 20,
+  "radio_linea": 15,
+  "radio_eje": 20,
+  "radio_texto": 12,
+  "resolucion": [
+   640,
+   480
+  ],
+  "confianza_mano": 0.5,
+  "esquinas_placa_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ],
+  "registro_origen": "autodeteccion",
+  "exposicion": -6,
+  "mano_recorte_placa": true,
+  "mano_lado_max_px": 0
+ },
+ "hoja_usada": [
+  137,
+  20,
+  352,
+  343
+ ],
+ "registro_usado": {
+  "origen": "autodeteccion",
+  "esquinas_px": [
+   [
+    140.8,
+    26.97
+   ],
+   [
+    472.11,
+    20.54
+   ],
+   [
+    488.44,
+    356.71
+   ],
+   [
+    137.17,
+    362.37
+   ]
+  ]
+ },
+ "metricas": {
+  "condiciones": [
+   {
+    "condicion": "en la bandeja",
+    "intentos": 59,
+    "lecturas": 10,
+    "tasa": {
+     "k": 10,
+     "n": 59,
+     "p": 0.1695,
+     "ic95": [
+      0.0948,
+      0.2846
+     ]
+    },
+    "tasa_pct": 16.9492,
+    "t_primera_s": 0.1318,
+    "ms_mediana": 202.5906,
+    "ms_p95": 215.5148,
+    "contraste_michelson": 0.7398,
+    "lado_px": 39.0533,
+    "polaridad": "normal (oscuro sobre claro)",
+    "orientacion_qr": "180",
+    "variantes": [
+     "relieve/zbar"
+    ],
+    "resolucion": [
+     640,
+     480
+    ],
+    "zoom_placa_pct": 100.0,
+    "px_por_modulo": 1.5932,
+    "texto": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/54D7E01D5C",
+    "orientacion_coincide": false
+   },
+   {
+    "condicion": "en la mano a unos 20 cm",
+    "intentos": 24,
+    "lecturas": 10,
+    "tasa": {
+     "k": 10,
+     "n": 24,
+     "p": 0.4167,
+     "ic95": [
+      0.2447,
+      0.6117
+     ]
+    },
+    "tasa_pct": 41.6667,
+    "t_primera_s": 1.6342,
+    "ms_mediana": 138.9389,
+    "ms_p95": 213.2051,
+    "contraste_michelson": 0.6908,
+    "lado_px": 77.3369,
+    "polaridad": "normal (oscuro sobre claro)",
+    "orientacion_qr": "180",
+    "variantes": [
+     "umbral/aruco",
+     "umbral/zbar"
+    ],
+    "resolucion": [
+     640,
+     480
+    ],
+    "zoom_placa_pct": 29.1667,
+    "px_por_modulo": 1.1702,
+    "texto": "HTTPS://TACTONAUTA.ONRENDER.COM/Q/54D7E01D5C",
+    "orientacion_coincide": false
+   }
+  ],
+  "tasa": {
+   "k": 20,
+   "n": 83,
+   "p": 0.241,
+   "ic95": [
+    0.1617,
+    0.3431
+   ]
+  },
+  "tasa_pct": 24.0964,
+  "t_primera_s": 0.883,
+  "ms_mediana": 201.597
+ },
+ "grafica": {
+  "titulo": "Ventas mensuales por producto",
+  "series": [
+   "Producto A (crece rápido)",
+   "Producto B (crece lento)",
+   "Producto C (decrece)"
+  ],
+  "fuente": "https://tactonauta.onrender.com/q/54D7E01D5C",
+  "placa_mm": [
+   220.0,
+   220.0
+  ]
+ },
+ "camara": {
+  "nombre": "WN CAM-K211L",
+  "orientacion": "180"
+ }
+}
