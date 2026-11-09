@@ -1192,7 +1192,7 @@ def crear_stl_desde_resultado(resultado, prefijo="grafica", pie_figura=None, aju
         incluir_etiquetas=True,
         diseno=diseno,
         ajustes=ajustes,
-        url_qr=url_qr,
+        url_qr=_contenido_qr(token),
         figura=_etiqueta_figura(_info_figura(resultado, figura, pie_figura)),
         esquina=_texto_esquina(_info_figura(resultado, figura, pie_figura)),
     )
@@ -1263,6 +1263,14 @@ def _token_qr(resultado):
     """Token del QR de una figura (ver arriba), a partir de su lectura."""
     origen = os.path.basename(_imagen_original(resultado) or "") or resultado.get("nombre_json") or ""
     return hashlib.sha1(origen.encode("utf-8")).hexdigest()[:10]
+
+
+def _contenido_qr(token):
+    """Lo que va DENTRO del QR impreso: solo el código, en mayúsculas
+    ("1E192396B9"). El modo exploración y Hand_Tracking le agregan la
+    dirección del servidor (ver generador_stl.QR_LADO); el enlace completo
+    (_url_qr) se sigue mostrando y sirve igual."""
+    return token.upper()
 
 
 def _url_qr(token):
@@ -1752,9 +1760,10 @@ def vista_lamina():
     diseno = {}
     # con el mismo QR que llevará el STL: ocupa su lugar y se ve en la pizarra
     url_qr = _url_qr(_token_qr(resultado))
+    contenido_qr = _contenido_qr(_token_qr(resultado))
     try:
         generar_modelo_desde_recta(payload, archivo_salida=None, incluir_etiquetas=True,
-                                   diseno=diseno, ajustes=ajustes, url_qr=url_qr,
+                                   diseno=diseno, ajustes=ajustes, url_qr=contenido_qr,
                                    figura=_etiqueta_figura(_info_figura(resultado)),
                                    esquina=_texto_esquina(_info_figura(resultado)))
     except ValueError as e:

@@ -705,6 +705,10 @@ def normalizar_url(entrada):
     """Convierte enlaces 'de compartir' (Drive, Sheets, Dropbox, GitHub) en
     enlaces de descarga directa. Lanza ErrorDatos si no parece un enlace."""
     url = entrada.strip().strip("\"'<>")
+    # El QR de las láminas nuevas lleva solo el código ("1E192396B9"): se
+    # completa con la dirección del servidor de Puntito.
+    if re.fullmatch(r"[0-9A-Fa-f]{10}", url):
+        url = "https://tactonauta.onrender.com/Q/" + url.upper()
     if not re.match(r"^https?://", url, re.I):
         raise ErrorDatos("Eso no parece un enlace web. Debe empezar con http o https.")
     u = urllib.parse.urlparse(url)

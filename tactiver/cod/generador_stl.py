@@ -41,7 +41,7 @@ el modelo (la placa se veía "pandeada" antes de laminar). Por eso:
   - al guardar se descarta cualquier triángulo de área cero que quede.
 """
 import qrcode
-from qrcode.constants import ERROR_CORRECT_L
+from qrcode.constants import ERROR_CORRECT_H
 import copy
 import math
 import re
@@ -65,25 +65,28 @@ CLEARANCE_BRAILLE = 9.5
 RELIEVE_EJE = 1.0
 RELIEVE_LINEA = 1.6
 DIAM_LINEA = 2.0
-# QR en relieve (esquina superior izquierda): identifica la lámina con un
-# enlace corto a todos sus datos (api.py, /q/<token>: documento, página,
-# contexto, valores y el mapa para Hand_Tracking), que se abre con un
-# celular o con la cámara de Hand_Tracking.
-# Lo que fija la legibilidad es el lado de cada módulo (cuadradito), no el
-# del QR: ~1 mm es lo que una boquilla de 0,4 mm imprime con bordes limpios
-# (por debajo de ~0,8 mm los módulos vecinos se empastan) y deja 3 px o más
-# por módulo a una cámara a la distancia de la mano. El QR mide entonces
-# módulos x QR_MODULO: con el enlace en mayúsculas (api._url_qr, modo
-# alfanumérico del QR) un enlace de ~45 caracteres da 25x25 módulos, unos
-# 26 mm; en minúsculas daba 29x29, 30 mm.
-QR_MODULO = 1.03
+# QR en relieve (esquina superior izquierda): identifica la lámina con el
+# CÓDIGO de sus datos ("54D7E01D5C"), no con el enlace completo: el modo
+# exploración de Puntito y Hand_Tracking (Modulo_Exploracion_Graficas_
+# optimizado, "qr_url_base") lo completan solos con la dirección del servidor
+# (api.py, /q/<código>). Con el enlace (~45 caracteres) el QR tenía 25x25
+# módulos de 1 mm: desde la altura de la bandeja la cámara del módulo veía
+# menos de 2,5 px por módulo y casi nunca lo leía (métricas del 8 nov: 0 %,
+# 24 % y 0 %). El código entra en la versión 1 del QR (21x21) aun con la
+# corrección de errores máxima (H, 30 %: aguanta manchas o módulos mal
+# impresos), y a QR_LADO = 30 mm cada módulo mide 1,43 mm.
+# Prueba simulada a 40 cm (webcam de 70°): con la cámara de 1280 px que el
+# módulo usa para el QR da 3,3 px por módulo y se lee siempre si los módulos
+# tienen contraste (pintados); el relieve blanco sobre blanco no se lee a
+# ningún tamaño. Con 640 px no alcanza: ver el código grande de atrás.
+QR_LADO = 30.0
 QR_ALTURA = 1.6
 # Módulos de borde dentro del QR. Es 0 porque la "zona de silencio" que
 # exige el estándar ya la da la placa lisa alrededor (MARGEN_PLACA hacia los
 # bordes y CLEARANCE_BRAILLE hacia la leyenda y el gráfico, ambos más que
 # 4 módulos): dibujarla adentro solo agrandaría el QR.
 QR_MARGEN = 0
-QR_ERROR_CORRECTION = ERROR_CORRECT_L
+QR_ERROR_CORRECTION = ERROR_CORRECT_H
 # Cada módulo del QR se agranda esto (mm) en la malla, así dos módulos
 # vecinos se superponen apenas en vez de compartir caras exactas
 # (geometría no-manifold que Bambu Studio intenta "reparar"). No cambia la
@@ -164,12 +167,12 @@ def _malla_caja(ancho, profundidad, altura, cx=0.0, cy=0.0, z0=0.0):
     return v[np.array(caras)]
 
 
-def lado_qr(url, modulo=QR_MODULO):
-    """Lado (mm) del QR en relieve de este enlace: módulos x `modulo`."""
-    return len(_crear_matriz_qr(url)) * modulo
+def lado_qr(contenido, lado=QR_LADO):
+    """Lado (mm) del QR en relieve: siempre QR_LADO (el módulo se ajusta)."""
+    return float(lado) if _crear_matriz_qr(contenido) else 0.0
 
 
-def agregar_qr(piezas, url, x0, y0, modulo=QR_MODULO, altura=QR_ALTURA):
+def agregar_qr(piezas, url, x0, y0, lado=QR_LADO, altura=QR_ALTURA):
     """Agrega un QR cuadrado en relieve a la lista de primitivas.
 
     x0, y0 corresponden a la esquina inferior izquierda del QR, y cada
@@ -183,7 +186,7 @@ def agregar_qr(piezas, url, x0, y0, modulo=QR_MODULO, altura=QR_ALTURA):
     if n == 0:
         return None
 
-    lado = n * modulo
+    modulo = lado / n
 
     for fila, fila_qr in enumerate(matriz):
         for columna, activo in enumerate(fila_qr):
@@ -2688,7 +2691,7 @@ def generar_modelo_desde_recta(
         qr_x = MARGEN_PLACA
         qr_y = y_tope - qr_lado
         desde = len(piezas)
-        qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, modulo=QR_MODULO, altura=QR_ALTURA)
+        qr_info = agregar_qr(piezas, url_qr, qr_x, qr_y, lado=qr_lado, altura=QR_ALTURA)
         if qr_info:
             _registrar("qr", "qr", desde, texto="Código QR",
                        recuadro=[qr_x, qr_y, qr_x + qr_lado, qr_y + qr_lado])
