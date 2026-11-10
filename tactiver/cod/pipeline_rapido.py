@@ -835,6 +835,149 @@ def extraer_imagenes_crudas(pdf_path, output_dir):
     return extraidas
 
 
+# Una imagen con varios gráficos lado a lado o uno debajo de otro (Fig. 1 A
+# y B, Fig. 3 A, B y C de "3D printable hyaluronic acid-based hydrogel..."):
+# el PDF la trae como UNA imagen, el segmentador lee un solo gráfico y la
+# lámina salía con los dos mezclados. Cada gráfico tiene su marco (ejes y
+# bordes): trazos rectos largos. Si los trazos largos forman grupos que no
+# se superponen y entre ellos hay una franja en blanco, son paneles aparte.
+PANEL_TRAZO_MIN = 0.12        # largo mínimo de un trazo del marco (fracción del lado)
+PANEL_MARCO_MIN = 0.15        # un grupo de trazos más corto que esto no es un marco
+PANEL_HUECO_TINTA_MAX = 0.01  # franja de corte: casi sin tinta
+PANEL_LADO_MIN = 150          # px: un panel más chico no es un gráfico legible
+PANEL_PROFUNDIDAD = 2         # columnas y, dentro de cada una, filas (o al revés)
+
+
+def _intervalos_de_marco(tinta, eje):
+    """Intervalos [a, b) a lo largo de `eje` (1: x, 0: y) ocupados por trazos
+    rectos largos, unidos cuando se superponen."""
+    h, w = tinta.shape
+    lado = w if eje == 1 else h
+    largo = max(int(lado * PANEL_TRAZO_MIN), 10)
+    k = (largo, 1) if eje == 1 else (1, largo)
+    rectos = cv2.morphologyEx(tinta, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, k))
+    n, _, st, _ = cv2.connectedComponentsWithStats(rectos, connectivity=8)
+    i0, i1 = (cv2.CC_STAT_LEFT, cv2.CC_STAT_WIDTH) if eje == 1 else (cv2.CC_STAT_TOP, cv2.CC_STAT_HEIGHT)
+    unidos = []
+    for a, b in sorted((int(st[i, i0]), int(st[i, i0] + st[i, i1])) for i in range(1, n)):
+        if unidos and a <= unidos[-1][1] + 2:
+            unidos[-1][1] = max(unidos[-1][1], b)
+        else:
+            unidos.append([a, b])
+    return [(a, b) for a, b in unidos if b - a >= PANEL_MARCO_MIN * lado]
+
+
+def _cortes_entre(tinta, marcos, eje):
+    """Dónde cortar entre marcos consecutivos: en el medio de la franja en
+    blanco más ancha del hueco. None si algún hueco no tiene franja en blanco
+    (los marcos son de un mismo gráfico, p. ej. un eje cortado)."""
+    perfil = tinta.sum(axis=0 if eje == 1 else 1)
+    limite = PANEL_HUECO_TINTA_MAX * tinta.shape[0 if eje == 1 else 1]
+    cortes = []
+    for (_, b0), (a1, _) in zip(marcos, marcos[1:]):
+        blanco = perfil[b0:a1] <= limite
+        mejor, inicio = None, None
+        for k, v in enumerate(list(blanco) + [False]):
+            if v and inicio is None:
+                inicio = k
+            elif not v and inicio is not None:
+                if mejor is None or k - inicio > mejor[1] - mejor[0]:
+                    mejor = (inicio, k)
+                inicio = None
+        if mejor is None:
+            return None
+        cortes.append(b0 + (mejor[0] + mejor[1]) // 2)
+    return cortes
+
+
+def dividir_paneles(ruta, profundidad=PANEL_PROFUNDIDAD):
+    """Recuadros (x0, y0, x1, y1) en píxeles de cada gráfico de la imagen,
+    en orden de lectura; [] si es un solo gráfico (ver arriba)."""
+    img = cv2.imread(ruta, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return []
+    tinta = (img < 200).astype(np.uint8)
+
+    def dividir(x0, y0, x1, y1, nivel):
+        trozo = tinta[y0:y1, x0:x1]
+        for eje in (1, 0):                       # primero columnas, después filas
+            marcos = _intervalos_de_marco(trozo, eje)
+            if len(marcos) < 2:
+                continue
+            cortes = _cortes_entre(trozo, marcos, eje)
+            if cortes is None:
+                continue
+            fin = x1 - x0 if eje == 1 else y1 - y0
+            limites = [0] + cortes + [fin]
+            if min(b - a for a, b in zip(limites, limites[1:])) < PANEL_LADO_MIN:
+                continue
+            partes = []
+            for a, b in zip(limites, limites[1:]):
+                caja = (x0 + a, y0, x0 + b, y1) if eje == 1 else (x0, y0 + a, x1, y0 + b)
+                partes.extend(dividir(*caja, nivel + 1) if nivel + 1 < profundidad else [caja])
+            return partes
+        return [(x0, y0, x1, y1)]
+
+    h, w = tinta.shape
+    paneles = dividir(0, 0, w, h, 0)
+    if len(paneles) < 2:
+        return []
+    # sin el blanco de los bordes del recorte
+    ajustados = []
+    for x0, y0, x1, y1 in paneles:
+        ys, xs = np.nonzero(tinta[y0:y1, x0:x1])
+        if len(xs) == 0:
+            continue
+        m = 4
+        ajustados.append((max(x0 + int(xs.min()) - m, x0), max(y0 + int(ys.min()) - m, y0),
+                          min(x0 + int(xs.max()) + 1 + m, x1), min(y0 + int(ys.max()) + 1 + m, y1)))
+    return ajustados if len(ajustados) >= 2 else []
+
+
+def _resultado_de_panel(r, caja, k, img):
+    """Copia de la figura `r` reducida a un panel: su propia imagen, su
+    recuadro en la página y las palabras del PDF que caen dentro."""
+    x0, y0, x1, y1 = caja
+    alto_px, ancho_px = img.shape[:2]
+    base, ext = os.path.splitext(r["file_path"])
+    ruta = f"{base}_panel{k}{ext}"
+    cv2.imwrite(ruta, img[y0:y1, x0:x1])
+    bx0, by0, bx1, by1 = r["bbox"]
+    sx, sy = (bx1 - bx0) / ancho_px, (by1 - by0) / alto_px
+    palabras = []
+    for p in r.get("palabras") or []:
+        cx, cy = p["px"] + p["pw"] / 2, p["py"] + p["ph"] / 2
+        if x0 <= cx < x1 and y0 <= cy < y1:
+            palabras.append(dict(p, px=round(p["px"] - x0, 1), py=round(p["py"] - y0, 1)))
+    panel = dict(r, file_path=ruta, width=(x1 - x0) * sx, height=(y1 - y0) * sy,
+                 bbox=[round(bx0 + x0 * sx, 1), round(by0 + y0 * sy, 1),
+                       round(bx0 + x1 * sx, 1), round(by0 + y1 * sy, 1)],
+                 palabras=palabras, panel_de=os.path.basename(r["file_path"]))
+    panel["titulo_grafico"] = titulo_en_figura(palabras, x1 - x0, y1 - y0)
+    return panel
+
+
+def _tipo_de(r, prediccion):
+    """Completa en `r` el tipo de figura (ver detectar_graficos)."""
+    if es_figura_compuesta(r["file_path"]):
+        r.update(tipo="compuesta", confianza=0.0, es_lineal=False, es_barras=False)
+    elif prediccion is not None:
+        etiqueta, prob = prediccion
+        r["tipo"] = clasificador_figuras.TIPOS.get(etiqueta, "otro")
+        r["tipo_modelo"] = etiqueta
+        r["confianza"] = round(prob, 2)
+        r["es_lineal"] = r["tipo"] == "linea"
+        r["es_barras"] = r["tipo"] == "barras"
+    else:
+        tipo, extent, _ = clasificar_geometria(r["file_path"])
+        if tipo == "linea" and es_dispersion(r["file_path"]):
+            tipo = "dispersion"   # puntos sueltos: no hay curva que unir
+        r["tipo"] = tipo
+        r["confianza"] = round((1 - extent) if tipo == "linea" else extent, 2)
+        r["es_lineal"] = tipo == "linea"
+        r["es_barras"] = False   # la regla de respaldo no distingue barras de tortas
+
+
 def detectar_graficos(pdf_path, output_dir):
     """
     Versión "liviana" de procesar_pdf pensada para la API web: hace los
@@ -882,34 +1025,34 @@ def detectar_graficos(pdf_path, output_dir):
 
         candidatos.append(r)
 
+    # Una imagen con varios gráficos se separa en paneles (ver
+    # dividir_paneles). Si ningún panel es un gráfico de líneas o de barras
+    # (un collage de fotos), la imagen queda entera, como estaba.
+    paneles = {}
+    for k, r in enumerate(candidatos):
+        if r.get("origen") != "imagen":
+            continue
+        cajas = dividir_paneles(r["file_path"])
+        if cajas:
+            img = cv2.imread(r["file_path"])
+            paneles[k] = [_resultado_de_panel(r, c, n, img) for n, c in enumerate(cajas, start=1)]
+    todos = candidatos + [p for ps in paneles.values() for p in ps]
+
     # Tipo de cada figura: el modelo de Docling (ver clasificador_figuras), o
     # la regla geométrica si el modelo no está disponible. Una imagen con
-    # varios paneles va aparte ("compuesta"): el segmentador lee un gráfico.
-    modelo = clasificador_figuras.clasificar([r["file_path"] for r in candidatos])
+    # varios paneles que no se pudieron separar va aparte ("compuesta"): el
+    # segmentador lee un gráfico.
+    modelo = clasificador_figuras.clasificar([r["file_path"] for r in todos])
+    for k, r in enumerate(todos):
+        _tipo_de(r, modelo[k] if modelo is not None else None)
+
     resultados = []
     for k, r in enumerate(candidatos):
-        if es_figura_compuesta(r["file_path"]):
-            r["tipo"] = "compuesta"
-            r["confianza"] = 0.0
-            r["es_lineal"] = False
-            r["es_barras"] = False
-        elif modelo is not None:
-            etiqueta, prob = modelo[k]
-            r["tipo"] = clasificador_figuras.TIPOS.get(etiqueta, "otro")
-            r["tipo_modelo"] = etiqueta
-            r["confianza"] = round(prob, 2)
-            r["es_lineal"] = r["tipo"] == "linea"
-            r["es_barras"] = r["tipo"] == "barras"
+        ps = paneles.get(k)
+        if ps and any(p["es_lineal"] or p["es_barras"] for p in ps):
+            resultados.extend(ps)
         else:
-            tipo, extent, _ = clasificar_geometria(r["file_path"])
-            if tipo == "linea" and es_dispersion(r["file_path"]):
-                tipo = "dispersion"   # puntos sueltos: no hay curva que unir
-            confianza = round((1 - extent) if tipo == "linea" else extent, 2)
-            r["tipo"] = tipo
-            r["confianza"] = confianza
-            r["es_lineal"] = tipo == "linea"
-            r["es_barras"] = False   # la regla de respaldo no distingue barras de tortas
-        resultados.append(r)
+            resultados.append(r)
 
     resultados = _sin_duplicados(resultados)
     _agrupar_paneles(resultados)
