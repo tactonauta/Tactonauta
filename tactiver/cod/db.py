@@ -100,6 +100,11 @@ _COLUMNAS_NUEVAS = [
     # Título del estudio (del PDF, ver pipeline_rapido.datos_documento): es
     # lo que el supervisor ve para seguir la solicitud, no el nombre del archivo.
     ("solicitudes", "documento_titulo TEXT"),
+    # Último cambio de estado (autorizada, rechazada, enviada a la imprenta,
+    # imprimiéndose, impresa): las listas van de lo más reciente a lo más
+    # viejo según esta fecha. Las solicitudes viejas no la tienen: vale
+    # creado_en.
+    ("solicitudes", "actualizado_en TEXT"),
 ]
 
 
@@ -387,6 +392,7 @@ def _fila_a_solicitud(fila):
         "orden": fila.get("orden"),
         "laminas": json.loads(laminas_json) if laminas_json else None,
         "creado_en": fila.get("creado_en"),
+        "actualizado_en": fila.get("actualizado_en") or fila.get("creado_en"),
     }
 
 
@@ -445,8 +451,10 @@ def solicitudes_de_imprenta(imprenta_id):
 
 _CAMPOS_SOLICITUD_DIRECTOS = (
     "supervisor_id", "imprenta_id", "estado_supervisor", "estado_imprenta",
-    "stl_generado", "orden", "rechazo", "rechazado_en",
+    "stl_generado", "orden", "rechazo", "rechazado_en", "actualizado_en",
 )
+# Cambiar alguna de estas columnas mueve la solicitud arriba en las listas.
+_CAMPOS_DE_ESTADO = ("estado_supervisor", "estado_imprenta", "rechazo")
 
 
 def actualizar_solicitud(id_solicitud, cambios):
@@ -455,6 +463,8 @@ def actualizar_solicitud(id_solicitud, cambios):
     `laminas` como listas de Python — estas últimas se serializan solas a
     JSON antes de guardarse."""
     con = _obtener_conexion()
+    if any(c in cambios for c in _CAMPOS_DE_ESTADO) and "actualizado_en" not in cambios:
+        cambios = {**cambios, "actualizado_en": time.strftime("%Y-%m-%dT%H:%M:%S")}
     columnas, valores = [], []
     for c in _CAMPOS_SOLICITUD_DIRECTOS:
         if c in cambios:
