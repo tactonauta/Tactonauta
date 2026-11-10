@@ -1252,7 +1252,8 @@
   <!-- APP: IMPRENTA -->
   <section class="screen" id="screen-app-imprenta" aria-labelledby="app-imprenta-heading">
     <h1 id="app-imprenta-heading" tabindex="-1">Trabajos para imprimir</h1>
-    <p class="lede">Estos son los modelos STL ya autorizados por un supervisor. Descárgalos, imprímelos y marca cada trabajo cuando esté listo para que el estudiante lo sepa.</p>
+    <p class="lede">Estos son los modelos STL ya autorizados por un supervisor. Descárgalos, imprímelos y marca cada trabajo cuando esté listo para que el estudiante lo sepa. Los trabajos nuevos aparecen solos, arriba de todo.</p>
+    <p class="status" id="imprenta-aviso" role="status" aria-live="polite"></p>
 
     <div class="board">
       <section class="board-col" aria-labelledby="col-imprenta-pendientes">
@@ -2114,7 +2115,7 @@
 
     vacio.hidden = propias.length > 0;
 
-    propias.forEach(s => {
+    propias.slice().sort(masRecientePrimero).forEach(s => {
       const li = document.createElement('li');
       li.className = 'request-card';
       const sup = etiquetaSupervisor(s.estado_supervisor);
@@ -2150,6 +2151,12 @@
   // gráficas; rechazar; historial), con los datos en el servidor y el flujo
   // Revisar -> pizarra / visto bueno -> Autorizar -> Enviar a imprenta.
   const MAX_RECIENTES = 5;          // terminadas que se ven sin abrir el historial
+  // Todas las listas y los historiales, de lo más reciente a lo más viejo:
+  // según el último cambio de estado (autorizada, enviada a la imprenta,
+  // impresa...), o la fecha de envío si todavía no cambió. A igual fecha
+  // (resolución de segundos), el id más alto es la más nueva.
+  const fechaActividad = s => new Date(s.actualizado_en || s.creado_en);
+  const masRecientePrimero = (a, b) => (fechaActividad(b) - fechaActividad(a)) || (b.id - a.id);
   let solicitudesSupervisor = [];   // último listado (lo usa el historial)
 
   // Las URL de la API vienen relativas ("/api/resultados/..."); las de
@@ -2344,8 +2351,8 @@
     if (f.stl_download_url) {
       const link = crearEl('a', 'link-btn primary', 'Descargar STL');
       link.style.marginRight = '0.4rem';
-      link.href = API_BASE + f.stl_download_url;
-      link.setAttribute('download', '');
+      link.href = API_BASE + f.stl_download_url + (f.stl_nombre ? '?nombre=' + encodeURIComponent(f.stl_nombre) : '');
+      link.setAttribute('download', f.stl_nombre || '');
       li.appendChild(link);
     }
     // CSV para Hand_Tracking: coordenadas de todo lo que hay en la placa
@@ -2715,8 +2722,7 @@
   //  terminadas (impresas + rechazadas): solo las MAX_RECIENTES más recientes;
   //  el resto de las terminadas, en el historial.
   function repartirSolicitudesSupervisor(propias) {
-    // creado_en tiene resolución de segundos: a igual fecha, el id más alto es la más nueva
-    const masReciente = (a, b) => (new Date(b.creado_en) - new Date(a.creado_en)) || (b.id - a.id);
+    const masReciente = masRecientePrimero;
     const pendientes = propias.filter(s => s.estado_supervisor === 'en_espera').sort(masReciente);
     const enCurso = propias.filter(s => s.estado_supervisor === 'aprobada' && s.estado_imprenta !== 'impreso').sort(masReciente);
     const terminadas = propias.filter(s => s.estado_supervisor === 'rechazada' ||
@@ -2815,15 +2821,44 @@
     await recargarSolicitud(id, 'visto-' + id + '-' + indice);
   }
 
+  // Las láminas se generan de a una, como la lectura en "Revisar": todas en
+  // un solo pedido pasaban el límite del servidor con varias gráficas y la
+  // imprenta recibía menos (o ninguna). Cada una queda guardada apenas se
+  // genera; si algo falla, volver a pulsar sigue desde la que falta.
   async function autorizarSolicitud(id, boton, status) {
     boton.disabled = true;
     status.classList.remove('error');
-    status.textContent = 'Generando láminas en braille y modelo STL… puede tardar un rato.';
-    const { resp, datos } = await postJson('/api/solicitudes/' + id + '/autorizar');
-    if (!resp.ok || !datos.ok) {
-      status.textContent = datos.error || 'No se pudo generar el braille y el STL.';
+    const fallar = (texto) => {
+      status.textContent = texto;
       status.classList.add('error');
       boton.disabled = false;
+    };
+    const solicitud = solicitudesSupervisor.find(x => x.id === id);
+    const indices = solicitud ? solicitud.figuras.map((f, i) => i).filter(i => !solicitud.figuras[i].quitada) : [];
+    for (let k = 0; k < indices.length; k++) {
+      status.textContent = 'Generando las láminas en braille y STL: lámina ' + (k + 1) + ' de ' + indices.length +
+        '… cada una puede tardar uno o dos minutos.';
+      let resp, datos;
+      try {
+        ({ resp, datos } = await postJson('/api/solicitudes/' + id + '/figuras/' + indices[k] + '/lamina'));
+      } catch (e) {
+        resp = { ok: false }; datos = {};
+      }
+      if (!resp.ok || !datos.ok) {
+        fallar((datos.error || 'No se pudo generar la lámina ' + (k + 1) + '.') +
+          (k > 0 ? ' Las ' + k + ' anteriores quedaron guardadas: vuelve a pulsar el botón para seguir con las que faltan.' : ''));
+        return;
+      }
+    }
+    status.textContent = 'Autorizando la solicitud…';
+    let resp, datos;
+    try {
+      ({ resp, datos } = await postJson('/api/solicitudes/' + id + '/autorizar'));
+    } catch (e) {
+      resp = { ok: false }; datos = {};
+    }
+    if (!resp.ok || !datos.ok) {
+      fallar(datos.error || 'No se pudo autorizar la solicitud. Vuelve a pulsar el botón.');
       return;
     }
     await recargarSolicitud(id, 'enviar-' + id, 'Solicitud autorizada: las láminas están listas para descargar o enviar a imprenta.');
@@ -4064,16 +4099,47 @@
   // ---------------------------------------------------------------
   let solicitudesImprenta = [];   // último listado (lo usa el historial)
 
-  async function pintarSolicitudesImprenta() {
-    if (!usuarioActual) return;
-    const { resp, datos } = await llamarApi('/api/solicitudes/imprenta', { method: 'GET' });
-    solicitudesImprenta = (resp.ok && datos.ok) ? datos.solicitudes : [];
-    const masReciente = (a, b) => new Date(b.creado_en) - new Date(a.creado_en);
+  // La cola se actualiza sola mientras está a la vista: antes se cargaba
+  // solo al entrar, y lo que el supervisor enviaba con la pantalla abierta
+  // no aparecía hasta recargar la página (parecía que no había llegado).
+  const REFRESCO_IMPRENTA_MS = 30000;
+  let firmaImprenta = null;
+  let pendientesVistos = null;   // ids en "Pendiente" la última vez
 
-    const pendientes = solicitudesImprenta.filter(s => s.estado_imprenta === 'pendiente')
-      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
-    const imprimiendo = solicitudesImprenta.filter(s => s.estado_imprenta === 'imprimiendo');
-    const impresos = solicitudesImprenta.filter(s => s.estado_imprenta === 'impreso').sort(masReciente);
+  async function refrescarImprenta() {
+    const pantalla = document.getElementById('screen-app-imprenta');
+    if (!usuarioActual || usuarioActual.rol !== 'imprenta' || !pantalla.classList.contains('active')
+        || document.visibilityState !== 'visible') return;
+    await pintarSolicitudesImprenta({ soloSiCambio: true });
+  }
+  setInterval(refrescarImprenta, REFRESCO_IMPRENTA_MS);
+  document.addEventListener('visibilitychange', refrescarImprenta);
+
+  async function pintarSolicitudesImprenta(opciones = {}) {
+    if (!usuarioActual) return;
+    let resp, datos;
+    try {
+      ({ resp, datos } = await llamarApi('/api/solicitudes/imprenta', { method: 'GET' }));
+    } catch (e) {
+      resp = { ok: false }; datos = {};
+    }
+    const llego = resp.ok && datos.ok;
+    if (!llego && opciones.soloSiCambio) return;    // sin conexión: se deja lo que se ve
+    const lista = llego ? datos.solicitudes : [];
+    const firma = JSON.stringify(lista.map(s => [s.id, s.estado_imprenta, s.actualizado_en, s.figuras.length]));
+    if (opciones.soloSiCambio && firma === firmaImprenta) return;
+    firmaImprenta = firma;
+    solicitudesImprenta = lista;
+    const idsPendientes = lista.filter(s => s.estado_imprenta === 'pendiente').map(s => s.id);
+    const nuevos = pendientesVistos ? idsPendientes.filter(id => !pendientesVistos.includes(id)).length : 0;
+    pendientesVistos = idsPendientes;
+    if (nuevos) {
+      document.getElementById('imprenta-aviso').textContent =
+        (nuevos === 1 ? 'Llegó 1 trabajo nuevo' : 'Llegaron ' + nuevos + ' trabajos nuevos') + ' a Pendiente.';
+    }
+    const pendientes = solicitudesImprenta.filter(s => s.estado_imprenta === 'pendiente').sort(masRecientePrimero);
+    const imprimiendo = solicitudesImprenta.filter(s => s.estado_imprenta === 'imprimiendo').sort(masRecientePrimero);
+    const impresos = solicitudesImprenta.filter(s => s.estado_imprenta === 'impreso').sort(masRecientePrimero);
 
     const columnas = [
       ['pendientes', pendientes, 'pendiente'],
@@ -4098,14 +4164,17 @@
 
   function construirTarjetaImprenta(s, estado) {
     const li = crearEl('li', 'request-card print-card');
-    const laminas = s.figuras.map((f, i) => ({ f, i })).filter(x => !x.f.quitada && !x.f.error);
+    // Todas las que el supervisor no quitó; si alguna no tiene su STL (una
+    // solicitud de antes de este arreglo), se avisa en vez de no mostrarla.
+    const laminas = s.figuras.map((f, i) => ({ f, i })).filter(x => !x.f.quitada);
+    const sinStl = laminas.filter(x => !x.f.stl_download_url);
 
     li.appendChild(crearEl('strong', null, s.estudiante.nombre));
     if (tituloDocumento(s)) li.appendChild(crearEl('p', 'print-meta', tituloDocumento(s)));
     li.appendChild(crearEl('p', 'print-meta', (s.estudiante.carrera || '') + ' · ' + (s.estudiante.facultad || '')));
     li.appendChild(crearEl('p', 'print-meta',
       'Orden ' + (s.orden || String(s.id).padStart(5, '0')) + ' · ' + laminas.length +
-      (laminas.length === 1 ? ' lámina' : ' láminas') + ' · ' + fechaCorta(s.creado_en)));
+      (laminas.length === 1 ? ' lámina' : ' láminas') + ' · ' + fechaCorta(s.actualizado_en || s.creado_en)));
 
     // Miniaturas de lo que se imprime (al hacer clic se ven ampliadas) y,
     // debajo, la descarga del STL de cada lámina.
@@ -4120,19 +4189,34 @@
         img.alt = '';
         img.loading = 'lazy';
         boton.appendChild(img);
-        boton.appendChild(crearEl('span', 'thumb-cap', 'Lámina ' + (k + 1)));
-        boton.addEventListener('click', () => abrirVisor(urlDeResultado(f.imagen_url), 'Lámina ' + (k + 1), f.caption));
+        const nombre = 'Lámina ' + (f.numero || k + 1);
+        boton.appendChild(crearEl('span', 'thumb-cap', nombre));
+        boton.addEventListener('click', () => abrirVisor(urlDeResultado(f.imagen_url), nombre, f.caption));
         item.appendChild(boton);
         miniaturas.appendChild(item);
         if (f.stl_download_url) {
-          const a = crearEl('a', 'link-btn secondary', 'STL lámina ' + (k + 1));
-          a.href = API_BASE + f.stl_download_url;
-          a.setAttribute('download', '');
+          const a = crearEl('a', 'link-btn secondary', 'STL ' + nombre.toLowerCase());
+          a.href = API_BASE + f.stl_download_url + (f.stl_nombre ? '?nombre=' + encodeURIComponent(f.stl_nombre) : '');
+          a.setAttribute('download', f.stl_nombre || '');
           descargas.appendChild(a);
         }
       });
       li.appendChild(miniaturas);
+      if (laminas.length - sinStl.length > 1) {
+        const zip = crearEl('a', 'link-btn primary', 'Descargar todas las láminas (ZIP)');
+        zip.href = API_BASE + '/api/solicitudes/' + s.id + '/laminas.zip';
+        zip.setAttribute('download', '');
+        descargas.prepend(zip);
+      }
       if (descargas.children.length) li.appendChild(descargas);
+      if (sinStl.length) {
+        const aviso = crearEl('p', 'status error',
+          (sinStl.length === 1 ? 'Falta el STL de la ' : 'Faltan los STL de las ') +
+          sinStl.map(x => 'lámina ' + (x.f.numero || x.i + 1)).join(', ') +
+          '. Avísale al supervisor para que la vuelva a generar.');
+        aviso.setAttribute('role', 'status');
+        li.appendChild(aviso);
+      }
     }
 
     if (estado === 'pendiente' || estado === 'imprimiendo') {
@@ -4197,7 +4281,7 @@
   function itemsDelHistorial(esSupervisor) {
     if (esSupervisor) return repartirSolicitudesSupervisor(solicitudesSupervisor).historial;
     return solicitudesImprenta.filter(s => s.estado_imprenta === 'impreso')
-      .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en))
+      .sort(masRecientePrimero)
       .slice(MAX_RECIENTES);
   }
 
@@ -4206,8 +4290,8 @@
     const esSupervisor = usuarioActual.rol === 'supervisor';
     document.getElementById('historial-heading').textContent = esSupervisor ? 'Historial de solicitudes' : 'Historial de impresiones';
     document.getElementById('historial-lede').textContent = esSupervisor
-      ? 'Las solicitudes impresas y las rechazadas de hace más tiempo, agrupadas por el mes en que se enviaron. Presiona un mes para ver sus solicitudes.'
-      : 'Los trabajos impresos hace más tiempo, agrupados por el mes en que se envió la solicitud. Presiona un mes para ver sus trabajos.';
+      ? 'Las solicitudes impresas y las rechazadas de hace más tiempo, de la más reciente a la más antigua y agrupadas por mes. Presiona un mes para ver sus solicitudes.'
+      : 'Los trabajos impresos hace más tiempo, del más reciente al más antiguo y agrupados por el mes en que se imprimieron. Presiona un mes para ver sus trabajos.';
     document.getElementById('historial-filtro-grupo').hidden = !esSupervisor;
 
     let items = itemsDelHistorial(esSupervisor);
@@ -4221,7 +4305,7 @@
 
     const grupos = [];
     items.forEach(s => {
-      const d = new Date(s.creado_en);
+      const d = fechaActividad(s);
       const clave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
       let g = grupos[grupos.length - 1];
       if (!g || g.clave !== clave) {

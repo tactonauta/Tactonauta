@@ -57,6 +57,7 @@ Salud:      GET /api/salud -> {"ok": true}
 import functools
 import glob
 import hashlib
+import io
 import os
 import json
 import math
@@ -68,10 +69,11 @@ import time
 import urllib.parse
 import uuid
 import traceback
+import zipfile
 
 import cv2
 from flask import (Flask, has_request_context, jsonify, render_template_string, request,
-                   send_from_directory, session)
+                   send_file, send_from_directory, session)
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import safe_join, secure_filename
 import numpy as np
@@ -487,6 +489,10 @@ def _con_estudiante(solicitud):
         "facultad": estudiante.get("facultad"),
         "carrera": estudiante.get("carrera"),
     }
+    # con qué nombre se descarga cada STL (ver _nombre_archivo_lamina)
+    for i, f in enumerate(solicitud.get("figuras") or []):
+        if f.get("stl_url"):
+            f["stl_nombre"] = _nombre_archivo_lamina(solicitud, f, i)
     return solicitud
 
 
@@ -668,6 +674,111 @@ def visto_bueno_figura(id_solicitud, indice):
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
 
 
+# Las láminas se generan de a una (/figuras/<i>/lamina), como la revisión:
+# todas juntas en el pedido de /autorizar pasaban el --timeout de 300 s de
+# gunicorn en Render con varias gráficas, el pedido se cortaba y la imprenta
+# recibía menos láminas (o ninguna). Cada lámina queda guardada apenas se
+# genera, con sus archivos ya copiados en R2, y /autorizar solo genera las
+# que falten.
+def _firma_lamina(figura):
+    """De qué lectura y ajustes salió una lámina: si el supervisor corrige
+    la figura después de generarla, la lámina ya no vale y se rehace."""
+    return json.dumps([figura.get("correccion_id"), figura.get("ajustes_lamina")], sort_keys=True)
+
+
+def _ruta_de_url(url):
+    """Ruta en el disco de un "/api/resultados/..." (None si no es uno)."""
+    prefijo = "/api/resultados/"
+    if not url or not str(url).startswith(prefijo):
+        return None
+    ruta = safe_join(RESULTADOS_DIR, str(url)[len(prefijo):])
+    return ruta
+
+
+def _lamina_vigente(figura):
+    """True si la figura ya tiene su STL, generado de su lectura actual, y el
+    archivo está (en el disco o en R2)."""
+    ruta = _ruta_de_url(figura.get("stl_url"))
+    return bool(ruta and figura.get("stl_de") == _firma_lamina(figura) and almacen.asegurar(ruta))
+
+
+def _respaldar_lamina(figura):
+    """Copia YA en R2 (sin esperar la cola) el STL y la narración de una
+    lámina: si el servidor se reinicia justo después, no se pierden."""
+    for clave in ("stl_url", "narracion_url", "handtracking_csv_url"):
+        ruta = _ruta_de_url(figura.get(clave))
+        if ruta and os.path.isfile(ruta):
+            try:
+                almacen.subir(ruta)
+            except Exception as e:
+                print(f"[R2] No se pudo copiar {os.path.basename(ruta)}: {e}", flush=True)
+
+
+def _generar_lamina(figura):
+    """La figura con su STL generado (o la misma, si ya tenía uno vigente).
+    Lanza ValueError con un mensaje entendible si no se puede."""
+    if _lamina_vigente(figura):
+        return figura
+    resultado = _resultado_guardado(figura.get("correccion_id"))
+    if resultado is None:
+        raise ValueError("Los archivos de esta gráfica ya no están en el servidor (pudo "
+                         "reiniciarse). Hay que volver a subir el documento.")
+    nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
+        resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"),
+        ajustes=figura.get("ajustes_lamina"), figura=figura)
+    figura = {**figura, **_campos_figura(resultado, nombre_stl, advertencias, narracion_info)}
+    figura["stl_de"] = _firma_lamina(figura)
+    _respaldar_lamina(figura)
+    return figura
+
+
+def _nombre_grafica(figura, indice):
+    return f"La gráfica {figura.get('numero') or indice + 1}"
+
+
+def _problema_para_autorizar(figuras):
+    """Mensaje si la solicitud todavía no se puede autorizar (None si sí)."""
+    utilizables = [f for f in figuras if not f.get("quitada")]
+    if not utilizables:
+        return "No queda ninguna gráfica para autorizar: agrega o restaura una, o rechaza la solicitud."
+    for i, f in enumerate(figuras):
+        if not f.get("quitada") and f.get("error"):
+            return (f"{_nombre_grafica(f, i)} no se pudo leer ({f['error']}). Vuelve a revisarla, "
+                    "reemplázala o quítala: si no, no llegaría a la imprenta.")
+    if not all(f.get("correccion_id") for f in utilizables):
+        return "Primero pulsa \"Revisar\" para ver las gráficas."
+    pendientes = [f for f in utilizables if not f.get("revisada")]
+    if pendientes:
+        return f"Falta dar el visto bueno a {len(pendientes)} gráfica(s) antes de autorizar."
+    return None
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/figuras/<int:indice>/lamina", methods=["POST"])
+@una_tarea_pesada
+def generar_lamina_figura(id_solicitud, indice):
+    """Genera el STL de UNA gráfica revisada (ver arriba)."""
+    solicitud, figuras, error = _figura_en_revision(id_solicitud, indice)
+    if error:
+        return error
+    figura = figuras[indice]
+    if figura.get("quitada"):
+        return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+    if figura.get("error") or not figura.get("correccion_id"):
+        return jsonify({"ok": False, "error": f"{_nombre_grafica(figura, indice)} todavía no se pudo revisar."}), 400
+    if not figura.get("revisada"):
+        return jsonify({"ok": False, "error": f"Falta el visto bueno de {_nombre_grafica(figura, indice).lower()}."}), 400
+    try:
+        figuras[indice] = _generar_lamina(figura)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": f"{_nombre_grafica(figura, indice)}: {e}"}), 400
+    except Exception as e:
+        print(f"ERROR GENERANDO la lámina {indice} de la solicitud {id_solicitud}:", flush=True)
+        print(traceback.format_exc(), flush=True)
+        return jsonify({"ok": False, "error": f"{_nombre_grafica(figura, indice)}: no se pudo generar la lámina ({e})."}), 500
+    solicitud = db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+    return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
 @app.route("/api/solicitudes/<int:id_solicitud>/autorizar", methods=["POST"])
 @una_tarea_pesada
 def autorizar_solicitud(id_solicitud):
@@ -676,51 +787,31 @@ def autorizar_solicitud(id_solicitud):
         return error
     if solicitud["estado_supervisor"] != "en_espera":
         return jsonify({"ok": False, "error": "Esta solicitud ya fue autorizada."}), 400
+    figuras = list(solicitud["figuras"])
+    problema = _problema_para_autorizar(figuras)
+    if problema:
+        return jsonify({"ok": False, "error": problema}), 400
 
-    utilizables = [f for f in solicitud["figuras"] if not f.get("error") and not f.get("quitada")]
-    if not utilizables:
-        return jsonify({"ok": False, "error": "No queda ninguna gráfica para autorizar: agrega o restaura una, o rechaza la solicitud."}), 400
-    if not any(f.get("correccion_id") for f in utilizables):
-        return jsonify({"ok": False, "error": "Primero pulsa \"Revisar\" para ver las gráficas."}), 400
-    pendientes = [f for f in utilizables if not f.get("revisada")]
-    if pendientes:
-        return jsonify({
-            "ok": False,
-            "error": f"Falta dar el visto bueno a {len(pendientes)} gráfica(s) antes de autorizar.",
-        }), 400
-
-    figuras_actualizadas = []
-    algun_exito = False
-    for figura in solicitud["figuras"]:
-        figura_actualizada = dict(figura)
-        if figura.get("error") or figura.get("quitada"):
-            figuras_actualizadas.append(figura_actualizada)
-            continue
-        resultado = _resultado_guardado(figura.get("correccion_id"))
-        if resultado is None:
-            figura_actualizada["error"] = (
-                "Los archivos de esta gráfica ya no están en el servidor (pudo "
-                "reiniciarse). Hay que volver a subir el documento."
-            )
-            figuras_actualizadas.append(figura_actualizada)
+    # Normalmente ya están todas (la interfaz las genera de a una); acá se
+    # generan las que falten. Si una falla, NO se autoriza: antes se
+    # autorizaba igual y esa lámina no llegaba a la imprenta sin que nadie
+    # se enterara. Las que sí se generaron quedan guardadas.
+    for i, figura in enumerate(figuras):
+        if figura.get("quitada"):
             continue
         try:
-            nombre_stl, advertencias, narracion_info = crear_stl_desde_resultado(
-                resultado, "grafica_tactil", pie_figura=figura.get("pie_figura"),
-                ajustes=figura.get("ajustes_lamina"), figura=figura)
-            figura_actualizada.update(
-                _campos_figura(resultado, nombre_stl, advertencias, narracion_info))
-            algun_exito = True
+            figuras[i] = _generar_lamina(figura)
         except Exception as e:
             print(f"ERROR AUTORIZANDO figura {figura.get('id')} de la solicitud {id_solicitud}:", flush=True)
             print(traceback.format_exc(), flush=True)
-            figura_actualizada["error"] = str(e)
-        figuras_actualizadas.append(figura_actualizada)
+            db.actualizar_solicitud(id_solicitud, {"figuras": figuras})
+            return jsonify({"ok": False, "error": f"{_nombre_grafica(figura, i)}: no se pudo generar la lámina ({e}). "
+                                                  "Corrígela o quítala y vuelve a autorizar."}), 400
 
     solicitud = db.actualizar_solicitud(id_solicitud, {
         "estado_supervisor": "aprobada",
-        "stl_generado": algun_exito,
-        "figuras": figuras_actualizadas,
+        "stl_generado": True,
+        "figuras": figuras,
     })
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
 
@@ -787,6 +878,9 @@ def corregir_figura_solicitud(id_solicitud, indice):
             campos = _campos_figura(resultado, nombre_stl, advertencias, narracion_info)
         if hay_ajustes:
             campos["ajustes_lamina"] = ajustes
+        if not en_revision:
+            campos["stl_de"] = _firma_lamina({**figura, **campos})
+            _respaldar_lamina(campos)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     except Exception as e:
@@ -861,7 +955,7 @@ def _segmentar_para_revision(figura):
 
 
 _CAMPOS_SEGMENTACION = ("ajustes_lamina", "resumen", "advertencias", "csv_url", "overlay_url", "json_url",
-                        "correccion_id", "descripcion", "revisada", "error")
+                        "correccion_id", "descripcion", "revisada", "error", "stl_de")
 
 
 @app.route("/api/solicitudes/<int:id_solicitud>/rechazar", methods=["POST"])
@@ -1001,12 +1095,61 @@ def enviar_a_imprenta(id_solicitud):
     if not supervisor or not supervisor.get("imprenta_predeterminada_id"):
         return jsonify({"ok": False, "error": "No tenés una imprenta conectada."}), 400
 
+    # Que lleguen TODAS: cada gráfica que no se quitó tiene que tener su STL
+    # en el servidor (o en R2), y queda copiada en R2 antes de enviarla.
+    for i, f in enumerate(solicitud["figuras"]):
+        if f.get("quitada"):
+            continue
+        ruta = _ruta_de_url(f.get("stl_url"))
+        if f.get("error") or not ruta or not almacen.asegurar(ruta):
+            return jsonify({"ok": False, "error": f"{_nombre_grafica(f, i)} no tiene su lámina (STL) en el "
+                                                  "servidor. Corrígela para volver a generarla, o quítala, "
+                                                  "y después envía a la imprenta."}), 400
+        _respaldar_lamina(f)
+
     solicitud = db.actualizar_solicitud(id_solicitud, {
         "imprenta_id": supervisor["imprenta_predeterminada_id"],
         "estado_imprenta": "pendiente",
         "orden": f"TV-{id_solicitud:05d}",
     })
     return jsonify({"ok": True, "solicitud": _con_estudiante(solicitud)})
+
+
+def _nombre_archivo_lamina(solicitud, figura, indice, extension="stl"):
+    """"TV-00053_lamina-1.2.stl": la imprenta sabe de qué orden y lámina es."""
+    orden = solicitud.get("orden") or f"solicitud-{solicitud['id']}"
+    numero = re.sub(r"[^0-9A-Za-z.]+", "-", str(figura.get("numero") or indice + 1))
+    return f"{orden}_lamina-{numero}.{extension}"
+
+
+@app.route("/api/solicitudes/<int:id_solicitud>/laminas.zip", methods=["GET"])
+def laminas_zip(id_solicitud):
+    """Todas las láminas (STL) de una solicitud en un ZIP: la imprenta baja
+    la orden entera de una vez en vez de lámina por lámina."""
+    solicitud = db.buscar_solicitud(id_solicitud)
+    usuario_id, rol = session.get("usuario_id"), session.get("rol")
+    dueno = solicitud and (
+        (rol == "supervisor" and solicitud["supervisor_id"] == usuario_id)
+        or (rol == "imprenta" and solicitud.get("imprenta_id") == usuario_id))
+    if not dueno:
+        return jsonify({"ok": False, "error": "No se encontró esa solicitud."}), 404
+    archivos = []
+    for i, f in enumerate(solicitud["figuras"]):
+        if f.get("quitada"):
+            continue
+        ruta = _ruta_de_url(f.get("stl_url"))
+        if ruta and almacen.asegurar(ruta):
+            archivos.append((ruta, _nombre_archivo_lamina(solicitud, f, i)))
+    if not archivos:
+        return jsonify({"ok": False, "error": "Esta solicitud no tiene láminas generadas."}), 404
+    memoria = io.BytesIO()
+    with zipfile.ZipFile(memoria, "w", zipfile.ZIP_DEFLATED) as z:
+        for ruta, nombre in archivos:
+            z.write(ruta, nombre)
+    memoria.seek(0)
+    return send_file(memoria, mimetype="application/zip", as_attachment=True,
+                     download_name=_nombre_archivo_lamina(solicitud, {"numero": "s"}, 0, "zip")
+                     .replace("_lamina-s", "_laminas"))
 
 
 @app.route("/api/solicitudes/imprenta", methods=["GET"])
@@ -1832,7 +1975,12 @@ def servir_resultado(nombre_archivo):
 @app.route("/api/resultados/<path:nombre_archivo>/descargar", methods=["GET"])
 def descargar_resultado(nombre_archivo):
     _asegurar_resultado(nombre_archivo)
-    return send_from_directory(RESULTADOS_DIR, nombre_archivo, as_attachment=True)
+    # ?nombre=TV-00053_lamina-1.stl: con qué nombre se guarda (la imprenta
+    # sabe qué lámina es; si no, todas se llamaban grafica_tactil_xxxx.stl)
+    pedido = secure_filename(request.args.get("nombre") or "")
+    extension = os.path.splitext(nombre_archivo)[1]
+    nombre = pedido if pedido and pedido.endswith(extension) else None
+    return send_from_directory(RESULTADOS_DIR, nombre_archivo, as_attachment=True, download_name=nombre)
 
 
 if __name__ == "__main__":
